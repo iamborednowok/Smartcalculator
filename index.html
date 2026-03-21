@@ -1970,10 +1970,10 @@ function SmartCalc(){
               {/* SLM loader */}
               {localAiStatus==="idle"&&(
                 <div style={{marginBottom:"11px",background:"linear-gradient(135deg,rgba(140,100,240,.1),rgba(100,70,200,.06))",border:"1px solid rgba(140,100,240,.22)",borderRadius:"14px",padding:"12px 14px"}}>
-                  <div style={{color:"#b0a0e8",fontSize:".73rem",fontWeight:400,marginBottom:"4px"}}>🧠 On-Device SLM (LFM2.5-1.2B)</div>
-                  <div style={{color:"#7878b0",fontSize:".65rem",lineHeight:1.6,marginBottom:"9px"}}>Math-grounded: engine pre-verifies all numbers before passing to SLM — eliminating hallucinations. Runs 100% offline.</div>
+                  <div style={{color:"#b0a0e8",fontSize:".73rem",fontWeight:400,marginBottom:"4px"}}>🧠 On-Device AI (Qwen2.5-0.5B)</div>
+                  <div style={{color:"#7878b0",fontSize:".65rem",lineHeight:1.6,marginBottom:"9px"}}>Math-grounded: engine pre-verifies all numbers before passing to AI — eliminating hallucinations. Runs 100% offline after download (~400MB).</div>
                   <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
-                    <button className="sml acc" onClick={initLocalAI} style={{fontSize:".65rem"}}>⬇ Load SLM</button>
+                    <button className="sml acc" onClick={initLocalAI} style={{fontSize:".65rem"}}>⬇ Load offline AI</button>
                     <span style={{color:"#5858a0",fontSize:".6rem"}}>{t.cachedNote}</span>
                   </div>
                 </div>
@@ -1989,16 +1989,30 @@ function SmartCalc(){
                   <div style={{height:"4px",background:"rgba(255,255,255,.08)",borderRadius:"2px",overflow:"hidden"}}>
                     <div style={{height:"100%",background:"linear-gradient(90deg,#5b50f2,#b060f8)",borderRadius:"2px",width:`${localAiProgress}%`,transition:"width .3s"}}/>
                   </div>
+                  <div style={{color:"#5858a0",fontSize:".58rem",marginTop:"6px"}}>Lần đầu tải ~400MB — sau đó cache lại, dùng offline được</div>
                 </div>
               )}
               {localAiStatus==="ready"&&(
                 <div style={{marginBottom:"9px",background:"rgba(80,200,120,.06)",border:"1px solid rgba(80,200,120,.2)",borderRadius:"11px",padding:"7px 12px",display:"flex",alignItems:"center",gap:"8px"}}>
-                  <span style={{color:"#70d890",fontSize:".68rem"}}>🔒 SLM ready · math-grounded · fully offline</span>
+                  <span style={{color:"#70d890",fontSize:".68rem"}}>🔒 AI offline sẵn sàng · math-grounded · fully offline</span>
                 </div>
               )}
               {(localAiStatus==="no-webgpu"||localAiStatus==="error")&&(
-                <div style={{marginBottom:"9px",background:"rgba(220,80,80,.06)",border:"1px solid rgba(220,80,80,.2)",borderRadius:"11px",padding:"7px 12px",fontSize:".65rem",color:"#f07878"}}>
-                  {localAiStatus==="no-webgpu"?`⚠ ${t.wgpuDesc}`:"⚠ SLM failed — using cloud fallback"}
+                <div style={{marginBottom:"9px",background:"rgba(220,80,80,.06)",border:"1px solid rgba(220,80,80,.25)",borderRadius:"14px",padding:"10px 14px"}}>
+                  <div style={{color:"#f08080",fontSize:".7rem",fontWeight:600,marginBottom:"4px"}}>
+                    {localAiStatus==="no-webgpu"?"⚠ WebGPU không khả dụng":"❌ Offline AI load thất bại"}
+                  </div>
+                  <div style={{color:"#c06060",fontSize:".63rem",lineHeight:1.6,marginBottom:"8px"}}>
+                    {localAiStatus==="no-webgpu"
+                      ?"Thiết bị hoặc trình duyệt không hỗ trợ. Hãy dùng Chrome phiên bản mới nhất."
+                      :"Không thể tải model về thiết bị. Có thể do mạng yếu, bộ nhớ không đủ, hoặc trình duyệt chặn WASM."}
+                  </div>
+                  <div style={{color:"#808080",fontSize:".6rem",marginBottom:"8px",background:"rgba(0,0,0,.3)",borderRadius:"8px",padding:"5px 9px"}}>
+                    ℹ App vẫn hoạt động bình thường qua Claude cloud khi có mạng.
+                  </div>
+                  <button className="sml" onClick={()=>{setLocalAiStatus("idle");setLocalAiProgress(0);setLocalAiPhase("");}} style={{fontSize:".62rem",borderColor:"rgba(220,80,80,.3)",color:"#f08080"}}>
+                    ↺ Thử lại
+                  </button>
                 </div>
               )}
 
