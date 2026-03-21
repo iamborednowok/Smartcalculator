@@ -1258,9 +1258,8 @@ function SmartCalc(){
 
   const initLocalAI=useCallback(async()=>{
     if(localAiStatus==="ready"||localAiStatus==="loading") return;
-    setLocalAiStatus("loading");setLocalAiProgress(0);setLocalAiPhase("model");
+    setLocalAiStatus("loading");setLocalAiProgress(0);setLocalAiPhase("Chuẩn bị…");
     try{
-      // Wait for transformers.js module to be ready (loaded via <script type="module">)
       if(!window.HFTransformers){
         await new Promise((res,rej)=>{
           if(window.HFTransformersReady){res();return;}
@@ -1270,20 +1269,43 @@ function SmartCalc(){
       }
       const{pipeline,env}=window.HFTransformers;
       env.allowLocalModels=false;env.useBrowserCache=true;
+      const fileProgress={};
+      const fileSizes={};
       const pipe=await pipeline("text-generation",LOCAL_MODEL_ID,{
         device:"wasm",
         dtype:"q4",
         progress_callback:(p)=>{
-          if(p.status==="progress") setLocalAiProgress(Math.round((p.progress||0)*100));
+          if(p.status==="initiate"){
+            fileSizes[p.file]=p.total||0;
+            fileProgress[p.file]=0;
+            setLocalAiPhase(`Chuẩn bị: ${(p.file||"").split("/").pop()}`);
+          } else if(p.status==="download"||p.status==="progress"){
+            const loaded=p.loaded||0;
+            const total=p.total||fileSizes[p.file]||1;
+            fileProgress[p.file]=loaded/total;
+            const vals=Object.values(fileProgress);
+            const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+            setLocalAiProgress(Math.min(99,Math.round(avg*100)));
+            const name=(p.file||"").split("/").pop();
+            const mb=(loaded/1024/1024).toFixed(1);
+            const tot=(total/1024/1024).toFixed(1);
+            setLocalAiPhase(`Đang tải: ${name} (${mb}/${tot} MB)`);
+          } else if(p.status==="done"){
+            fileProgress[p.file]=1;
+            const vals=Object.values(fileProgress);
+            const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+            setLocalAiProgress(Math.min(99,Math.round(avg*100)));
+            setLocalAiPhase(`✓ ${(p.file||"").split("/").pop()}`);
+          }
         }
       });
       localModelRef.current=pipe;
       setLocalAiStatus("ready");setLocalAiProgress(100);setLocalAiPhase("");
-      showToast("✓ Qwen2.5 ready — offline AI on device!","success");
+      showToast("✓ Qwen2.5 sẵn sàng — AI offline trên thiết bị!","success");
     }catch(err){
       console.error("SLM load error:",err);
       setLocalAiPhase("");setLocalAiStatus("error");
-      showToast("AI offline failed: "+((err?.message||"unknown").slice(0,60)),"info");
+      showToast("AI offline lỗi: "+((err?.message||"unknown").slice(0,60)),"info");
     }
   },[localAiStatus,showToast]);
 
@@ -1980,16 +2002,19 @@ function SmartCalc(){
               )}
               {(localAiStatus==="loading")&&(
                 <div style={{marginBottom:"11px",background:"rgba(0,0,0,.2)",borderRadius:"14px",padding:"12px 14px",border:"1px solid rgba(255,255,255,.1)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
-                    <span style={{color:"#a0a0d0",fontSize:".72rem"}}>
-                      {localAiPhase==="tokenizer"?t.loadingTokenizer:t.loadingModel}
-                    </span>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+                    <span style={{color:"#a0a0d0",fontSize:".68rem",fontWeight:600}}>🧠 Đang tải Qwen2.5…</span>
                     <span style={{color:"#8080c0",fontSize:".68rem"}}>{localAiProgress}%</span>
                   </div>
-                  <div style={{height:"4px",background:"rgba(255,255,255,.08)",borderRadius:"2px",overflow:"hidden"}}>
-                    <div style={{height:"100%",background:"linear-gradient(90deg,#5b50f2,#b060f8)",borderRadius:"2px",width:`${localAiProgress}%`,transition:"width .3s"}}/>
+                  <div style={{height:"5px",background:"rgba(255,255,255,.08)",borderRadius:"3px",overflow:"hidden",marginBottom:"7px"}}>
+                    <div style={{height:"100%",background:"linear-gradient(90deg,#5b50f2,#b060f8)",borderRadius:"3px",width:`${localAiProgress}%`,transition:"width .4s ease"}}/>
                   </div>
-                  <div style={{color:"#5858a0",fontSize:".58rem",marginTop:"6px"}}>Lần đầu tải ~400MB — sau đó cache lại, dùng offline được</div>
+                  <div style={{color:"#6868a8",fontSize:".6rem",lineHeight:1.5,wordBreak:"break-all"}}>
+                    {localAiPhase||"Đang khởi động…"}
+                  </div>
+                  <div style={{color:"#454580",fontSize:".57rem",marginTop:"5px"}}>
+                    Lần đầu tải ~400MB • Sau đó cache lại, dùng offline được
+                  </div>
                 </div>
               )}
               {localAiStatus==="ready"&&(
