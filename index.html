@@ -1,0 +1,2135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Smart Calculator</title>
+
+  <!-- PWA: iOS Safari home-screen app settings -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Calc" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#06060f" />
+  <meta name="description" content="Smart Calculator with AI, graphing, unit converter and more" />
+
+  <!-- PWA Manifest (inline as data URI so it works from a single file) -->
+  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Smart+Calculator%22%2C%22short_name%22%3A%22Calc%22%2C%22description%22%3A%22Smart+Calculator+with+AI%2C+graphing+and+more%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2306060f%22%2C%22theme_color%22%3A%22%2306060f%22%2C%22orientation%22%3A%22portrait%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDUxMiA1MTIiPjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTEyIiBmaWxsPSIjMDYwNjBmIi8%2BPHJlY3QgeD0iNjQiIHk9IjY0IiB3aWR0aD0iMzg0IiBoZWlnaHQ9IjM4NCIgcng9IjU2IiBmaWxsPSIjMGQwZDIwIiBzdHJva2U9IiMzMDMwNjAiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjI1NiIgeT0iMzIwIiBmb250LWZhbWlseT0ibW9ub3NwYWNlIiBmb250LXNpemU9IjIyMCIgZmlsbD0iIzViNTJmMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI%2BPC90ZXh0Pjwvc3ZnPg%3D%3D%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%2C%22purpose%22%3A%22any+maskable%22%7D%5D%7D" />
+
+  <!-- iOS touch icon (inline SVG → base64) -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExMiIgZmlsbD0iIzA2MDYwZiIvPjxyZWN0IHg9IjY0IiB5PSI2NCIgd2lkdGg9IjM4NCIgaGVpZ2h0PSIzODQiIHJ4PSI1NiIgZmlsbD0iIzBkMGQyMCIgc3Ryb2tlPSIjMzAzMDYwIiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIyNTYiIHk9IjMyMCIgZm9udC1mYW1pbHk9Im1vbm9zcGFjZSIgZm9udC1zaXplPSIyMjAiIGZpbGw9IiM1YjUyZjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPsKrPC90ZXh0Pjwvc3ZnPg==" />
+
+  <!-- Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; background: #06060f; }
+    body { display: flex; justify-content: center; align-items: flex-start; }
+
+    /* Safe area insets for iPhone notch/home indicator */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    /* Install banner */
+    #install-banner {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+      background: linear-gradient(135deg, #1a1a38 0%, #0e0e22 100%);
+      border-top: 1px solid rgba(105,82,240,0.35);
+      padding: 14px 18px 18px;
+      font-family: 'DM Mono', monospace, sans-serif;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 -8px 40px rgba(0,0,0,0.7);
+      padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    }
+    #install-banner.visible { display: flex; }
+    .ib-row { display: flex; align-items: center; gap: 12px; }
+    .ib-icon { width: 44px; height: 44px; border-radius: 10px; background: #0d0d20; border: 1px solid rgba(105,82,240,0.4); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+    .ib-text { flex: 1; }
+    .ib-title { color: #d8d8ff; font-size: .8rem; font-weight: 600; }
+    .ib-sub { color: #7878a8; font-size: .68rem; margin-top: 2px; }
+    .ib-close { background: none; border: none; color: #5858a0; font-size: 1.1rem; cursor: pointer; padding: 4px; flex-shrink: 0; }
+    .ib-btns { display: flex; gap: 9px; }
+    .ib-btn-main { flex: 1; background: linear-gradient(135deg, #5b52f0, #8b35ee); border: none; color: #fff; font-family: inherit; font-size: .76rem; padding: 10px 14px; border-radius: 11px; cursor: pointer; font-weight: 600; }
+    .ib-btn-later { background: none; border: 1px solid rgba(255,255,255,0.15); color: #8888b8; font-family: inherit; font-size: .72rem; padding: 10px 14px; border-radius: 11px; cursor: pointer; }
+
+    /* iOS install guide overlay */
+    #ios-guide {
+      position: fixed; inset: 0; z-index: 10000;
+      background: rgba(0,0,0,0.85);
+      display: none; align-items: flex-end; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    #ios-guide.visible { display: flex; }
+    .ios-card {
+      background: linear-gradient(160deg, #1a1a38, #0e0e22);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 22px 22px 0 0;
+      padding: 24px 22px 32px;
+      width: 100%; max-width: 480px;
+      font-family: 'DM Mono', monospace, sans-serif;
+    }
+    .ios-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; margin: 0 auto 18px; }
+    .ios-title { color: #d8d8ff; font-size: .9rem; font-weight: 700; margin-bottom: 6px; }
+    .ios-sub { color: #7878a8; font-size: .7rem; margin-bottom: 20px; }
+    .ios-step { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
+    .ios-num { width: 26px; height: 26px; border-radius: 50%; background: rgba(91,82,240,0.25); border: 1px solid rgba(91,82,240,0.5); color: #a898ff; font-size: .72rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .ios-step-text { color: #c0c0e0; font-size: .76rem; line-height: 1.6; }
+    .ios-step-text b { color: #e8e8ff; }
+    .ios-close-btn { width: 100%; background: linear-gradient(135deg, #5b52f0, #8b35ee); border: none; color: #fff; font-family: inherit; font-size: .8rem; padding: 13px; border-radius: 13px; cursor: pointer; margin-top: 6px; font-weight: 600; }
+
+    /* Offline indicator */
+    #offline-badge {
+      position: fixed; top: 12px; right: 12px; z-index: 9000;
+      background: rgba(220,80,80,0.9); color: #fff;
+      font-family: monospace; font-size: .6rem; padding: 3px 9px;
+      border-radius: 10px; display: none;
+    }
+    body.offline #offline-badge { display: block; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="offline-badge">● OFFLINE</div>
+
+  <!-- Install Banner (Android / Desktop) -->
+  <div id="install-banner">
+    <div class="ib-row">
+      <div class="ib-icon">🧮</div>
+      <div class="ib-text">
+        <div class="ib-title">Install Smart Calculator</div>
+        <div class="ib-sub">Add to your home screen — works offline</div>
+      </div>
+      <button class="ib-close" onclick="dismissBanner()">✕</button>
+    </div>
+    <div class="ib-btns">
+      <button class="ib-btn-main" id="install-btn">Install App</button>
+      <button class="ib-btn-later" onclick="dismissBanner()">Not Now</button>
+    </div>
+  </div>
+
+  <!-- iOS Install Guide Overlay -->
+  <div id="ios-guide" onclick="if(event.target===this)closeIosGuide()">
+    <div class="ios-card">
+      <div class="ios-handle"></div>
+      <div class="ios-title">📲 Add to Home Screen</div>
+      <div class="ios-sub">Follow these steps to install on iPhone / iPad</div>
+      <div class="ios-step">
+        <div class="ios-num">1</div>
+        <div class="ios-step-text">Tap the <b>Share</b> button <b>⎙</b> at the bottom of Safari (the box with an arrow pointing up)</div>
+      </div>
+      <div class="ios-step">
+        <div class="ios-num">2</div>
+        <div class="ios-step-text">Scroll down and tap <b>"Add to Home Screen"</b></div>
+      </div>
+      <div class="ios-step">
+        <div class="ios-num">3</div>
+        <div class="ios-step-text">Tap <b>"Add"</b> in the top-right corner — the app icon will appear on your home screen!</div>
+      </div>
+      <button class="ios-close-btn" onclick="closeIosGuide()">Got it</button>
+    </div>
+  </div>
+
+  <script>
+    // ── PWA Install Logic ──────────────────────────────────────────
+    let deferredPrompt = null;
+    const banner = document.getElementById('install-banner');
+    const installBtn = document.getElementById('install-btn');
+    const iosGuide = document.getElementById('ios-guide');
+
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isInStandalone = window.matchMedia('(display-mode: standalone)').matches
+                        || window.navigator.standalone === true;
+    const dismissed = sessionStorage.getItem('install-dismissed');
+
+    // Android / Chrome: capture the install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!isInStandalone && !dismissed) {
+        setTimeout(() => banner.classList.add('visible'), 2000);
+      }
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      dismissBanner();
+    });
+
+    // iOS: show guide instead
+    if (isIOS && !isInStandalone && !dismissed) {
+      setTimeout(() => banner.classList.add('visible'), 2000);
+      installBtn.textContent = 'How to Install';
+      installBtn.addEventListener('click', showIosGuide, { once: true });
+    }
+
+    function dismissBanner() {
+      banner.classList.remove('visible');
+      sessionStorage.setItem('install-dismissed', '1');
+    }
+    function showIosGuide() { iosGuide.classList.add('visible'); dismissBanner(); }
+    function closeIosGuide() { iosGuide.classList.remove('visible'); }
+
+    // ── Offline Detection ──────────────────────────────────────────
+    function updateOnline() {
+      document.body.classList.toggle('offline', !navigator.onLine);
+    }
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    updateOnline();
+
+    // ── Service Worker (registers itself for offline caching) ──────
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        const CACHE = 'smart-calc-v1';
+        const URLS = [
+          'https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js',
+          'https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js',
+          'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js',
+          'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js'
+        ];
+        self.addEventListener('install', e => {
+          e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS).catch(()=>{})));
+          self.skipWaiting();
+        });
+        self.addEventListener('activate', e => {
+          e.waitUntil(caches.keys().then(keys =>
+            Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+          ));
+          self.clients.claim();
+        });
+        self.addEventListener('fetch', e => {
+          e.respondWith(
+            caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+              if (res && res.status === 200 && e.request.url.startsWith('https://cdnjs')) {
+                const clone = res.clone();
+                caches.open(CACHE).then(c => c.put(e.request, clone));
+              }
+              return res;
+            }).catch(() => caches.match(e.request)))
+          );
+        });
+      `;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl).catch(() => {});
+    }
+  </script>
+
+  <!-- App -->
+  <script type="text/babel">
+    const { useState, useRef, useEffect, useCallback, useMemo } = React;
+    // math is loaded globally via CDN (window.math)
+
+// ─── Math engine ──────────────────────────────────────────────────────────────
+const mathScope = {
+  sin:(x)=>math.sin(x), cos:(x)=>math.cos(x), tan:(x)=>math.tan(x),
+  asin:(x)=>math.asin(x), acos:(x)=>math.acos(x), atan:(x)=>math.atan(x),
+  sinh:(x)=>math.sinh(x), cosh:(x)=>math.cosh(x), tanh:(x)=>math.tanh(x),
+  log:(x)=>math.log10(x), ln:(x)=>math.log(x),
+  sqrt:(x)=>math.sqrt(x), cbrt:(x)=>Math.cbrt(x), abs:(x)=>math.abs(x),
+  floor:(x)=>math.floor(x), ceil:(x)=>math.ceil(x), round:(x)=>math.round(x),
+  fact:(n)=>math.factorial(Math.round(n)),
+  nCr:(n,r)=>math.combinations(Math.round(n),Math.round(r)),
+  nPr:(n,r)=>math.permutations(Math.round(n),Math.round(r)),
+  gcd:(a,b)=>math.gcd(Math.round(a),Math.round(b)),
+  lcm:(a,b)=>math.lcm(Math.round(a),Math.round(b)),
+  pi:Math.PI, e:Math.E, phi:1.6180339887498948482,
+};
+function prepExpr(raw,angleMode){
+  let e=raw.trim().replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-")
+    .replace(/π/g,"pi").replace(/√\(/g,"sqrt(").replace(/\^/g,"**");
+  if(angleMode==="deg"){
+    e=e.replace(/\bsin\(/g,"sin(deg2rad(").replace(/\bcos\(/g,"cos(deg2rad(").replace(/\btan\(/g,"tan(deg2rad(");
+    const ec=(e.match(/deg2rad\(/g)||[]).length;
+    e=e+")".repeat(ec);
+    mathScope.deg2rad=(x)=>(x*Math.PI)/180;
+    mathScope.sin=(x)=>Math.sin(x);mathScope.cos=(x)=>Math.cos(x);mathScope.tan=(x)=>Math.tan(x);
+  }
+  e=e.replace(/\bpi\b/g,String(Math.PI)).replace(/\be\b/g,String(Math.E)).replace(/\bphi\b/g,String(mathScope.phi));
+  return e;
+}
+function calcEval(raw,angleMode="deg",fractionMode=false){
+  if(!raw||raw==="0") return "0";
+  try{
+    const e=prepExpr(raw,angleMode);
+    const result=math.evaluate(e,mathScope);
+    const num=typeof result==="object"?math.number(result):Number(result);
+    if(!isFinite(num)) throw new Error("Not finite");
+    if(fractionMode){
+      try{
+        const frac=math.fraction(math.evaluate(e,mathScope));
+        if(frac.d!==1&&frac.d<=9999) return `${frac.s<0?"-":""}${Math.abs(frac.n)}/${frac.d}`;
+      }catch{}
+    }
+    return parseFloat(num.toPrecision(12)).toString();
+  }catch{throw new Error("Invalid expression");}
+}
+function formatMath(s){
+  if(!s) return s;
+  return s.replace(/sqrt\(/g,"√(").replace(/\*\*/g,"^").replace(/\bpi\b/gi,"π")
+    .replace(/\*/g,"×").replace(/\//g,"÷");
+}
+function fmtNum(n){
+  if(!isFinite(n)) return String(n);
+  return parseFloat(n.toPrecision(12)).toString();
+}
+
+// ─── Offline AI helpers ───────────────────────────────────────────────────────
+function extractNums(text){
+  const results=[];const re=/\$?(-?\d+(?:\.\d+)?)\s*(k|m|b)?\b/gi;let m;
+  while((m=re.exec(text))!==null){
+    let n=parseFloat(m[1]);const s=(m[2]||"").toLowerCase();
+    if(s==="k") n*=1000;else if(s==="m") n*=1e6;else if(s==="b") n*=1e9;
+    results.push(n);
+  }
+  return results;
+}
+const UNIT_ALIASES={
+  mm:["mm","millimeter","millimeters"],cm:["cm","centimeter","centimeters"],
+  m:["meters","metre","metres"," m "],km:["km","kilometer","kilometers","kilometre"],
+  "in":["inch","inches"],ft:["foot","feet","ft"],yd:["yard","yards"],mi:["mile","miles"],
+  g:["gram","grams"],kg:["kilogram","kilograms","kg"],lb:["pound","pounds","lbs"],
+  oz:["ounce","ounces"],"t":["ton","tons","tonne","tonnes"],
+  "°C":["celsius","°c","centigrade"],"°F":["fahrenheit","°f"],K:["kelvin"],
+  "m/s":["m/s","meters per second"],"km/h":["km/h","kmh","kph","kilometers per hour"],
+  mph:["mph","miles per hour"],
+  ml:["ml","milliliter","milliliters"],l:["liter","liters","litre","litres"],
+  gal:["gallon","gallons"],cup:["cup","cups"],
+  s:["second","seconds","sec"],"min":["minute","minutes","mins"],
+  hr:["hour","hours"],"day":["day","days"],wk:["week","weeks"],
+  mo:["month","months"],yr:["year","years"],
+  bbl:["barrel","barrels","bbl"],psi:["psi"],bar:["bar"],kPa:["kpa"],
+  B:["byte","bytes"],KB:["kb","kilobyte"],MB:["mb","megabyte"],
+  GB:["gb","gigabyte"],TB:["tb","terabyte"],
+};
+function resolveUnit(word){
+  const w=word.toLowerCase().trim();
+  for(const[unit,aliases]of Object.entries(UNIT_ALIASES)){
+    if(w===unit.toLowerCase()||aliases.some(a=>w.includes(a))) return unit;
+  }
+  return null;
+}
+function scoreComplexity(text){
+  const t=text.toLowerCase();
+  const complex=[/if\s+.{10,}then/,/what\s+(would|will|happens?|should)/,/explain\s+why/,/prove\s+that/,/derive\s+/,/optimal\b/,/probability\s+that/,/expected\s+value/,/series\s+converge/,/integral\s+of/,/derivative\s+of/,/taylor\s+series/,/eigenvalue/,/matrix\s+inverse/,/differential\s+equation/,/laplace/,/word\s+problem/];
+  const moderate=[/quadratic/,/logarithm/,/combinations?\s+of/,/permutations?\s+of/,/standard\s+deviation/,/variance\s+of/,/binomial/,/probability\s+of/,/geometric\s+series/,/arithmetic\s+series/,/limit\s+as/];
+  if(complex.some(r=>r.test(t))) return "complex";
+  if(moderate.some(r=>r.test(t))) return "moderate";
+  return "simple";
+}
+function tryDirectMath(text,fmtFn){
+  let e=text.trim()
+    .replace(/what\s+is\s+/i,"").replace(/calculate\s+/i,"").replace(/compute\s+/i,"").replace(/find\s+/i,"")
+    .replace(/square\s+root\s+of\s+/gi,"sqrt(").replace(/cube\s+root\s+of\s+/gi,"cbrt(")
+    .replace(/(\d+)\s+squared/gi,"($1)^2").replace(/(\d+)\s+cubed/gi,"($1)^3")
+    .replace(/(\d+)\s+to\s+the\s+power\s+of\s+(\d+)/gi,"($1)^($2)")
+    .replace(/(\d+)\s+to\s+the\s+(\d+)/gi,"($1)^($2)")
+    .replace(/pi\b/gi,"3.14159265358979")
+    .replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-").replace(/\^/g,"**");
+  if(/[\d\.\+\-\*\/\^\(\)\%]/.test(e)&&!/[a-z]{4,}/i.test(e.replace(/sqrt|cbrt|sin|cos|tan|log|abs|ceil|floor|round/gi,""))){
+    try{
+      const r=math.evaluate(e,mathScope);const num=typeof r==="object"?math.number(r):Number(r);
+      if(isFinite(num)) return{answer:fmtFn(num),steps:[`${text} = ${fmtFn(num)}`],expression:text,engine:"offline"};
+    }catch{}
+  }
+  return null;
+}
+
+// ─── Context Memory System ────────────────────────────────────────────────────
+function extractContextVars(text){
+  const vars={};const t=text.trim();let m;
+  m=t.match(/\b(?:let|set)\s+([a-z_]\w*)\s*(?:=|to)\s*(\$?-?\d+(?:\.\d+)?(?:k|m|b)?)/i);
+  if(m){const n=extractNums(m[2])[0];if(!isNaN(n))vars[m[1].toLowerCase()]=n;}
+  m=t.match(/^([a-z_]\w*)\s*=\s*(\$?-?\d+(?:\.\d+)?(?:k|m|b)?)$/i);
+  if(m&&!['e','pi','phi','i'].includes(m[1].toLowerCase())){const n=extractNums(m[2])[0];if(!isNaN(n))vars[m[1].toLowerCase()]=n;}
+  m=t.match(/(?:my\s+)?(\w{3,20})\s+(?:is|equals?)\s+(\$?-?\d+(?:\.\d+)?(?:k|m|b)?)/i);
+  if(m&&!['it','he','she','they','that','this','result','answer','sin','cos','tan'].includes(m[1].toLowerCase())){
+    const n=extractNums(m[2])[0];if(!isNaN(n))vars[m[1].toLowerCase()]=n;
+  }
+  m=t.match(/(?:if|where|assume|given)\s+([a-z_]\w*)\s*=\s*(-?\d+(?:\.\d+)?)/i);
+  if(m)vars[m[1].toLowerCase()]=parseFloat(m[2]);
+  return vars;
+}
+function resolveContextRefs(text,ctx){
+  let t=text;
+  if(ctx.lastResult&&/\b(it|that|the result|the answer|this number|this value)\b/i.test(t)){
+    const numOnly=ctx.lastResult.replace(/[^\d.\-]/g,"");
+    if(numOnly) t=t.replace(/\b(it|that|the result|the answer|this number|this value)\b/gi,numOnly);
+  }
+  for(const[key,val]of Object.entries(ctx.vars||{})){
+    if(key.length<2) continue;
+    const re=new RegExp(`(?<![a-zA-Z])${key}(?![a-zA-Z])`,'gi');
+    t=t.replace(re,String(val));
+  }
+  return t;
+}
+
+// ─── Math Grounding (Anti-Hallucination) for SLM ─────────────────────────────
+function extractMathFacts(query,angleMode="deg"){
+  const facts=[];const seen=new Set();
+  const addFact=(expr,result)=>{
+    const key=expr.trim();
+    if(!seen.has(key)&&result!==null&&result!==undefined&&isFinite(Number(result))){
+      seen.add(key);
+      facts.push({expr:key,result:parseFloat(Number(result).toPrecision(10)).toString()});
+    }
+  };
+  const cleaned=query.replace(/^(?:what(?:'s|\s+is)?\s+|calculate\s+|compute\s+|find\s+|evaluate\s+|solve\s+)/i,"").trim();
+  if(cleaned.length<60){
+    try{const r=calcEval(cleaned,angleMode);if(r&&r!=="0"&&r!==cleaned)addFact(cleaned,r);}catch{}
+  }
+  const trigFnRe=/\b(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh)\s*\(\s*(-?\d+(?:\.\d+)?)\s*(?:°|deg(?:rees?)?)?\s*\)/gi;
+  let m;
+  while((m=trigFnRe.exec(query))!==null){
+    try{
+      const fn=m[1].toLowerCase(),arg=parseFloat(m[2]);
+      const rad=angleMode==="deg"?arg*Math.PI/180:arg;
+      const fnMap={sin:Math.sin,cos:Math.cos,tan:Math.tan,asin:Math.asin,acos:Math.acos,atan:Math.atan,sinh:Math.sinh,cosh:Math.cosh,tanh:Math.tanh};
+      const r=fnMap[fn]?.(rad);
+      if(r!==undefined)addFact(`${fn}(${arg}${angleMode==="deg"?"°":""})`,r);
+    }catch{}
+  }
+  const powRe=/(-?\d+(?:\.\d+)?)\s*(?:\^|\*\*)\s*(-?\d+(?:\.\d+)?)/g;
+  while((m=powRe.exec(query))!==null){
+    const r=Math.pow(parseFloat(m[1]),parseFloat(m[2]));
+    if(isFinite(r))addFact(`${m[1]}^${m[2]}`,r);
+  }
+  const namedFnRe=/\b(sqrt|cbrt|log(?:10)?|ln|abs|floor|ceil|round)\s*\(\s*(-?\d+(?:\.\d+)?)\s*\)/gi;
+  while((m=namedFnRe.exec(query))!==null){
+    const fn=m[1].toLowerCase(),n=parseFloat(m[2]);
+    const fnMap={sqrt:Math.sqrt,cbrt:Math.cbrt,log:Math.log10,log10:Math.log10,ln:Math.log,abs:Math.abs,floor:Math.floor,ceil:Math.ceil,round:Math.round};
+    const r=fnMap[fn]?.(n);
+    if(r!==undefined&&isFinite(r))addFact(`${fn}(${n})`,r);
+  }
+  const factRe=/(\d+)\s*(?:!|factorial)/gi;
+  while((m=factRe.exec(query))!==null){
+    const n=parseInt(m[1]);
+    if(n>=0&&n<=25){try{addFact(`${n}!`,math.number(math.factorial(n)));}catch{}}
+  }
+  const arithRe=/(-?\d+(?:\.\d+)?)\s*([×÷+\-*/])\s*(-?\d+(?:\.\d+)?)/g;
+  while((m=arithRe.exec(query))!==null){
+    const a=parseFloat(m[1]),b=parseFloat(m[3]);
+    const op=m[2].replace('×','*').replace('÷','/');
+    try{const r=math.evaluate(`${a}${op}${b}`,mathScope);if(isFinite(r))addFact(`${m[1]}${m[2]}${m[3]}`,r);}catch{}
+  }
+  const pctRe=/(-?\d+(?:\.\d+)?)\s*%\s+(?:of\s+)?(-?\d+(?:\.\d+)?)/gi;
+  while((m=pctRe.exec(query))!==null){
+    addFact(`${m[1]}% of ${m[2]}`,parseFloat(m[1])*parseFloat(m[2])/100);
+  }
+  return facts;
+}
+function buildGroundedSLMPrompt(mathFacts){
+  let sys="You are a precise math assistant. Explain clearly and concisely.\n\n";
+  if(mathFacts.length>0){
+    sys+="╔══ VERIFIED BY MATH ENGINE (use EXACT values, do NOT recalculate) ══╗\n";
+    mathFacts.forEach(f=>{sys+=`  ${f.expr} = ${f.result}\n`;});
+    sys+="╚═══════════════════════════════════════════════════════════════════╝\n\n";
+    sys+="Instructions: Use the pre-computed values above. Do NOT do arithmetic yourself.\n\n";
+  }
+  sys+='Respond ONLY with raw JSON (no markdown, no backticks):\n';
+  sys+='{"answer":"final answer","steps":["step 1","step 2"],"expression":"math notation","note":"optional"}';
+  return sys;
+}
+
+// ─── Offline Parser ───────────────────────────────────────────────────────────
+function offlineParser(text,unitsConfig,convertFn,fmtFn,ctx){
+  const resolved=ctx?resolveContextRefs(text,ctx):text;
+  const t=resolved.toLowerCase().trim();const ns=extractNums(t);let m;
+  const direct=tryDirectMath(resolved,fmtFn);if(direct)return direct;
+  m=t.match(/(?:sqrt|square\s+root\s+of)\s+(-?\d+(?:\.\d+)?)/);
+  if(m){const n=parseFloat(m[1]),r=Math.sqrt(n);return{answer:fmtFn(r),steps:[`√${n} = ${fmtFn(r)}`],expression:`√${n}`,engine:"offline"};}
+  m=t.match(/(?:cube\s+root\s+of|cbrt)\s+(-?\d+(?:\.\d+)?)/);
+  if(m){const n=parseFloat(m[1]),r=Math.cbrt(n);return{answer:fmtFn(r),steps:[`∛${n} = ${fmtFn(r)}`],expression:`∛${n}`,engine:"offline"};}
+  m=t.match(/(\d+(?:\.\d+)?)\s+(?:to\s+the\s+(?:power\s+(?:of\s+)?)?|raised\s+to\s+)(\d+(?:\.\d+)?)/);
+  if(m){const b=parseFloat(m[1]),ep=parseFloat(m[2]),r=Math.pow(b,ep);return{answer:fmtFn(r),steps:[`${b}^${ep} = ${fmtFn(r)}`],expression:`${b}^${ep}`,engine:"offline"};}
+  m=t.match(/(\d+)\s*(?:factorial|!)/);
+  if(m){const n=parseInt(m[1]);if(n<=170){const f=math.factorial(n);return{answer:fmtFn(typeof f==="object"?math.number(f):f),steps:[`${n}! computed`],expression:`${n}!`,engine:"offline"};}}
+  m=t.match(/(?:log(?:arithm)?\s+(?:base\s+10\s+)?of|log10)\s+(\d+(?:\.\d+)?)/);
+  if(m){const n=parseFloat(m[1]),r=Math.log10(n);return{answer:fmtFn(r),steps:[`log₁₀(${n}) = ${fmtFn(r)}`],expression:`log(${n})`,engine:"offline"};}
+  m=t.match(/(?:natural\s+log|ln)\s+(?:of\s+)?(\d+(?:\.\d+)?)/);
+  if(m){const n=parseFloat(m[1]),r=Math.log(n);return{answer:fmtFn(r),steps:[`ln(${n}) = ${fmtFn(r)}`],expression:`ln(${n})`,engine:"offline"};}
+  m=t.match(/\b(sin|cos|tan|asin|acos|atan)\s*(?:of\s+)?(-?\d+(?:\.\d+)?)\s*(deg|rad|degrees?|radians?)?/);
+  if(m){const fn=m[1],val=parseFloat(m[2]),inDeg=!m[3]||m[3].startsWith("d");const rad=inDeg?val*Math.PI/180:val;const r=fn==="sin"?Math.sin(rad):fn==="cos"?Math.cos(rad):fn==="tan"?Math.tan(rad):fn==="asin"?Math.asin(rad)*(inDeg?180/Math.PI:1):fn==="acos"?Math.acos(rad)*(inDeg?180/Math.PI:1):Math.atan(rad)*(inDeg?180/Math.PI:1);return{answer:fmtFn(r),steps:[`${fn}(${val}${inDeg?"°":""}) = ${fmtFn(r)}`],expression:`${fn}(${val})`,engine:"offline"};}
+  m=t.match(/(?:quadratic|solve).*?a\s*=\s*(-?\d+(?:\.\d+)?).*?b\s*=\s*(-?\d+(?:\.\d+)?).*?c\s*=\s*(-?\d+(?:\.\d+)?)/);
+  if(m){const a=parseFloat(m[1]),b=parseFloat(m[2]),c=parseFloat(m[3]),disc=b*b-4*a*c;if(disc<0)return{answer:"No real roots",steps:[`Δ = ${disc} < 0`],expression:`${a}x²+${b}x+${c}=0`,engine:"offline"};const x1=(-b+Math.sqrt(disc))/(2*a),x2=(-b-Math.sqrt(disc))/(2*a);return{answer:`x₁=${fmtFn(x1)}, x₂=${fmtFn(x2)}`,steps:[`Δ=${disc}`,`x₁=${fmtFn(x1)}`,`x₂=${fmtFn(x2)}`],expression:`x=(−b±√(b²−4ac))/2a`,engine:"offline"};}
+  m=t.match(/(?:gcd|hcf)\s+(?:of\s+)?(\d+)\s+(?:and\s+)?(\d+)/);
+  if(m){const a=parseInt(m[1]),b=parseInt(m[2]),r=math.gcd(a,b);return{answer:String(r),steps:[`GCD(${a},${b}) = ${r}`],expression:`gcd(${a},${b})`,engine:"offline"};}
+  m=t.match(/lcm\s+(?:of\s+)?(\d+)\s+(?:and\s+)?(\d+)/);
+  if(m){const a=parseInt(m[1]),b=parseInt(m[2]),r=math.lcm(a,b);return{answer:String(r),steps:[`LCM(${a},${b}) = ${r}`],expression:`lcm(${a},${b})`,engine:"offline"};}
+  m=t.match(/(?:c|choose|combinations?)\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/)||t.match(/(\d+)\s*c\s*(\d+)/)||t.match(/combinations?\s+of\s+(\d+)\s+(?:choose|from|taken)\s+(\d+)/);
+  if(m&&t.match(/\d+.*\d+/)){const n=parseInt(m[1]),r=parseInt(m[2]),res=math.combinations(n,r);return{answer:fmtFn(typeof res==="object"?math.number(res):res),steps:[`C(${n},${r}) = ${n}!/(${r}!×${n-r}!)`],expression:`C(${n},${r})`,engine:"offline"};}
+  m=t.match(/permutations?\s+of\s+(\d+)\s+(?:choose|from|taken)\s+(\d+)/)||t.match(/(\d+)\s*p\s*(\d+)/);
+  if(m&&t.match(/\d+.*\d+/)){const n=parseInt(m[1]),r=parseInt(m[2]),res=math.permutations(n,r);return{answer:fmtFn(typeof res==="object"?math.number(res):res),steps:[`P(${n},${r}) = ${n}!/${n-r}!`],expression:`P(${n},${r})`,engine:"offline"};}
+  if((t.includes("mean")||t.includes("average"))&&ns.length>=2){const avg=ns.reduce((a,b)=>a+b,0)/ns.length;return{answer:fmtFn(avg),steps:[`Sum: ${ns.reduce((a,b)=>a+b,0)}`,`Count: ${ns.length}`,`Mean: ${fmtFn(avg)}`],expression:`(${ns.join("+")})/  ${ns.length}`,engine:"offline"};}
+  if(t.includes("median")&&ns.length>=2){const sorted=[...ns].sort((a,b)=>a-b);const mid=Math.floor(sorted.length/2);const med=sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2;return{answer:fmtFn(med),steps:[`Sorted: [${sorted.join(", ")}]`,`Median: ${fmtFn(med)}`],expression:"median",engine:"offline"};}
+  if((t.includes("standard deviation")||t.includes("std dev"))&&ns.length>=2){const mean=ns.reduce((a,b)=>a+b,0)/ns.length;const variance=ns.reduce((s,x)=>s+(x-mean)**2,0)/ns.length;const sd=Math.sqrt(variance);return{answer:fmtFn(sd),steps:[`Mean: ${fmtFn(mean)}`,`Variance: ${fmtFn(variance)}`,`SD: ${fmtFn(sd)}`],expression:"σ=√(Σ(x−μ)²/n)",engine:"offline"};}
+  if((t.includes("sum")||t.match(/add\s+up/)||t.match(/total\s+of/))&&ns.length>=2){const s=ns.reduce((a,b)=>a+b,0);return{answer:fmtFn(s),steps:[`${ns.join(" + ")} = ${fmtFn(s)}`],expression:ns.join("+"),engine:"offline"};}
+  m=t.match(/(\d+(?:\.\d+)?)\s*%\s+(?:tip|gratuity).*?\$?\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:percent|%)\s+(?:of\s+)?(?:a\s+)?\$?(\d+(?:\.\d+)?)\s*(?:bill|tab|check|meal)|(?:tip|gratuity)\s+(?:on\s+)?\$?(\d+(?:\.\d+)?)\s+(?:at|of|@)\s+(\d+(?:\.\d+)?)\s*%/);
+  if(m&&t.match(/tip|gratuity/)){const bill=parseFloat(m[2]||m[4]||m[5]),tipPct=parseFloat(m[1]||m[3]||m[6]);const tip=bill*tipPct/100,total=bill+tip;const nMatch=t.match(/split\s+(\d+)|(\d+)\s+people|(\d+)\s+ways/);const n=nMatch?parseInt(nMatch[1]||nMatch[2]||nMatch[3]):0;return{answer:`Tip: $${tip.toFixed(2)} · Total: $${total.toFixed(2)}${n?` · Per person: $${(total/n).toFixed(2)}`:""}`,steps:[`Tip = ${tipPct}% × $${bill} = $${tip.toFixed(2)}`,`Total = $${bill} + $${tip.toFixed(2)} = $${total.toFixed(2)}`+(n?`\nPer person = $${total.toFixed(2)} ÷ ${n} = $${(total/n).toFixed(2)}`:"")],expression:`${tipPct}%×${bill}`,engine:"offline"};}
+  m=t.match(/(\d+(?:\.\d+)?)\s*%\s+off\s+\$?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:percent|%)\s+(?:discount|off)\s+(?:on\s+)?\$?(\d+(?:\.\d+)?)/);
+  if(m){const pct=parseFloat(m[1]||m[3]),price=parseFloat(m[2]||m[4]);const disc=price*pct/100,sale=price-disc;return{answer:`$${sale.toFixed(2)} (save $${disc.toFixed(2)})`,steps:[`Discount = ${pct}% × $${price} = $${disc.toFixed(2)}`,`Sale price = $${price} - $${disc.toFixed(2)} = $${sale.toFixed(2)}`],expression:`${price}×(1-${pct}/100)`,engine:"offline"};}
+  m=t.match(/(?:percentage|percent)\s+(?:change|increase|decrease|growth).*?(?:from\s+)?(\d+(?:\.\d+)?)\s+(?:to\s+)?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s+to\s+(\d+(?:\.\d+)?)\s+(?:percentage|percent)/);
+  if(m&&(t.includes("change")||t.includes("increase")||t.includes("decrease")||t.includes("growth"))){const a=parseFloat(m[1]||m[3]),b=parseFloat(m[2]||m[4]),pct=((b-a)/a)*100;return{answer:`${fmtFn(pct)}%${pct>=0?" increase":" decrease"}`,steps:[`Change = (${b} − ${a}) / ${a} × 100 = ${fmtFn(pct)}%`],expression:`(${b}-${a})/${a}×100`,engine:"offline"};}
+  m=t.match(/(?:roi|return\s+on\s+investment).*?\$?(\d+(?:\.\d+)?k?b?).*?\$?(\d+(?:\.\d+)?k?b?)/);
+  if(m&&t.includes("roi")){const vals2=extractNums(t.replace(/roi|return\s+on\s+investment/gi,""));if(vals2.length>=2){const cost=Math.min(...vals2),gain=Math.max(...vals2),roi=((gain-cost)/cost)*100;return{answer:`ROI: ${fmtFn(roi)}%`,steps:[`ROI = (${gain} − ${cost}) / ${cost} × 100 = ${fmtFn(roi)}%`],expression:`(${gain}-${cost})/${cost}×100`,engine:"offline"};}}
+  m=t.match(/(?:compound\s+interest|compounded).*?\$?(\d+(?:\.\d+)?k?)\s*(?:principal|at|@)?\s*(?:at|@)?\s*(\d+(?:\.\d+)?)\s*%.*?(\d+)\s*(?:year|yr)/);
+  if(m){const P=extractNums(m[1]||"")[0]||parseFloat(m[1]),r=parseFloat(m[2])/100,t2=parseInt(m[3]),A=P*Math.pow(1+r,t2);return{answer:`$${fmtFn(A)}`,steps:[`A = ${P}×(1+${r})^${t2}`,`A = $${fmtFn(A)}`,`Interest earned: $${fmtFn(A-P)}`],expression:`${P}×(1+${r})^${t2}`,engine:"offline"};}
+  m=t.match(/(?:simple\s+interest).*?\$?(\d+(?:\.\d+)?k?)\s*(?:at|@)\s*(\d+(?:\.\d+)?)\s*%.*?(\d+)\s*(?:year|yr)/);
+  if(m){const P=parseFloat(m[1]),r=parseFloat(m[2])/100,t2=parseInt(m[3]),I=P*r*t2;return{answer:`$${fmtFn(I)} interest, total $${fmtFn(P+I)}`,steps:[`I = P×r×t = ${P}×${r}×${t2} = $${fmtFn(I)}`],expression:`${P}×${r}×${t2}`,engine:"offline"};}
+  m=t.match(/(?:mortgage|home\s+loan|monthly\s+payment).*?\$?(\d+(?:\.\d+)?k?)\s*(?:at|@|loan)?\s*(\d+(?:\.\d+)?)\s*%.*?(\d+)\s*(?:year|yr)/);
+  if(m){const P=extractNums(m[1]||"")[0]||parseFloat(m[1]),annual=parseFloat(m[2])/100,yrs=parseInt(m[3]),r=annual/12,n=yrs*12,payment=P*r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1);return{answer:`$${fmtFn(payment)}/month`,steps:[`Loan: $${P.toLocaleString()}`,`Rate: ${m[2]}%/yr`,`Term: ${yrs} years`,`Payment = $${fmtFn(payment)}/mo`,`Total paid: $${fmtFn(payment*n)}`,`Total interest: $${fmtFn(payment*n-P)}`],expression:`P·r(1+r)^n/((1+r)^n-1)`,engine:"offline"};}
+  m=t.match(/(?:bmi|body\s+mass\s+index).*?(\d+(?:\.\d+)?)\s*kg.*?(\d+(?:\.\d+)?)\s*cm|(\d+(?:\.\d+)?)\s*kg.*?(\d+(?:\.\d+)?)\s*m\b/);
+  if(!m)m=t.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilograms?).*?(\d+(?:\.\d+)?)\s*(?:cm|centimeters?)/);
+  if(m&&t.includes("bmi")){let wt=parseFloat(m[1]||m[3]),ht=parseFloat(m[2]||m[4]);if(ht>10)ht/=100;const bmi=wt/(ht*ht);const cat=bmi<18.5?"Underweight":bmi<25?"Normal weight":bmi<30?"Overweight":"Obese";return{answer:`BMI: ${fmtFn(bmi)} (${cat})`,steps:[`BMI = ${wt} / ${ht}² = ${fmtFn(bmi)}`,`Category: ${cat}`],expression:`${wt}/${ht}²`,engine:"offline"};}
+  m=t.match(/(?:area|circumference|perimeter)\s+(?:of\s+(?:a\s+)?)?circle.*?(?:radius|r)\s*=?\s*(\d+(?:\.\d+)?)/)||t.match(/circle.*?(?:radius|r)\s*=?\s*(\d+(?:\.\d+)?)/);
+  if(m){const r=parseFloat(m[1]);if(t.includes("area")||(!t.includes("circumference")&&!t.includes("perimeter"))){const a=Math.PI*r*r;return{answer:fmtFn(a),steps:[`A = π×${r}² = ${fmtFn(a)}`],expression:`π×${r}²`,engine:"offline"};}const c=2*Math.PI*r;return{answer:fmtFn(c),steps:[`C = 2π×${r} = ${fmtFn(c)}`],expression:`2π×${r}`,engine:"offline"};}
+  m=t.match(/(?:area|perimeter)\s+(?:of\s+(?:a\s+)?)?(?:rectangle|rect).*?(\d+(?:\.\d+)?)\s*(?:by|×|x|\*)\s*(\d+(?:\.\d+)?)/)||t.match(/rectangle.*?(\d+(?:\.\d+)?)\s*(?:by|×|x|\*)\s*(\d+(?:\.\d+)?)/);
+  if(m){const l=parseFloat(m[1]),w=parseFloat(m[2]);const isArea=t.includes("area");const res=isArea?l*w:2*(l+w);return{answer:fmtFn(res),steps:[`${isArea?"A":"P"} = ${isArea?`${l}×${w}`:`2×(${l}+${w})`} = ${fmtFn(res)}`],expression:isArea?`${l}×${w}`:`2×(${l}+${w})`,engine:"offline"};}
+  m=t.match(/(?:area\s+of\s+(?:a\s+)?)?triangle.*?(\d+(?:\.\d+)?)\s*(?:by|×|x|\*)\s*(\d+(?:\.\d+)?)/);
+  if(m&&t.includes("area")){const b=parseFloat(m[1]),h=parseFloat(m[2]),a=0.5*b*h;return{answer:fmtFn(a),steps:[`A = ½×${b}×${h} = ${fmtFn(a)}`],expression:`0.5×${b}×${h}`,engine:"offline"};}
+  m=t.match(/(?:volume|surface)\s+(?:of\s+(?:a\s+)?)?sphere.*?(?:radius|r)\s*=?\s*(\d+(?:\.\d+)?)/);
+  if(m){const r=parseFloat(m[1]);if(t.includes("surface")){const s=4*Math.PI*r*r;return{answer:fmtFn(s),steps:[`SA = 4π×${r}² = ${fmtFn(s)}`],expression:`4π×${r}²`,engine:"offline"};}const v=(4/3)*Math.PI*r**3;return{answer:fmtFn(v),steps:[`V = ⁴⁄₃π×${r}³ = ${fmtFn(v)}`],expression:`(4/3)π×${r}³`,engine:"offline"};}
+  m=t.match(/cylinder.*?(?:radius|r)\s*=?\s*(\d+(?:\.\d+)?).*?(?:height|h)\s*=?\s*(\d+(?:\.\d+)?)/);
+  if(m){const r=parseFloat(m[1]),h=parseFloat(m[2]),v=Math.PI*r*r*h;return{answer:fmtFn(v),steps:[`V = π×${r}²×${h} = ${fmtFn(v)}`],expression:`π×${r}²×${h}`,engine:"offline"};}
+  m=t.match(/(?:hypotenuse|pythagoras|pythagorean|right\s+triangle).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)/);
+  if(m&&(t.includes("hypotenuse")||t.includes("pythagoras")||t.includes("right triangle"))){const a=parseFloat(m[1]),b2=parseFloat(m[2]),c=Math.sqrt(a**2+b2**2);return{answer:fmtFn(c),steps:[`c = √(${a}²+${b2}²) = ${fmtFn(c)}`],expression:`√(${a}²+${b2}²)`,engine:"offline"};}
+  m=t.match(/(?:how\s+many\s+seconds?\s+in\s+(?:a|one)?\s*)(year|month|week|day|hour|minute)/);
+  if(m){const map={year:31557600,month:2629800,week:604800,day:86400,hour:3600,minute:60};const s=map[m[1]];return{answer:`${s.toLocaleString()} seconds`,steps:[`1 ${m[1]} = ${s.toLocaleString()} seconds`],expression:`1 ${m[1]} → seconds`,engine:"offline"};}
+  if(ctx?.lastResult){
+    const numOnly=parseFloat(ctx.lastResult.replace(/[^\d.\-]/g,""));
+    if(!isNaN(numOnly)){
+      if(t.match(/\b(?:double|2x|twice)\b/))return{answer:fmtFn(numOnly*2),steps:[`${numOnly} × 2 = ${fmtFn(numOnly*2)}`],expression:`${numOnly}×2`,engine:"offline"};
+      if(t.match(/\b(?:triple|3x|three\s+times)\b/))return{answer:fmtFn(numOnly*3),steps:[`${numOnly} × 3 = ${fmtFn(numOnly*3)}`],expression:`${numOnly}×3`,engine:"offline"};
+      if(t.match(/\b(?:half|halve)\b/))return{answer:fmtFn(numOnly/2),steps:[`${numOnly} ÷ 2 = ${fmtFn(numOnly/2)}`],expression:`${numOnly}/2`,engine:"offline"};
+      if(t.match(/\b(?:square|squared)\b/))return{answer:fmtFn(numOnly**2),steps:[`${numOnly}² = ${fmtFn(numOnly**2)}`],expression:`${numOnly}²`,engine:"offline"};
+      if(t.match(/\b(?:negate|opposite|negative)\b/))return{answer:fmtFn(-numOnly),steps:[`-${numOnly} = ${fmtFn(-numOnly)}`],expression:`-${numOnly}`,engine:"offline"};
+    }
+  }
+  const words=t.split(/\s+/);let fromUnit=null,toUnit=null,numVal=null;
+  for(let i=0;i<words.length;i++){if(!numVal&&/\d/.test(words[i])){numVal=parseFloat(words[i]);}const u=resolveUnit(words[i]);if(u){if(!fromUnit)fromUnit=u;else if(!toUnit)toUnit=u;}}
+  if(numVal!==null&&fromUnit&&toUnit&&fromUnit!==toUnit){for(const[cat,cfg]of Object.entries(unitsConfig)){const units=cfg.units;if(units.includes(fromUnit)&&units.includes(toUnit)){try{const r=convertFn(numVal,fromUnit,toUnit,cat);return{answer:`${fmtFn(r)} ${toUnit}`,steps:[`${numVal} ${fromUnit} = ${fmtFn(r)} ${toUnit}`],expression:`${numVal} ${fromUnit}→${toUnit}`,engine:"offline"};}catch{}}}}
+  return null;
+}
+
+// ─── Button layouts ───────────────────────────────────────────────────────────
+const SCI_BTNS=[
+  [{l:"sin",v:"sin("},{l:"cos",v:"cos("},{l:"tan",v:"tan("},{l:"(",v:"("}],
+  [{l:"log",v:"log("},{l:"ln",v:"ln("},{l:"√",v:"√("},{l:")",v:")"}],
+  [{l:"x²",v:"^2"},{l:"xʸ",v:"^"},{l:"π",v:"π"},{l:"e",v:"e"}],
+  [{l:"sinh",v:"sinh("},{l:"n!",v:"fact("},{l:"nCr",v:"nCr("},{l:"nPr",v:"nPr("}],
+];
+const BASIC_BTNS=[
+  ["C","±","%","÷"],["7","8","9","×"],["4","5","6","−"],["1","2","3","+"],["0",".","⌫","="],
+];
+
+// ─── Formula library ──────────────────────────────────────────────────────────
+const FORMULAS={
+  "Geometry":[
+    {name:"Circle Area",icon:"⬤",color:"#60b8f0",desc:"Area enclosed by a circle",expr:"A = π × r²",unit:"units²",vars:[{k:"r",label:"Radius",hint:"e.g. 5"}],fn:(v)=>Math.PI*v.r**2},
+    {name:"Circumference",icon:"◯",color:"#60b8f0",desc:"Perimeter of a circle",expr:"C = 2 × π × r",unit:"units",vars:[{k:"r",label:"Radius",hint:"e.g. 5"}],fn:(v)=>2*Math.PI*v.r},
+    {name:"Rectangle Area",icon:"▬",color:"#60d090",desc:"Area of a rectangle",expr:"A = l × w",unit:"units²",vars:[{k:"l",label:"Length",hint:"e.g. 8"},{k:"w",label:"Width",hint:"e.g. 4"}],fn:(v)=>v.l*v.w},
+    {name:"Rect. Perimeter",icon:"▭",color:"#60d090",desc:"Distance around a rectangle",expr:"P = 2(l + w)",unit:"units",vars:[{k:"l",label:"Length",hint:"e.g. 8"},{k:"w",label:"Width",hint:"e.g. 4"}],fn:(v)=>2*(v.l+v.w)},
+    {name:"Triangle Area",icon:"△",color:"#e0c060",desc:"Area of any triangle",expr:"A = ½ × b × h",unit:"units²",vars:[{k:"b",label:"Base",hint:"e.g. 6"},{k:"h",label:"Height",hint:"e.g. 4"}],fn:(v)=>0.5*v.b*v.h},
+    {name:"Pythagorean c",icon:"📐",color:"#e0c060",desc:"Hypotenuse of right triangle",expr:"c = √(a² + b²)",unit:"units",vars:[{k:"a",label:"Side a",hint:"e.g. 3"},{k:"b",label:"Side b",hint:"e.g. 4"}],fn:(v)=>Math.sqrt(v.a**2+v.b**2)},
+    {name:"Sphere Volume",icon:"🔵",color:"#a080e8",desc:"Volume inside a sphere",expr:"V = ⁴⁄₃ × π × r³",unit:"units³",vars:[{k:"r",label:"Radius",hint:"e.g. 3"}],fn:(v)=>(4/3)*Math.PI*v.r**3},
+    {name:"Sphere Surface",icon:"🌐",color:"#a080e8",desc:"Surface area of a sphere",expr:"SA = 4 × π × r²",unit:"units²",vars:[{k:"r",label:"Radius",hint:"e.g. 3"}],fn:(v)=>4*Math.PI*v.r**2},
+    {name:"Cylinder Volume",icon:"🧱",color:"#80c8a0",desc:"Volume of a cylinder",expr:"V = π × r² × h",unit:"units³",vars:[{k:"r",label:"Radius",hint:"e.g. 3"},{k:"h",label:"Height",hint:"e.g. 5"}],fn:(v)=>Math.PI*v.r**2*v.h},
+    {name:"Cone Volume",icon:"🔺",color:"#e08060",desc:"Volume of a cone",expr:"V = ⅓ × π × r² × h",unit:"units³",vars:[{k:"r",label:"Radius",hint:"e.g. 3"},{k:"h",label:"Height",hint:"e.g. 5"}],fn:(v)=>(1/3)*Math.PI*v.r**2*v.h},
+  ],
+  "Finance":[
+    {name:"Compound Interest",icon:"📈",color:"#70d890",desc:"Grow with reinvested returns",expr:"A = P(1 + r/n)^(nt)",unit:"$",vars:[{k:"P",label:"Principal",hint:"e.g. 1000"},{k:"r",label:"Annual rate",hint:"e.g. 0.07"},{k:"n",label:"Times/year",hint:"e.g. 12"},{k:"t",label:"Years",hint:"e.g. 10"}],fn:(v)=>v.P*Math.pow(1+v.r/v.n,v.n*v.t)},
+    {name:"Simple Interest",icon:"💵",color:"#70d890",desc:"Interest on principal only",expr:"I = P × r × t",unit:"$ interest",vars:[{k:"P",label:"Principal",hint:"e.g. 1000"},{k:"r",label:"Annual rate",hint:"e.g. 0.05"},{k:"t",label:"Years",hint:"e.g. 3"}],fn:(v)=>v.P*v.r*v.t},
+    {name:"Mortgage Payment",icon:"🏠",color:"#f0a060",desc:"Monthly home loan payment",expr:"M = P·r(1+r)ⁿ/((1+r)ⁿ−1)",unit:"$/month",vars:[{k:"P",label:"Loan amount",hint:"e.g. 300000"},{k:"r",label:"Monthly rate",hint:"e.g. 0.005"},{k:"n",label:"Total months",hint:"e.g. 360"}],fn:(v)=>{const r=v.r,n=v.n,P=v.P;return P*r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1);}},
+    {name:"ROI",icon:"💹",color:"#70d890",desc:"Return on investment",expr:"ROI = (gain−cost)/cost×100",unit:"%",vars:[{k:"gain",label:"Final value",hint:"e.g. 15000"},{k:"cost",label:"Initial cost",hint:"e.g. 10000"}],fn:(v)=>((v.gain-v.cost)/v.cost)*100},
+    {name:"Rule of 72",icon:"⏱",color:"#c0a8f8",desc:"Years to double your money",expr:"Years = 72 / rate%",unit:"years",vars:[{k:"rate",label:"Annual return %",hint:"e.g. 7"}],fn:(v)=>72/v.rate},
+    {name:"Tip Calculator",icon:"🍽",color:"#f0d060",desc:"Tip and total from bill",expr:"tip = bill × tip% / 100",unit:"$",vars:[{k:"bill",label:"Bill amount",hint:"e.g. 84.50"},{k:"tip",label:"Tip %",hint:"e.g. 15"}],fn:(v)=>v.bill*v.tip/100},
+  ],
+  "Physics":[
+    {name:"Kinetic Energy",icon:"⚡",color:"#f0e060",desc:"Energy of a moving object",expr:"KE = ½ × m × v²",unit:"Joules",vars:[{k:"m",label:"Mass",hint:"kg"},{k:"v",label:"Velocity",hint:"m/s"}],fn:(v)=>0.5*v.m*v.v**2},
+    {name:"Potential Energy",icon:"🌍",color:"#80d870",desc:"Gravitational stored energy",expr:"PE = m × g × h",unit:"Joules",vars:[{k:"m",label:"Mass",hint:"kg"},{k:"g",label:"Gravity",hint:"9.81"},{k:"h",label:"Height",hint:"m"}],fn:(v)=>v.m*v.g*v.h},
+    {name:"Force (F=ma)",icon:"🎯",color:"#f09060",desc:"Newton's second law",expr:"F = m × a",unit:"Newtons",vars:[{k:"m",label:"Mass",hint:"kg"},{k:"a",label:"Acceleration",hint:"m/s²"}],fn:(v)=>v.m*v.a},
+    {name:"Ohm's Law V=IR",icon:"🔌",color:"#60c8f0",desc:"Voltage across a resistor",expr:"V = I × R",unit:"Volts",vars:[{k:"I",label:"Current",hint:"Amps"},{k:"R",label:"Resistance",hint:"Ohms"}],fn:(v)=>v.I*v.R},
+    {name:"Power P=IV",icon:"💡",color:"#f0e060",desc:"Electrical power",expr:"P = I × V",unit:"Watts",vars:[{k:"I",label:"Current",hint:"Amps"},{k:"V",label:"Voltage",hint:"Volts"}],fn:(v)=>v.I*v.V},
+    {name:"Wave Speed",icon:"〰",color:"#a0d8f8",desc:"Speed = freq × wavelength",expr:"v = f × λ",unit:"m/s",vars:[{k:"f",label:"Frequency",hint:"Hz"},{k:"lambda",label:"Wavelength",hint:"m"}],fn:(v)=>v.f*v.lambda},
+    {name:"Pressure",icon:"💨",color:"#c0b8f8",desc:"Force per unit area",expr:"P = F / A",unit:"Pascals",vars:[{k:"F",label:"Force",hint:"N"},{k:"A",label:"Area",hint:"m²"}],fn:(v)=>v.F/v.A},
+  ],
+};
+
+// ─── Math practice ────────────────────────────────────────────────────────────
+const DICE_TYPES=[4,6,8,10,12,20,100];
+const rn=(range,min=1)=>Math.floor(Math.random()*range)+min;
+const ri=(n)=>Math.floor(Math.random()*n);
+const fix=(n,d=4)=>parseFloat(n.toFixed(d));
+function getMathProblems(mq){
+  return [
+    {tag:mq.tagAdd,level:"Easy",gen:()=>{const a=rn(50),b=rn(50);return{q:`${a} + ${b}`,a:a+b};}},
+    {tag:mq.tagSub,level:"Easy",gen:()=>{const a=rn(50,10),b=rn(a-1,1);return{q:`${a} − ${b}`,a:a-b};}},
+    {tag:mq.tagMul,level:"Easy",gen:()=>{const a=rn(12,2),b=rn(12,2);return{q:`${a} × ${b}`,a:a*b};}},
+    {tag:mq.tagDiv,level:"Easy",gen:()=>{const b=rn(9,2),a=b*rn(9,1);return{q:`${a} ÷ ${b}`,a:a/b};}},
+    {tag:mq.tagSq,level:"Easy",gen:()=>{const n=rn(12,2);return{q:`${n}²`,a:n*n};}},
+    {tag:mq.tagSqrt,level:"Easy",gen:()=>{const n=[1,4,9,16,25,36,49,64,81,100,121,144,169,196,225][ri(15)];return{q:`√${n}`,a:Math.sqrt(n)};}},
+    {tag:mq.tagPct,level:"Easy",gen:()=>{const a=rn(80,10),r=[5,10,15,20,25,50][ri(6)];return{q:mq.pctOf(r,a),a:a*r/100};}},
+    {tag:mq.tagAdd,level:"Hard",gen:()=>{const a=rn(9000,1000),b=rn(9000,1000);return{q:`${a} + ${b}`,a:a+b};}},
+    {tag:mq.tagMul,level:"Hard",gen:()=>{const a=rn(50,10),b=rn(20,5);return{q:`${a} × ${b}`,a:a*b};}},
+    {tag:"BODMAS",level:"Hard",gen:()=>{const[a,b,c,d]=[rn(10,2),rn(8,2),rn(6,2),rn(4,1)];return{q:`${a} × ${b} + ${c} × ${d}`,a:a*b+c*d};}},
+    {tag:mq.tagSq,level:"Hard",gen:()=>{const n=rn(25,10);return{q:`${n}²`,a:n*n};}},
+    {tag:mq.tagAlg1||"Algebra",level:"Hard",gen:()=>{const x=rn(15,1),m=rn(5,2),c=rn(10,0);return{q:`${m}x + ${c} = ${m*x+c}  →  x = ?`,a:x,hint:`(${m*x+c} − ${c}) ÷ ${m}`};}},
+    {tag:mq.tagMul,level:"Nightmare",gen:()=>{const a=rn(900,100),b=rn(90,10);return{q:`${a} × ${b}`,a:a*b};}},
+    {tag:"BODMAS",level:"Nightmare",gen:()=>{const[a,b,c,d]=[rn(20,5),rn(15,3),rn(10,2),rn(8,2)];return{q:`(${a} + ${b}) × (${c} − ${d})`,a:(a+b)*(c-d)};}},
+    {tag:mq.tagFrac||"Fractions",level:"Nightmare",gen:()=>{const[a,b,c,d]=[rn(8,2),rn(8,2),rn(8,2),rn(8,2)];return{q:`${a}/${b} + ${c}/${d}`,a:fix((a*d+b*c)/(b*d))};}},
+    {tag:mq.tagCbrt||"Cube Root",level:"Nightmare",gen:()=>{const n=[2,3,4,5,6,7,8,9,10][ri(9)],c=n*n*n;return{q:`∛${c}`,a:n};}},
+    {tag:mq.tagPow||"Powers",level:"Impossible",gen:()=>{const b=[2,3,4,5,6][ri(5)],e=[6,7,8,9,10,11,12][ri(7)];return{q:`${b}^${e}`,a:Math.pow(b,e)};}},
+    {tag:mq.tagLog||"Logarithm",level:"Impossible",gen:()=>{const bases=[2,3,4,5,8,10],b=bases[ri(6)],e=rn(6,2),n=Math.pow(b,e);return{q:`log₍${b}₎(${n})`,a:e};}},
+    {tag:mq.tagTrig||"Trig",level:"Impossible",gen:()=>{
+      const fn=["sin","cos","tan"][ri(3)];
+      const sinP=[[0,0],[30,.5],[45,fix(Math.SQRT2/2)],[60,fix(Math.sqrt(3)/2)],[90,1]];
+      const cosP=[[0,1],[30,fix(Math.sqrt(3)/2)],[45,fix(Math.SQRT2/2)],[60,.5],[90,0]];
+      const tanP=[[0,0],[30,fix(1/Math.sqrt(3))],[45,1],[60,fix(Math.sqrt(3))]];
+      if(fn==="sin"){const[d,v]=sinP[ri(5)];return{q:`sin(${d}°)`,a:v};}
+      if(fn==="cos"){const[d,v]=cosP[ri(5)];return{q:`cos(${d}°)`,a:v};}
+      const[d,v]=tanP[ri(4)];return{q:`tan(${d}°)`,a:v};
+    }},
+    {tag:mq.tagSeq||"Sequence",level:"Impossible",gen:()=>{const a=rn(15,1),d=rn(10,2),n=rn(5,4);const s=n*(2*a+(n-1)*d)/2;return{q:mq.sumSeq(a,a+d,a+2*d,n),a:s};}},
+  ];
+}
+const DIFF_BASE={
+  "Random":{emoji:"🎲",color:"#a090e8",bg:"rgba(105,82,240,.15)",border:"rgba(105,82,240,.35)"},
+  "Easy":{emoji:"🟢",color:"#70d890",bg:"rgba(60,180,80,.12)",border:"rgba(60,180,80,.3)"},
+  "Hard":{emoji:"🟠",color:"#f0a060",bg:"rgba(220,130,50,.12)",border:"rgba(220,130,50,.3)"},
+  "Nightmare":{emoji:"🔴",color:"#f07070",bg:"rgba(210,70,70,.12)",border:"rgba(210,70,70,.3)"},
+  "Impossible":{emoji:"💀",color:"#c090f8",bg:"rgba(180,80,240,.12)",border:"rgba(180,80,240,.3)"},
+};
+const FREE_MODELS=[
+  {id:"meta-llama/llama-3.3-70b-instruct:free",label:"Llama 3.3 70B",badge:"free",color:"#70c8e8",desc:"Meta's best free model"},
+  {id:"google/gemma-3-27b-it:free",label:"Gemma 3 27B",badge:"free",color:"#70e8a8",desc:"Google's capable free model"},
+  {id:"mistralai/mistral-7b-instruct:free",label:"Mistral 7B",badge:"free",color:"#e8a870",desc:"Fast and efficient"},
+  {id:"openrouter/auto",label:"Auto-select",badge:"🎲",color:"#8080c0",desc:"OpenRouter picks best"},
+];
+const AI_SYSTEM=`You are a brilliant math assistant in a calculator app. Solve any math problem, conversion, or financial question clearly.\nRespond ONLY with a raw JSON object — no markdown, no preamble:\n{"answer":"final answer","steps":["step 1","step 2"],"expression":"optional math","note":"optional caveat"}`;
+const AI_EXAMPLES=["⚡ 15% tip on $84.50, split 3 people","⚡ 30% off $249.99","⚡ $400k mortgage at 6.5% for 30 years","⚡ compound interest $5k at 7% for 20 years","⚡ area of circle radius 8.5","⚡ hypotenuse a=3 b=4","⚡ sin of 45 degrees","⚡ standard deviation of 4 7 13 2 1","⚡ my salary is 5000, what is 15% of it?","⚡ 98.6°F to Celsius","☁ what is the probability of rolling two sixes in a row?"];
+const GRAPH_EXAMPLES=["sin(x)","cos(x) + sin(2*x)","x^2 - 4","sqrt(abs(x))","1/x","tan(x)","x^3 - 3*x","e^(-x^2)"];
+const GRAPH_COLORS=["#7b6fff","#5dde8a","#f0b84a","#f06060","#5dcdf0","#e060c8","#a0e860","#f080a0"];
+function ts(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
+
+// ─── Languages (compact — en + vi only for brevity, others same as original) ─
+const LANGS={
+  en:{name:"English",flag:"🇬🇧",tabs:["Calc","Formula","Convert","Random","Graph","AI"],hist:"Hist",clearAll:"clear all",copy:"copy",copied:"✓ copied",basic:"basic",sci:"sci",frac:"½ frac",last:"↩ last",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc · Backspace · hold C = clear history",formulaBack:"← back",calculate:"Calculate",result:"RESULT",sentCalc:"Sent to calculator",unitSubUnits:"⇄ Units",unitSubOil:"🛢 Oil → Money",rollBtn:"Roll!",flipBtn:"Flip",pickBtn:"Pick",diceLabel:"🎲 DICE ROLLER",coinLabel:"🪙 COIN",rangeLabel:"🎯 RANGE",mathLabel:"🧮 MATH PRACTICE",startBtn:(d,e)=>`Start — ${d} ${e}`,nextBtn:"Next →",skipBtn:"skip",checkBtn:"Check",answerPlaceholder:"Your answer…",correct:"✓ Correct!",wrong:(a)=>`✗ Answer: ${a}`,resetScore:"reset",hintBtn:"hint",aiPlaceholder:"Ask anything… context-aware (Enter to send)",clearChat:"clear chat",tryAsking:"TRY ASKING…",offlineEngine:"⚡ offline",localEngine:"🧠 SLM+grounded",cloudEngine:"☁",modelDefault:"Claude (default)",thinking:"🧠 THINKING…",saveKey:"Save",removeKey:"remove",keyActive:"✓ Key active",orKeyDesc:"Free key at openrouter.ai — no credit card.",wgpuError:"WebGPU not available",wgpuDesc:"SLM needs WebGPU. Use Chrome on Android.",historyLabel:"HISTORY",noWebGPU:"needs Chrome on Android",loadingTokenizer:"Loading tokenizer…",loadingModel:"Downloading LFM2.5-1.2B…",cachedNote:"Cached in browser after download",precision:"PRECISION · OFFLINE · AI-POWERED",fromLabel:"FROM",toLabel:"TO",swipeHint:"← swipe to delete",holdC:"hold C = clear history",mathQ:{tagAdd:"Addition",tagSub:"Subtraction",tagMul:"Multiplication",tagDiv:"Division",tagSq:"Squares",tagSqrt:"Square Root",tagPct:"Percentage",tagFrac:"Fractions",tagCbrt:"Cube Root",tagPow:"Powers",tagLog:"Logarithm",tagTrig:"Trig",tagQuad:"Quadratic",tagSeq:"Sequence",tagFin:"Finance",pctOf:(r,a)=>`${r}% of ${a}`,sumSeq:(a,b,c,n)=>`Sum: ${a} + ${b} + ${c} + … (${n} terms)`,quadratic:(b,c)=>`x²${b}x${c}=0 larger root=?`,finance:(P,r,n)=>`${P} at ${r}%/yr for ${n}yr\nFinal = ?`,tagMissing:"Missing",tagDouble:"Times Table",tagRound:"Rounding",tagPctChg:"% Change",tagDecMul:"Decimals",tagAlg1:"Algebra",tagAlg2:"Quadratic Eq",tagNeg:"Negatives",tagGeo:"Geo Series",tagBinom:"Binomial",tagMod:"Modular",tagSimult:"Simultaneous",tagDet:"Determinant",roundTo:(n,t)=>`Round ${n} to nearest ${t}`,pctChange:(a,p,up)=>`${up?"Increase":"Decrease"} ${a} by ${p}%`,geoSeq:(a,ar,n)=>`Geo sum: ${a} + ${ar} + … (${n} terms)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"All levels mixed"},Easy:{desc:"Basic arithmetic"},Hard:{desc:"Multi-step problems"},Nightmare:{desc:"Fractions, cubes, mixed"},Impossible:{desc:"Logs, trig, series"}},
+  vi:{name:"Tiếng Việt",flag:"🇻🇳",tabs:["Tính","Công thức","Đổi đơn vị","Ngẫu nhiên","Đồ thị","AI"],hist:"Lịch sử",clearAll:"xóa tất cả",copy:"sao chép",copied:"✓ đã sao chép",basic:"cơ bản",sci:"khoa học",frac:"½ phân số",last:"↩ lần trước",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← quay lại",calculate:"Tính",result:"KẾT QUẢ",sentCalc:"Đã gửi tới máy tính",unitSubUnits:"⇄ Đơn vị",unitSubOil:"🛢 Dầu → Tiền",rollBtn:"Tung!",flipBtn:"Tung đồng xu",pickBtn:"Chọn",diceLabel:"🎲 TUNG XÚC XẮC",coinLabel:"🪙 ĐỒNG XU",rangeLabel:"🎯 KHOẢNG",mathLabel:"🧮 LUYỆN TOÁN",startBtn:(d,e)=>`Bắt đầu — ${d} ${e}`,nextBtn:"Tiếp →",skipBtn:"bỏ qua",checkBtn:"Kiểm tra",answerPlaceholder:"Câu trả lời…",correct:"✓ Đúng rồi!",wrong:(a)=>`✗ Đáp án: ${a}`,resetScore:"đặt lại",hintBtn:"gợi ý",aiPlaceholder:"Hỏi gì cũng được…",clearChat:"xóa cuộc trò chuyện",tryAsking:"THỬ HỎI…",offlineEngine:"⚡ ngoại tuyến",localEngine:"🧠 SLM+nền tảng",cloudEngine:"☁",modelDefault:"Claude (mặc định)",thinking:"🧠 ĐANG SUY NGHĨ…",saveKey:"Lưu",removeKey:"xóa",keyActive:"✓ Khóa hoạt động",orKeyDesc:"Lấy khóa miễn phí tại openrouter.ai.",wgpuError:"WebGPU không khả dụng",wgpuDesc:"SLM cần WebGPU. Dùng Chrome Android.",historyLabel:"LỊCH SỬ",noWebGPU:"cần Chrome Android",loadingTokenizer:"Đang tải tokenizer…",loadingModel:"Đang tải LFM2.5…",cachedNote:"Lưu cache sau khi tải",precision:"CHÍNH XÁC · NGOẠI TUYẾN · AI",fromLabel:"TỪ",toLabel:"ĐẾN",swipeHint:"← vuốt để xóa",holdC:"giữ C = xóa lịch sử",mathQ:{tagAdd:"Cộng",tagSub:"Trừ",tagMul:"Nhân",tagDiv:"Chia",tagSq:"Bình phương",tagSqrt:"Căn bậc hai",tagPct:"Phần trăm",tagFrac:"Phân số",tagCbrt:"Căn bậc ba",tagPow:"Lũy thừa",tagLog:"Logarit",tagTrig:"Lượng giác",tagQuad:"PT bậc 2",tagSeq:"Dãy số",tagFin:"Tài chính",pctOf:(r,a)=>`${r}% của ${a}`,sumSeq:(a,b,c,n)=>`Tổng: ${a} + ${b} + ${c} + … (${n} số hạng)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} lãi ${r}%/năm ${n} năm\nSố tiền cuối = ?`,tagMissing:"Số bị thiếu",tagDouble:"Bảng nhân",tagRound:"Làm tròn",tagPctChg:"Thay đổi %",tagDecMul:"Số thập phân",tagAlg1:"Đại số",tagAlg2:"PT bậc 2",tagNeg:"Số âm",tagGeo:"Cấp số nhân",tagBinom:"Nhị thức",tagMod:"Số dư",tagSimult:"Hệ PT",tagDet:"Định thức",roundTo:(n,t)=>`Làm tròn ${n} đến ${t}`,pctChange:(a,p,up)=>`${up?"Tăng":"Giảm"} ${a} thêm ${p}%`,geoSeq:(a,ar,n)=>`Tổng CSN: ${a} + ${ar} + … (${n} số hạng)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"Tất cả cấp độ"},Easy:{desc:"Số học cơ bản"},Hard:{desc:"Nhiều bước tính"},Nightmare:{desc:"Phân số, căn bậc ba"},Impossible:{desc:"Log, lượng giác, dãy số"}},
+  fr:{name:"Français",flag:"🇫🇷",tabs:["Calc","Formule","Conversion","Aléatoire","Graphe","IA"],hist:"Hist.",clearAll:"tout effacer",copy:"copier",copied:"✓ copié",basic:"basique",sci:"scientifique",frac:"½ fraction",last:"↩ dernier",kbHint:"⌨ 0–9 · +-*/ · Entrée · Échap",formulaBack:"← retour",calculate:"Calculer",result:"RÉSULTAT",sentCalc:"Envoyé",unitSubUnits:"⇄ Unités",unitSubOil:"🛢 Pétrole → Monnaie",rollBtn:"Lancer!",flipBtn:"Lancer",pickBtn:"Choisir",diceLabel:"🎲 DÉS",coinLabel:"🪙 PIÈCE",rangeLabel:"🎯 INTERVALLE",mathLabel:"🧮 ENTRAÎNEMENT",startBtn:(d,e)=>`Démarrer — ${d} ${e}`,nextBtn:"Suivant →",skipBtn:"passer",checkBtn:"Vérifier",answerPlaceholder:"Votre réponse…",correct:"✓ Correct !",wrong:(a)=>`✗ Réponse : ${a}`,resetScore:"réinitialiser",hintBtn:"indice",aiPlaceholder:"Posez une question…",clearChat:"effacer",tryAsking:"ESSAYEZ…",offlineEngine:"⚡ hors ligne",localEngine:"🧠 SLM+ancré",cloudEngine:"☁",modelDefault:"Claude (défaut)",thinking:"🧠 EN RÉFLEXION…",saveKey:"Sauvegarder",removeKey:"supprimer",keyActive:"✓ Clé active",orKeyDesc:"Clé gratuite sur openrouter.ai.",wgpuError:"WebGPU indisponible",wgpuDesc:"SLM nécessite WebGPU. Chrome Android.",historyLabel:"HISTORIQUE",noWebGPU:"Chrome Android requis",loadingTokenizer:"Chargement tokenizer…",loadingModel:"Téléchargement LFM2.5…",cachedNote:"Mis en cache",precision:"PRÉCISION · HORS LIGNE · IA",fromLabel:"DE",toLabel:"VERS",swipeHint:"← glisser pour supprimer",holdC:"maintenir C = effacer",mathQ:{tagAdd:"Addition",tagSub:"Soustraction",tagMul:"Multiplication",tagDiv:"Division",tagSq:"Carrés",tagSqrt:"Racine carrée",tagPct:"Pourcentage",tagFrac:"Fractions",tagCbrt:"Racine cubique",tagPow:"Puissances",tagLog:"Logarithme",tagTrig:"Trigonométrie",tagQuad:"Équation 2e degré",tagSeq:"Suite",tagFin:"Finance",pctOf:(r,a)=>`${r}% de ${a}`,sumSeq:(a,b,c,n)=>`Somme: ${a}+${b}+${c}+… (${n} termes)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P}$ à ${r}%/an pour ${n}ans`,tagMissing:"Manquant",tagDouble:"Tables",tagRound:"Arrondi",tagPctChg:"Variation %",tagDecMul:"Décimaux",tagAlg1:"Algèbre",tagAlg2:"Éq. 2e degré",tagNeg:"Négatifs",tagGeo:"Géo. suite",tagBinom:"Binôme",tagMod:"Modulo",tagSimult:"Système",tagDet:"Déterminant",roundTo:(n,t)=>`Arrondir ${n} à ${t}`,pctChange:(a,p,up)=>`${up?"Augmenter":"Diminuer"} ${a} de ${p}%`,geoSeq:(a,ar,n)=>`Somme géo: ${a}+${ar}+… (${n})`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"Tous niveaux"},Easy:{desc:"Arithmétique"},Hard:{desc:"Multi-étapes"},Nightmare:{desc:"Fractions, racines"},Impossible:{desc:"Log, trigonométrie"}},
+  es:{name:"Español",flag:"🇪🇸",tabs:["Calc","Fórmula","Conversión","Aleatorio","Gráfica","IA"],hist:"Hist.",clearAll:"borrar todo",copy:"copiar",copied:"✓ copiado",basic:"básico",sci:"científico",frac:"½ fracción",last:"↩ último",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← volver",calculate:"Calcular",result:"RESULTADO",sentCalc:"Enviado",unitSubUnits:"⇄ Unidades",unitSubOil:"🛢 Petróleo → Moneda",rollBtn:"¡Tirar!",flipBtn:"Lanzar",pickBtn:"Elegir",diceLabel:"🎲 DADOS",coinLabel:"🪙 MONEDA",rangeLabel:"🎯 RANGO",mathLabel:"🧮 PRÁCTICA",startBtn:(d,e)=>`Empezar — ${d} ${e}`,nextBtn:"Siguiente →",skipBtn:"saltar",checkBtn:"Verificar",answerPlaceholder:"Tu respuesta…",correct:"✓ ¡Correcto!",wrong:(a)=>`✗ Respuesta: ${a}`,resetScore:"reiniciar",hintBtn:"pista",aiPlaceholder:"Pregunta lo que quieras…",clearChat:"borrar",tryAsking:"INTENTA PREGUNTAR…",offlineEngine:"⚡ sin conexión",localEngine:"🧠 SLM+fundado",cloudEngine:"☁",modelDefault:"Claude (predeterminado)",thinking:"🧠 PENSANDO…",saveKey:"Guardar",removeKey:"eliminar",keyActive:"✓ Clave activa",orKeyDesc:"Clave gratis en openrouter.ai.",wgpuError:"WebGPU no disponible",wgpuDesc:"SLM necesita WebGPU. Chrome Android.",historyLabel:"HISTORIAL",noWebGPU:"requiere Chrome Android",loadingTokenizer:"Cargando…",loadingModel:"Descargando LFM2.5…",cachedNote:"En caché",precision:"PRECISIÓN · SIN CONEXIÓN · IA",fromLabel:"DE",toLabel:"A",swipeHint:"← deslizar para borrar",holdC:"mantener C = borrar",mathQ:{tagAdd:"Suma",tagSub:"Resta",tagMul:"Multiplicación",tagDiv:"División",tagSq:"Cuadrados",tagSqrt:"Raíz cuadrada",tagPct:"Porcentaje",tagFrac:"Fracciones",tagCbrt:"Raíz cúbica",tagPow:"Potencias",tagLog:"Logaritmo",tagTrig:"Trigonometría",tagQuad:"Cuadrática",tagSeq:"Sucesión",tagFin:"Finanzas",pctOf:(r,a)=>`${r}% de ${a}`,sumSeq:(a,b,c,n)=>`Suma: ${a}+${b}+${c}+… (${n})`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} al ${r}%/año ${n}años`,tagMissing:"Faltante",tagDouble:"Tablas",tagRound:"Redondeo",tagPctChg:"Cambio %",tagDecMul:"Decimales",tagAlg1:"Álgebra",tagAlg2:"Ec. cuadrática",tagNeg:"Negativos",tagGeo:"Serie geométrica",tagBinom:"Binomio",tagMod:"Módulo",tagSimult:"Simultáneas",tagDet:"Determinante",roundTo:(n,t)=>`Redondear ${n} a ${t}`,pctChange:(a,p,up)=>`${up?"Aumentar":"Disminuir"} ${a} un ${p}%`,geoSeq:(a,ar,n)=>`Suma geom.: ${a}+${ar}+… (${n})`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"Todos los niveles"},Easy:{desc:"Aritmética básica"},Hard:{desc:"Varios pasos"},Nightmare:{desc:"Fracciones, raíces"},Impossible:{desc:"Log, trigonometría"}},
+  zh:{name:"中文",flag:"🇨🇳",tabs:["计算","公式","换算","随机","图形","AI"],hist:"历史",clearAll:"全部清除",copy:"复制",copied:"✓ 已复制",basic:"基础",sci:"科学",frac:"½ 分数",last:"↩ 上次",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← 返回",calculate:"计算",result:"结果",sentCalc:"已发送",unitSubUnits:"⇄ 单位",unitSubOil:"🛢 石油 → 货币",rollBtn:"掷骰!",flipBtn:"抛硬币",pickBtn:"随机选",diceLabel:"🎲 掷骰子",coinLabel:"🪙 硬币",rangeLabel:"🎯 范围",mathLabel:"🧮 数学练习",startBtn:(d,e)=>`开始 — ${d} ${e}`,nextBtn:"下一题 →",skipBtn:"跳过",checkBtn:"检查",answerPlaceholder:"你的答案…",correct:"✓ 正确！",wrong:(a)=>`✗ 答案是：${a}`,resetScore:"重置",hintBtn:"提示",aiPlaceholder:"随便问…",clearChat:"清除对话",tryAsking:"试试问…",offlineEngine:"⚡ 离线",localEngine:"🧠 SLM+接地",cloudEngine:"☁",modelDefault:"Claude (默认)",thinking:"🧠 思考中…",saveKey:"保存",removeKey:"删除",keyActive:"✓ 密钥已激活",orKeyDesc:"在openrouter.ai免费获取。",wgpuError:"WebGPU不可用",wgpuDesc:"SLM需要WebGPU，Chrome Android。",historyLabel:"历史记录",noWebGPU:"需要Chrome Android",loadingTokenizer:"加载分词器…",loadingModel:"下载LFM2.5…",cachedNote:"已缓存",precision:"精准·离线·AI",fromLabel:"从",toLabel:"到",swipeHint:"← 左划删除",holdC:"长按C=清除历史",mathQ:{tagAdd:"加法",tagSub:"减法",tagMul:"乘法",tagDiv:"除法",tagSq:"平方",tagSqrt:"平方根",tagPct:"百分比",tagFrac:"分数",tagCbrt:"立方根",tagPow:"幂次",tagLog:"对数",tagTrig:"三角函数",tagQuad:"二次方程",tagSeq:"数列",tagFin:"金融",pctOf:(r,a)=>`${a}的${r}%`,sumSeq:(a,b,c,n)=>`求和：${a}+${b}+${c}+… (${n}项)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} 年利率${r}% ${n}年`,tagMissing:"填数",tagDouble:"乘法表",tagRound:"四舍五入",tagPctChg:"百分比变化",tagDecMul:"小数",tagAlg1:"代数",tagAlg2:"二次方程",tagNeg:"负数",tagGeo:"等比数列",tagBinom:"二项式",tagMod:"取模",tagSimult:"联立方程",tagDet:"行列式",roundTo:(n,t)=>`将${n}四舍五入到${t}`,pctChange:(a,p,up)=>`将${a}${up?"增加":"减少"}${p}%`,geoSeq:(a,ar,n)=>`等比求和：${a}+${ar}+… (${n}项)`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"所有难度混合"},Easy:{desc:"基础四则运算"},Hard:{desc:"多步骤计算"},Nightmare:{desc:"分数、立方根"},Impossible:{desc:"对数、三角、数列"}},
+  ja:{name:"日本語",flag:"🇯🇵",tabs:["計算","公式","変換","ランダム","グラフ","AI"],hist:"履歴",clearAll:"全削除",copy:"コピー",copied:"✓ コピー済",basic:"基本",sci:"関数",frac:"½ 分数",last:"↩ 前の結果",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← 戻る",calculate:"計算する",result:"結果",sentCalc:"計算機に送信",unitSubUnits:"⇄ 単位",unitSubOil:"🛢 石油 → 通貨",rollBtn:"振る!",flipBtn:"投げる",pickBtn:"選ぶ",diceLabel:"🎲 サイコロ",coinLabel:"🪙 コイン",rangeLabel:"🎯 範囲",mathLabel:"🧮 計算練習",startBtn:(d,e)=>`開始 — ${d} ${e}`,nextBtn:"次へ →",skipBtn:"スキップ",checkBtn:"確認",answerPlaceholder:"答えを入力…",correct:"✓ 正解！",wrong:(a)=>`✗ 答え：${a}`,resetScore:"リセット",hintBtn:"ヒント",aiPlaceholder:"何でも聞いてください…",clearChat:"チャット消去",tryAsking:"例えばこんな質問…",offlineEngine:"⚡ オフライン",localEngine:"🧠 SLM+根拠付き",cloudEngine:"☁",modelDefault:"Claude (デフォルト)",thinking:"🧠 考え中…",saveKey:"保存",removeKey:"削除",keyActive:"✓ キー有効",orKeyDesc:"openrouter.aiで無料キーを取得。",wgpuError:"WebGPU使用不可",wgpuDesc:"SLMはWebGPUが必要。Android Chrome。",historyLabel:"計算履歴",noWebGPU:"Android Chromeが必要",loadingTokenizer:"トークナイザー読み込み中…",loadingModel:"LFM2.5ダウンロード中…",cachedNote:"ブラウザにキャッシュ済み",precision:"高精度·オフライン·AI",fromLabel:"から",toLabel:"へ",swipeHint:"← 左スワイプで削除",holdC:"Cを長押し=履歴削除",mathQ:{tagAdd:"足し算",tagSub:"引き算",tagMul:"かけ算",tagDiv:"割り算",tagSq:"2乗",tagSqrt:"平方根",tagPct:"パーセント",tagFrac:"分数",tagCbrt:"立方根",tagPow:"累乗",tagLog:"対数",tagTrig:"三角関数",tagQuad:"二次方程式",tagSeq:"数列",tagFin:"金融",pctOf:(r,a)=>`${a}の${r}%`,sumSeq:(a,b,c,n)=>`和：${a}+${b}+${c}+…(${n}項)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} 年利${r}%を${n}年間`,tagMissing:"穴埋め",tagDouble:"九九",tagRound:"四捨五入",tagPctChg:"増減率",tagDecMul:"小数",tagAlg1:"代数",tagAlg2:"二次方程式",tagNeg:"負の数",tagGeo:"等比数列",tagBinom:"二項式",tagMod:"剰余",tagSimult:"連立方程式",tagDet:"行列式",roundTo:(n,t)=>`${n}を${t}の位で四捨五入`,pctChange:(a,p,up)=>`${a}を${p}%${up?"増やす":"減らす"}`,geoSeq:(a,ar,n)=>`等比和：${a}+${ar}+…(${n}項)`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"すべてのレベル"},Easy:{desc:"基本的な算数"},Hard:{desc:"複数ステップ"},Nightmare:{desc:"分数・立方根"},Impossible:{desc:"対数・三角・数列"}},
+  ar:{name:"العربية",flag:"🇸🇦",tabs:["حاسبة","صيغ","تحويل","عشوائي","رسم","AI"],hist:"السجل",clearAll:"مسح الكل",copy:"نسخ",copied:"✓ تم النسخ",basic:"أساسي",sci:"علمي",frac:"½ كسر",last:"↩ السابق",kbHint:"⌨ 0–9 · +-*/ · Enter",formulaBack:"← رجوع",calculate:"احسب",result:"النتيجة",sentCalc:"تم الإرسال",unitSubUnits:"⇄ وحدات",unitSubOil:"🛢 نفط → عملة",rollBtn:"ارمِ!",flipBtn:"ارمِ العملة",pickBtn:"اختر",diceLabel:"🎲 رمي النرد",coinLabel:"🪙 عملة",rangeLabel:"🎯 نطاق",mathLabel:"🧮 تدريب رياضيات",startBtn:(d,e)=>`ابدأ — ${d} ${e}`,nextBtn:"التالي →",skipBtn:"تخطي",checkBtn:"تحقق",answerPlaceholder:"إجابتك…",correct:"✓ صحيح!",wrong:(a)=>`✗ الإجابة: ${a}`,resetScore:"إعادة",hintBtn:"تلميح",aiPlaceholder:"اسأل أي شيء…",clearChat:"مسح",tryAsking:"جرّب السؤال…",offlineEngine:"⚡ بدون إنترنت",localEngine:"🧠 SLM+مُرتكز",cloudEngine:"☁",modelDefault:"Claude (افتراضي)",thinking:"🧠 جارٍ التفكير…",saveKey:"حفظ",removeKey:"حذف",keyActive:"✓ المفتاح نشط",orKeyDesc:"احصل على مفتاح مجاني في openrouter.ai.",wgpuError:"WebGPU غير متوفر",wgpuDesc:"SLM يحتاج WebGPU. Chrome Android.",historyLabel:"السجل",noWebGPU:"يحتاج Chrome Android",loadingTokenizer:"تحميل…",loadingModel:"تنزيل LFM2.5…",cachedNote:"مخزن",precision:"دقة·بلا إنترنت·AI",fromLabel:"من",toLabel:"إلى",swipeHint:"← اسحب للحذف",holdC:"اضغط C مطولاً=مسح",mathQ:{tagAdd:"جمع",tagSub:"طرح",tagMul:"ضرب",tagDiv:"قسمة",tagSq:"تربيع",tagSqrt:"جذر تربيعي",tagPct:"نسبة مئوية",tagFrac:"كسور",tagCbrt:"جذر تكعيبي",tagPow:"قوى",tagLog:"لوغاريتم",tagTrig:"مثلثات",tagQuad:"معادلة تربيعية",tagSeq:"متتالية",tagFin:"مالية",pctOf:(r,a)=>`${r}% من ${a}`,sumSeq:(a,b,c,n)=>`المجموع: ${a}+${b}+${c}+…(${n})`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} بفائدة ${r}% لـ${n}سنوات`,tagMissing:"عدد مفقود",tagDouble:"جداول الضرب",tagRound:"تقريب",tagPctChg:"تغيير %",tagDecMul:"أعداد عشرية",tagAlg1:"جبر",tagAlg2:"معادلة تربيعية",tagNeg:"أعداد سالبة",tagGeo:"متتالية هندسية",tagBinom:"ثنائي",tagMod:"باقي القسمة",tagSimult:"معادلتان",tagDet:"محدد",roundTo:(n,t)=>`قرّب ${n} إلى ${t}`,pctChange:(a,p,up)=>`${up?"زيادة":"تقليل"} ${a} بنسبة ${p}%`,geoSeq:(a,ar,n)=>`مجموع هندسي: ${a}+${ar}+…(${n})`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"جميع المستويات"},Easy:{desc:"الحساب الأساسي"},Hard:{desc:"مسائل متعددة"},Nightmare:{desc:"كسور وجذور"},Impossible:{desc:"لوغاريتم ومثلثات"}},
+};
+
+// ─── App CSS ──────────────────────────────────────────────────────────────────
+const APP_CSS=`
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bricolage+Grotesque:wght@700;800&display=swap') layer;
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:radial-gradient(ellipse 90% 60% at 15% -5%,rgba(79,46,229,.24) 0%,transparent 55%),radial-gradient(ellipse 70% 50% at 88% 108%,rgba(124,58,237,.2) 0%,transparent 50%),#06060f;}
+button,select,input,textarea{touch-action:manipulation;-webkit-tap-highlight-color:transparent;outline:none;}
+.btn{background:linear-gradient(160deg,rgba(255,255,255,.08) 0%,rgba(255,255,255,.04) 100%);border:1px solid rgba(255,255,255,.12);color:#e8e8f8;font-family:'DM Mono',monospace;font-size:1rem;font-weight:400;border-radius:14px;cursor:pointer;height:52px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;transition:transform .07s;position:relative;overflow:hidden;contain:layout style;}
+.btn::after{content:'';position:absolute;top:0;left:0;right:0;height:50%;background:linear-gradient(180deg,rgba(255,255,255,.07) 0%,transparent 100%);border-radius:16px 16px 0 0;pointer-events:none;}
+.btn:active,.btn.pressed{transform:scale(0.89);background:linear-gradient(160deg,rgba(255,255,255,.2) 0%,rgba(255,255,255,.1) 100%);will-change:transform;}
+.btn.sci{font-size:.72rem;color:#88f2cc;background:linear-gradient(160deg,rgba(50,170,110,.16) 0%,rgba(30,130,80,.08) 100%);border-color:rgba(60,180,120,.28);height:44px;}
+.btn.sci:active,.btn.sci.pressed{background:linear-gradient(160deg,rgba(50,170,110,.34) 0%,rgba(30,130,80,.2) 100%);transform:scale(0.89);}
+.btn.op{color:#ccbeff;background:linear-gradient(160deg,rgba(130,110,255,.2) 0%,rgba(100,75,230,.1) 100%);border-color:rgba(140,115,255,.32);font-size:1.12rem;}
+.btn.op:active,.btn.op.pressed{background:linear-gradient(160deg,rgba(130,110,255,.38) 0%,rgba(100,75,230,.24) 100%);transform:scale(0.89);}
+.btn.eq{background:linear-gradient(145deg,#5b50f2 0%,#8535ee 55%,#6b38ed 100%);border:none;color:#fff;font-size:1.3rem;font-weight:500;box-shadow:0 0 30px rgba(105,75,242,.6),0 4px 16px rgba(80,55,230,.45),inset 0 1px 0 rgba(255,255,255,.28);}
+.btn.eq:active,.btn.eq.pressed{transform:scale(0.89);box-shadow:0 0 12px rgba(105,75,242,.35);}
+.btn.red{color:#ff8898;background:linear-gradient(160deg,rgba(220,55,80,.16) 0%,rgba(180,35,60,.08) 100%);border-color:rgba(230,80,105,.24);}
+.btn.red:active,.btn.red.pressed{background:linear-gradient(160deg,rgba(220,55,80,.32) 0%,rgba(180,35,60,.2) 100%);transform:scale(0.89);}
+.btn.dim{color:#b0b0d0;}
+.tab-btn{background:none;border:none;color:#8888b0;font-family:'DM Mono',monospace;font-size:.48rem;padding:6px 1px 4px;cursor:pointer;transition:color .15s;letter-spacing:.03em;text-transform:uppercase;display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;position:relative;min-height:42px;}
+.tab-btn .t-icon{font-size:.78rem;line-height:1;}
+.tab-btn.on{color:#d8d0ff;}
+.tab-btn.on::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:18px;height:2px;background:linear-gradient(90deg,#6855f8,#b060f8,#6855f8);border-radius:2px;box-shadow:0 0 8px rgba(110,80,248,.6);}
+.bub-u{background:linear-gradient(135deg,rgba(85,70,240,.28) 0%,rgba(120,45,210,.2) 100%);border:1px solid rgba(105,82,240,.5);border-radius:18px 18px 5px 18px;padding:11px 15px;color:#eeeeff;font-size:.84rem;line-height:1.55;align-self:flex-end;max-width:90%;}
+.bub-a{background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,rgba(255,255,255,.04) 100%);border:1px solid rgba(255,255,255,.14);border-radius:18px 18px 18px 5px;padding:13px 15px;align-self:flex-start;max-width:97%;width:100%;}
+.bub-a.err{border-color:rgba(220,80,80,.3);background:linear-gradient(135deg,rgba(220,80,80,.09) 0%,rgba(180,40,40,.05) 100%);}
+.b-ans{color:#ffffff;font-size:1.2rem;font-weight:300;margin-bottom:5px;line-height:1.35;}
+.b-expr{color:#c0a0f8;font-size:.73rem;margin-bottom:9px;font-style:italic;}
+.b-step{color:#c0c0e8;font-size:.74rem;line-height:1.72;}
+.b-note{color:#a0d0a8;font-size:.71rem;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.08);}
+.b-ground{color:#70b8f8;font-size:.64rem;margin-top:6px;padding:5px 9px;border-radius:8px;background:rgba(70,140,240,.08);border:1px solid rgba(70,140,240,.18);}
+.ctx-info{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:7px;}
+.ctx-pill{background:rgba(104,85,240,.12);border:1px solid rgba(104,85,240,.22);border-radius:8px;padding:2px 8px;font-size:.6rem;color:#b0a8e8;font-family:'DM Mono',monospace;}
+.ctx-var{background:rgba(104,85,240,.2);border-radius:5px;padding:1px 5px;color:#cfc8ff;}
+.ai-box{background:linear-gradient(135deg,rgba(255,255,255,.065) 0%,rgba(255,255,255,.032) 100%);border:1px solid rgba(255,255,255,.13);color:#eaeaff;font-family:'DM Mono',monospace;font-size:16px;padding:11px 14px;border-radius:14px;outline:none;width:100%;resize:none;line-height:1.5;overflow:hidden;min-height:50px;transition:border-color .2s,background .2s;-webkit-appearance:none;}
+.ai-box:focus{border-color:rgba(105,82,240,.72);background:linear-gradient(135deg,rgba(255,255,255,.095) 0%,rgba(255,255,255,.05) 100%);}
+.ai-box::placeholder{color:#6868a0;}
+.send{width:44px;height:44px;border-radius:13px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:linear-gradient(145deg,#5b50f2,#8b35ee);color:#fff;font-size:1.15rem;box-shadow:0 0 20px rgba(105,75,242,.5),inset 0 1px 0 rgba(255,255,255,.22);transition:transform .1s,box-shadow .1s;align-self:flex-end;}
+.send:active{transform:scale(0.9);box-shadow:0 0 8px rgba(105,75,242,.25);}
+.send:disabled{opacity:.3;cursor:default;}
+.mdrop-btn{display:flex;align-items:center;gap:7px;background:linear-gradient(135deg,rgba(255,255,255,.065) 0%,rgba(255,255,255,.032) 100%);border:1px solid rgba(255,255,255,.13);color:#cacaf2;font-family:'DM Mono',monospace;font-size:.75rem;padding:9px 13px;border-radius:12px;cursor:pointer;width:100%;transition:background .12s;text-align:left;}
+.mdrop-btn:active,.mdrop-btn.open{border-color:rgba(105,82,240,.68);background:linear-gradient(135deg,rgba(105,82,240,.15) 0%,rgba(80,50,210,.08) 100%);}
+.mdrop-list{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:300;background:linear-gradient(160deg,#0f0f24 0%,#0a0a1c 100%);border:1px solid rgba(255,255,255,.14);border-radius:15px;padding:5px;box-shadow:0 28px 70px rgba(0,0,0,.92);}
+.mdrop-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;cursor:pointer;transition:background .1s;}
+.mdrop-item:active,.mdrop-item.sel{background:linear-gradient(135deg,rgba(105,82,240,.2) 0%,rgba(80,50,210,.1) 100%);}
+.m-lbl{color:#d8d8ff;font-size:.76rem;}.m-dsc{color:#8888b8;font-size:.65rem;margin-top:1px;}
+.spanel{background:linear-gradient(135deg,rgba(255,255,255,.06) 0%,rgba(10,8,28,.5) 100%);border:1px solid rgba(255,255,255,.18);border-radius:16px;padding:15px;}
+.key-inp{background:linear-gradient(135deg,rgba(255,255,255,.075) 0%,rgba(255,255,255,.035) 100%);border:1px solid rgba(255,255,255,.14);color:#dcdcff;font-family:'DM Mono',monospace;font-size:16px;padding:10px 36px 10px 13px;border-radius:11px;outline:none;width:100%;transition:border-color .2s;-webkit-appearance:none;}
+.key-inp:focus{border-color:rgba(105,82,240,.62);}.key-inp::placeholder{color:#5858a0;}
+.inp{background:linear-gradient(135deg,rgba(255,255,255,.09) 0%,rgba(255,255,255,.05) 100%);border:1px solid rgba(255,255,255,.18);color:#eeeeff;font-family:'DM Mono',monospace;font-size:16px;padding:10px 13px;border-radius:11px;outline:none;transition:border-color .2s;width:100%;-webkit-appearance:none;}
+.inp:focus{border-color:rgba(105,82,240,.62);}.inp::placeholder{color:#5858a0;}
+.sel-box{background:linear-gradient(135deg,rgba(255,255,255,.09) 0%,rgba(255,255,255,.05) 100%);border:1px solid rgba(255,255,255,.18);color:#dcdcf4;font-family:'DM Mono',monospace;font-size:15px;padding:9px 10px;border-radius:11px;outline:none;cursor:pointer;-webkit-appearance:none;width:100%;}
+.sel-box:focus{border-color:rgba(105,82,240,.62);}
+.sml{background:none;border:1px solid rgba(255,255,255,.18);color:#a0a0c8;font-family:'DM Mono',monospace;font-size:.66rem;padding:7px 13px;border-radius:10px;cursor:pointer;transition:background .1s,color .1s;white-space:nowrap;}
+.sml:active{background:rgba(255,255,255,.12);color:#c0c0e8;}
+.sml.acc{background:linear-gradient(135deg,rgba(105,82,240,.28) 0%,rgba(80,50,210,.18) 100%);border-color:rgba(105,82,240,.6);color:#ccc4ff;}
+.sml.acc:active{background:linear-gradient(135deg,rgba(105,82,240,.38) 0%,rgba(80,50,210,.26) 100%);}
+.fm-card{background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,rgba(255,255,255,.04) 100%);border:1px solid rgba(255,255,255,.14);border-radius:13px;padding:12px 14px;cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:11px;contain:layout style;}
+.fm-card:active{background:linear-gradient(135deg,rgba(255,255,255,.13) 0%,rgba(255,255,255,.07) 100%);}
+.cp{background:none;border:1px solid rgba(255,255,255,.22);color:#9898c8;font-family:'DM Mono',monospace;font-size:.61rem;padding:4px 10px;border-radius:8px;cursor:pointer;transition:all .12s;}
+.cp:active{background:rgba(255,255,255,.12);color:#c0c0e8;}.cp.ok{color:#82e8a2;border-color:rgba(100,230,130,.42);}
+.ex-btn{display:block;width:100%;text-align:left;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);color:#9090c0;font-family:'DM Mono',monospace;font-size:.73rem;padding:9px 14px;border-radius:11px;cursor:pointer;margin-bottom:7px;transition:background .1s,color .1s;line-height:1.5;}
+.ex-btn:active{background:linear-gradient(135deg,rgba(255,255,255,.12) 0%,rgba(255,255,255,.04) 100%);color:#a8a8d8;}
+.unit-pill{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#b8b8e0;font-family:'DM Mono',monospace;font-size:.71rem;padding:5px 11px;border-radius:20px;cursor:pointer;transition:all .12s;white-space:nowrap;}
+.unit-pill.on{background:linear-gradient(135deg,rgba(105,82,240,.25) 0%,rgba(80,50,210,.15) 100%);border-color:rgba(105,82,240,.52);color:#c8bcff;}
+.unit-pill:active{background:rgba(255,255,255,.12);}
+.toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#1c1c3e 0%,#14142e 100%);border:1px solid rgba(255,255,255,.24);color:#e0e0ff;font-family:'DM Mono',monospace;font-size:.73rem;padding:10px 22px;border-radius:22px;box-shadow:0 8px 40px rgba(0,0,0,.7);z-index:999;animation:toastIn .22s ease;white-space:nowrap;}
+.toast.success{border-color:rgba(100,232,118,.42);color:#92e8a8;}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.fi{animation:fadeUp .18s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.spin{animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cursor{display:inline-block;width:2px;height:.85em;background:linear-gradient(180deg,#9080ff,#5b50f2);margin-left:3px;vertical-align:middle;border-radius:1px;animation:blink 1s step-end infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.3}30%{transform:translateY(-8px);opacity:1}}
+.bounce-dot{animation:bounce 1.1s ease-in-out infinite;}
+.hr-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 9px;border-radius:9px;cursor:pointer;transition:background .1s;}
+.hr-row:active{background:rgba(255,255,255,.06);}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:linear-gradient(180deg,rgba(105,82,240,.35),rgba(80,50,210,.2));border-radius:2px;}
+.scroll-momentum{-webkit-overflow-scrolling:touch;overflow-y:auto;}
+select option{background:#0e0e22;color:#c8c8e8;}
+.lang-btn{display:flex;align-items:center;gap:5px;background:linear-gradient(135deg,rgba(255,255,255,.065) 0%,rgba(255,255,255,.03) 100%);border:1px solid rgba(255,255,255,.12);font-family:'DM Mono',monospace;font-size:.68rem;padding:5px 9px;border-radius:10px;cursor:pointer;color:#a0a0c8;transition:background .12s;white-space:nowrap;}
+.lang-btn:active{background:rgba(255,255,255,.1);}
+.lang-list{position:absolute;right:0;top:calc(100% + 5px);z-index:400;background:linear-gradient(160deg,#0f0f24 0%,#0a0a1c 100%);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:5px;box-shadow:0 24px 60px rgba(0,0,0,.9);min-width:180px;}
+.lang-item{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;cursor:pointer;transition:background .1s;font-family:'DM Mono',monospace;font-size:.73rem;color:#c8c8e8;}
+.lang-item:active,.lang-item.sel{background:rgba(105,82,240,.16);color:#c8bcff;}
+.diff-btn{display:flex;align-items:center;gap:7px;background:linear-gradient(135deg,rgba(255,255,255,.065) 0%,rgba(255,255,255,.032) 100%);border:1px solid rgba(255,255,255,.13);font-family:'DM Mono',monospace;font-size:.72rem;padding:7px 11px;border-radius:11px;cursor:pointer;transition:background .12s;text-align:left;width:100%;color:#c0c0f0;}
+.diff-btn:active{background:rgba(255,255,255,.1);}
+.diff-list{margin-top:5px;background:linear-gradient(160deg,#0f0f24 0%,#0a0a1c 100%);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:5px;box-shadow:0 4px 24px rgba(0,0,0,.5);overflow:hidden;}
+.diff-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;transition:background .1s;}
+.diff-item:active,.diff-item.sel{background:rgba(255,255,255,.1);}
+.eng-badge{display:inline-flex;align-items:center;gap:3px;font-size:.59rem;padding:2px 8px;border-radius:10px;font-family:'DM Mono',monospace;letter-spacing:.03em;border:1px solid transparent;}
+@keyframes resultFlash{0%{box-shadow:inset 0 2px 12px rgba(0,0,0,.4),0 0 0 0 rgba(120,200,100,0)}35%{box-shadow:inset 0 2px 12px rgba(0,0,0,.2),0 0 0 3px rgba(120,200,100,.25)}100%{box-shadow:inset 0 2px 12px rgba(0,0,0,.4),0 0 0 0 rgba(120,200,100,0)}}
+.result-flash{animation:resultFlash .32s ease-out;}
+.paren-badge{position:absolute;top:11px;left:12px;font-size:.62rem;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:8px;background:rgba(255,165,0,.16);border:1px solid rgba(255,165,0,.4);color:#ffb840;}
+.swipe-hint{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:.5rem;color:rgba(255,255,255,.08);letter-spacing:.08em;pointer-events:none;white-space:nowrap;}
+.math-q{text-align:center;font-size:1.9rem;font-weight:300;color:#f4f4ff;letter-spacing:-0.02em;margin-bottom:12px;background:rgba(0,0,0,.3);border-radius:12px;padding:14px;white-space:pre-line;transition:border-color .2s,box-shadow .2s;}
+.math-q-ok{box-shadow:0 0 0 2px rgba(100,220,110,.3);border-color:rgba(100,220,110,.4)!important;}
+.math-q-wrong{animation:shakeX .35s ease;border-color:rgba(220,80,80,.4)!important;}
+@keyframes shakeX{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+@keyframes streakPop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.3)}100%{transform:scale(1);opacity:1}}
+/* ── Graph ── */
+.graph-canvas{display:block;width:100%;height:auto;border-radius:14px;cursor:crosshair;touch-action:none;}
+.graph-fn-row{display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);margin-bottom:5px;}
+.graph-fn-expr{color:#e0e0ff;font-family:'DM Mono',monospace;font-size:.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.graph-sml-btn{background:none;border:1px solid rgba(255,255,255,.12);color:#7070a0;font-family:'DM Mono',monospace;font-size:.6rem;padding:2px 7px;border-radius:7px;cursor:pointer;flex-shrink:0;}
+.graph-sml-btn:active{background:rgba(255,255,255,.1);}
+.graph-inp{background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,rgba(255,255,255,.04) 100%);border:1px solid rgba(255,255,255,.16);color:#eaeaff;font-family:'DM Mono',monospace;font-size:15px;padding:9px 12px;border-radius:11px;outline:none;flex:1;transition:border-color .2s;-webkit-appearance:none;}
+.graph-inp:focus{border-color:rgba(105,82,240,.7);}
+.graph-inp::placeholder{color:#5858a0;}
+.graph-add-btn{background:linear-gradient(145deg,#5b50f2,#8b35ee);border:none;color:#fff;font-family:'DM Mono',monospace;font-size:.72rem;padding:9px 14px;border-radius:11px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.graph-add-btn:active{opacity:.8;}
+.graph-ctrl-btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#a0a0c8;font-family:'DM Mono',monospace;font-size:.75rem;padding:5px 10px;border-radius:9px;cursor:pointer;transition:background .1s;}
+.graph-ctrl-btn:active{background:rgba(255,255,255,.14);}
+.graph-preset{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#8888b8;font-family:'DM Mono',monospace;font-size:.64rem;padding:4px 9px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .1s,color .1s;}
+.graph-preset:active,.graph-preset:hover{background:rgba(104,85,240,.14);color:#b0a8e8;}
+@media (orientation:landscape) and (max-height:500px){.btn{height:46px;font-size:.95rem;}.btn.sci{height:40px;font-size:.68rem;}}
+@media (prefers-reduced-motion:reduce){.fi,.btn,.sml,.fm-card,.tab-btn,.unit-pill{animation:none!important;transition:none!important;}.cursor{animation:none!important;opacity:1;}.spin{animation:none!important;}}
+`;
+if(typeof document!=="undefined"&&!document.getElementById("sc-styles")){
+  const _s=document.createElement("style");_s.id="sc-styles";_s.textContent=APP_CSS;document.head.appendChild(_s);
+}
+
+// ─── Oil / Currency ───────────────────────────────────────────────────────────
+const OIL_TO_BBL={bbl:1,Mbbl:1000,MMbbl:1e6,"m³":6.28981,ton:7.33};
+const OIL_CURRENCIES=["USD","EUR","GBP","JPY","CNY","AED","SAR","IDR","VND","MYR","CAD","AUD"];
+const OIL_SYMBOLS={USD:"$",EUR:"€",GBP:"£",JPY:"¥",CNY:"¥",AED:"د.إ",SAR:"﷼",IDR:"Rp",VND:"₫",MYR:"RM",CAD:"C$",AUD:"A$"};
+const OIL_NO_DECIMALS=new Set(["JPY","IDR","VND"]);
+function fmtCurrency(usd,cur,fxRates){
+  if(!usd) return "—";
+  const rate=fxRates?.[cur]??(cur==="USD"?1:null);
+  if(!rate) return `${fmtNum(usd)} USD`;
+  const val=usd*rate;
+  const sym=OIL_SYMBOLS[cur]||cur+" ";
+  const d=OIL_NO_DECIMALS.has(cur)?0:2;
+  return sym+val.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+}
+
+// ─── Unit conversion engine ───────────────────────────────────────────────────
+const UNITS={
+  Length:{units:["mm","cm","m","km","in","ft","yd","mi"],base:"m",toBase:{mm:1e-3,cm:1e-2,m:1,km:1e3,"in":0.0254,ft:0.3048,yd:0.9144,mi:1609.344}},
+  Weight:{units:["g","kg","lb","oz","t"],base:"kg",toBase:{g:1e-3,kg:1,lb:0.453592,oz:0.0283495,t:1e3}},
+  Temperature:{units:["°C","°F","K"],base:"°C",toBase:{}},
+  Speed:{units:["m/s","km/h","mph"],base:"m/s",toBase:{"m/s":1,"km/h":1/3.6,mph:0.44704}},
+  Volume:{units:["ml","l","gal","cup"],base:"l",toBase:{ml:1e-3,l:1,gal:3.78541,cup:0.236588}},
+  Time:{units:["s","min","hr","day","wk","mo","yr"],base:"s",toBase:{s:1,min:60,hr:3600,day:86400,wk:604800,mo:2629800,yr:31557600}},
+  Data:{units:["B","KB","MB","GB","TB"],base:"B",toBase:{B:1,KB:1024,MB:1048576,GB:1073741824,TB:1099511627776}},
+};
+function convertUnit(val,from,to,cat){
+  if(cat==="Temperature"){
+    if(from===to) return val;
+    let c=from==="°C"?val:from==="°F"?(val-32)*5/9:val-273.15;
+    return to==="°C"?c:to==="°F"?c*9/5+32:c+273.15;
+  }
+  const cfg=UNITS[cat];if(!cfg) throw new Error("unknown cat");
+  return val*(cfg.toBase[from]||1)/(cfg.toBase[to]||1);
+}
+
+// ─── Graph Tab ────────────────────────────────────────────────────────────────
+function GraphTab({onSendToAI}){
+  const canvasRef=useRef(null);
+  const [fns,setFns]=useState([{id:1,expr:"sin(x)",color:GRAPH_COLORS[0]}]);
+  const [inputExpr,setInputExpr]=useState("");
+  const [view,setView]=useState({xMin:-8,xMax:8,yMin:-5,yMax:5});
+  const [graphError,setGraphError]=useState(null);
+  const [isDragging,setIsDragging]=useState(false);
+  const dragRef=useRef({x:0,y:0,view:null});
+  const touchRef=useRef({});
+  const nextId=useRef(2);
+  const rafRef=useRef(null);       // tracks pending draw frame
+  const dragRafRef=useRef(null);   // throttles drag setView to 1/frame
+
+  function niceStep(raw){
+    if(!raw||raw<=0) return 1;
+    const exp=Math.floor(Math.log10(raw));
+    const frac=raw/Math.pow(10,exp);
+    const nice=frac<1.5?1:frac<3.5?2:frac<7.5?5:10;
+    return nice*Math.pow(10,exp);
+  }
+
+  useEffect(()=>{
+    const canvas=canvasRef.current;if(!canvas) return;
+    // Cancel any pending frame so we never double-draw
+    if(rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current=requestAnimationFrame(()=>{
+      rafRef.current=null;
+      const dpr=window.devicePixelRatio||1;
+      const rect=canvas.getBoundingClientRect();
+      const W=rect.width,H=rect.height;
+      // Only re-allocate backing store when size actually changes (avoids GPU texture churn on every pan)
+      if(canvas.width!==Math.round(W*dpr)||canvas.height!==Math.round(H*dpr)){
+        canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
+      }
+      const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);
+      const{xMin,xMax,yMin,yMax}=view;
+      const wx=x=>(x-xMin)/(xMax-xMin)*W;
+      const wy=y=>H-(y-yMin)/(yMax-yMin)*H;
+      ctx.fillStyle="#06060f";ctx.fillRect(0,0,W,H);
+      const xStep=niceStep((xMax-xMin)/8);const yStep=niceStep((yMax-yMin)/6);
+      const xStart=Math.ceil(xMin/xStep)*xStep;const yStart=Math.ceil(yMin/yStep)*yStep;
+      ctx.strokeStyle="rgba(255,255,255,0.05)";ctx.lineWidth=1;
+      for(let x=xStart;x<=xMax+xStep;x+=xStep){ctx.beginPath();ctx.moveTo(wx(x),0);ctx.lineTo(wx(x),H);ctx.stroke();}
+      for(let y=yStart;y<=yMax+yStep;y+=yStep){ctx.beginPath();ctx.moveTo(0,wy(y));ctx.lineTo(W,wy(y));ctx.stroke();}
+      ctx.strokeStyle="rgba(255,255,255,0.22)";ctx.lineWidth=1.5;
+      if(xMin<0&&xMax>0){ctx.beginPath();ctx.moveTo(wx(0),0);ctx.lineTo(wx(0),H);ctx.stroke();}
+      if(yMin<0&&yMax>0){ctx.beginPath();ctx.moveTo(0,wy(0));ctx.lineTo(W,wy(0));ctx.stroke();}
+      ctx.font="10px DM Mono,monospace";ctx.fillStyle="rgba(180,180,255,0.35)";
+      ctx.textAlign="center";
+      for(let x=xStart;x<=xMax;x+=xStep){
+        if(Math.abs(x)<xStep*0.01) continue;
+        const label=parseFloat(x.toPrecision(4)).toString();
+        const py=Math.min(H-5,Math.max(13,wy(0)+12));
+        ctx.fillText(label,wx(x),py);
+      }
+      ctx.textAlign="right";
+      for(let y=yStart;y<=yMax;y+=yStep){
+        if(Math.abs(y)<yStep*0.01) continue;
+        const label=parseFloat(y.toPrecision(4)).toString();
+        const px=Math.min(W-5,Math.max(25,wx(0)-5));
+        ctx.fillText(label,px,wy(y)+4);
+      }
+      // Reuse one scope object per draw — mutate x in place, no per-pixel allocation
+      const drawScope=Object.create(mathScope);
+      drawScope.x=0;drawScope.X=0;
+      ctx.shadowBlur=0; // shadow is very expensive on mobile — disabled
+      for(const fn of fns){
+        try{
+          const safeExpr=fn.expr.replace(/\^/g,"**").replace(/\bpi\b/gi,String(Math.PI)).replace(/\bphi\b/gi,"1.6180339887");
+          ctx.strokeStyle=fn.color;ctx.lineWidth=2.5;ctx.lineJoin="round";
+          let inPath=false;ctx.beginPath();let prevY=null;
+          for(let px=0;px<=W;px++){
+            drawScope.x=xMin+(px/W)*(xMax-xMin); // mutate in place — zero allocation
+            drawScope.X=drawScope.x;
+            try{
+              let y=math.evaluate(safeExpr,drawScope);
+              y=typeof y==="object"?math.number(y):Number(y);
+              if(!isFinite(y)||isNaN(y)||Math.abs(y)>1e8){
+                if(inPath){ctx.stroke();ctx.beginPath();inPath=false;}
+                prevY=null;continue;
+              }
+              if(prevY!==null&&Math.abs(y-prevY)>(yMax-yMin)*3){ctx.stroke();ctx.beginPath();inPath=false;}
+              const py2=wy(y);
+              if(!inPath){ctx.moveTo(px,py2);inPath=true;}
+              else ctx.lineTo(px,py2);
+              prevY=y;
+            }catch{if(inPath){ctx.stroke();ctx.beginPath();inPath=false;}prevY=null;}
+          }
+          if(inPath) ctx.stroke();
+        }catch{}
+      }
+    });
+    return()=>{if(rafRef.current){cancelAnimationFrame(rafRef.current);rafRef.current=null;}};
+  },[fns,view]);
+
+  const zoom=useCallback((factor)=>setView(v=>{
+    const cx=(v.xMin+v.xMax)/2,cy=(v.yMin+v.yMax)/2;
+    const hw=(v.xMax-v.xMin)/2*factor,hh=(v.yMax-v.yMin)/2*factor;
+    return{xMin:cx-hw,xMax:cx+hw,yMin:cy-hh,yMax:cy+hh};
+  }),[]);
+
+  const onWheel=useCallback((e)=>{e.preventDefault();zoom(e.deltaY>0?1.15:0.87);},[zoom]);
+  useEffect(()=>{
+    const c=canvasRef.current;if(!c) return;
+    c.addEventListener("wheel",onWheel,{passive:false});
+    return()=>c.removeEventListener("wheel",onWheel);
+  },[onWheel]);
+
+  const onTouchStart=(e)=>{
+    if(e.touches.length===2){const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;touchRef.current.pinchDist=Math.sqrt(dx*dx+dy*dy);}
+    else if(e.touches.length===1){touchRef.current.x=e.touches[0].clientX;touchRef.current.y=e.touches[0].clientY;touchRef.current.view={...view};}
+  };
+  const onTouchMove=(e)=>{
+    e.preventDefault();
+    if(e.touches.length===2){
+      const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(touchRef.current.pinchDist){zoom(touchRef.current.pinchDist/dist);touchRef.current.pinchDist=dist;}
+    }else if(e.touches.length===1&&touchRef.current.view){
+      const c=canvasRef.current;if(!c) return;
+      const rect=c.getBoundingClientRect();
+      const ddx=e.touches[0].clientX-touchRef.current.x,ddy=e.touches[0].clientY-touchRef.current.y;
+      const v=touchRef.current.view;const sx=(v.xMax-v.xMin)/rect.width,sy=(v.yMax-v.yMin)/rect.height;
+      if(dragRafRef.current) return; // throttle touch pan to display refresh rate
+      dragRafRef.current=requestAnimationFrame(()=>{
+        dragRafRef.current=null;
+        setView({xMin:v.xMin-ddx*sx,xMax:v.xMax-ddx*sx,yMin:v.yMin+ddy*sy,yMax:v.yMax+ddy*sy});
+      });
+    }
+  };
+  const onMouseDown=(e)=>{setIsDragging(true);dragRef.current={x:e.clientX,y:e.clientY,view:{...view}};};
+  const onMouseMove=(e)=>{
+    if(!isDragging) return;
+    const c=canvasRef.current;if(!c) return;
+    if(dragRafRef.current) return; // skip if a frame is already queued — throttle to display refresh
+    const ex=e.clientX,ey=e.clientY; // capture before async
+    dragRafRef.current=requestAnimationFrame(()=>{
+      dragRafRef.current=null;
+      const rect=c.getBoundingClientRect();
+      const v=dragRef.current.view;
+      const dx=(ex-dragRef.current.x)/rect.width*(v.xMax-v.xMin);
+      const dy=(ey-dragRef.current.y)/rect.height*(v.yMax-v.yMin);
+      setView({xMin:v.xMin-dx,xMax:v.xMax-dx,yMin:v.yMin+dy,yMax:v.yMax+dy});
+    });
+  };
+  const onMouseUp=()=>{
+    setIsDragging(false);
+    if(dragRafRef.current){cancelAnimationFrame(dragRafRef.current);dragRafRef.current=null;}
+  };
+  // Cancel both RAF handles on unmount
+  useEffect(()=>()=>{
+    if(rafRef.current) cancelAnimationFrame(rafRef.current);
+    if(dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
+  },[]);
+
+  const addFn=()=>{
+    const expr=inputExpr.trim();if(!expr) return;
+    try{
+      math.evaluate(expr.replace(/\^/g,"**").replace(/\bpi\b/gi,String(Math.PI)),{...mathScope,x:1});
+      setFns(prev=>[...prev,{id:nextId.current++,expr,color:GRAPH_COLORS[prev.length%GRAPH_COLORS.length]}]);
+      setInputExpr("");setGraphError(null);
+    }catch{setGraphError("Invalid — use x as variable, e.g. sin(x), x^2 - 4, 1/x");}
+  };
+
+  return(
+    <div className="fi">
+      <div style={{fontSize:".6rem",color:"#6060a0",letterSpacing:".1em",marginBottom:"10px"}}>FUNCTION GRAPHER</div>
+
+      <div style={{position:"relative",marginBottom:"10px",borderRadius:"14px",overflow:"hidden",border:"1px solid rgba(255,255,255,.08)",background:"#06060f"}}>
+        <canvas ref={canvasRef} className="graph-canvas"
+          style={{width:"100%",height:"220px",cursor:isDragging?"grabbing":"crosshair"}}
+          onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={()=>{touchRef.current={};}}
+        />
+        <div style={{position:"absolute",bottom:"8px",right:"8px",display:"flex",gap:"5px"}}>
+          <button className="graph-ctrl-btn" onClick={()=>zoom(0.7)}>+</button>
+          <button className="graph-ctrl-btn" onClick={()=>zoom(1.43)}>−</button>
+          <button className="graph-ctrl-btn" onClick={()=>setView({xMin:-8,xMax:8,yMin:-5,yMax:5})}>⌂</button>
+        </div>
+        <div style={{position:"absolute",top:"8px",left:"8px",fontSize:".5rem",color:"rgba(255,255,255,.18)",fontFamily:"DM Mono,monospace"}}>drag · scroll/pinch to zoom</div>
+      </div>
+
+      {fns.length>0&&(
+        <div style={{marginBottom:"9px"}}>
+          {fns.map(fn=>(
+            <div key={fn.id} className="graph-fn-row">
+              <div style={{width:"10px",height:"10px",borderRadius:"50%",background:fn.color,flexShrink:0,boxShadow:`0 0 6px ${fn.color}88`}}/>
+              <span className="graph-fn-expr">y = {fn.expr}</span>
+              {onSendToAI&&<button className="graph-sml-btn" style={{borderColor:"rgba(104,85,240,.3)",color:"#9080d0"}} onClick={()=>onSendToAI(`Explain the graph of y = ${fn.expr}`)}>AI↗</button>}
+              <button className="graph-sml-btn" onClick={()=>setFns(prev=>prev.filter(f=>f.id!==fn.id))}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{display:"flex",gap:"7px",marginBottom:"8px"}}>
+        <input className="graph-inp" placeholder="e.g. sin(x), x^2 - 4, tan(x), e^(-x^2)"
+          value={inputExpr} onChange={e=>setInputExpr(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter") addFn();}}
+        />
+        <button className="graph-add-btn" onClick={addFn}>+ Add</button>
+      </div>
+
+      {graphError&&<div style={{color:"#f08080",fontSize:".65rem",marginBottom:"8px",padding:"6px 10px",background:"rgba(220,80,80,.08)",borderRadius:"8px",border:"1px solid rgba(220,80,80,.2)"}}>{graphError}</div>}
+
+      <div style={{marginBottom:"9px"}}>
+        <div style={{fontSize:".57rem",color:"#5858a0",letterSpacing:".08em",marginBottom:"6px"}}>PRESETS</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
+          {GRAPH_EXAMPLES.map((ex,i)=>(
+            <button key={i} className="graph-preset" onClick={()=>{
+              if(!fns.some(f=>f.expr===ex))
+                setFns(prev=>[...prev,{id:nextId.current++,expr:ex,color:GRAPH_COLORS[(prev.length)%GRAPH_COLORS.length]}]);
+            }}>{ex}</button>
+          ))}
+        </div>
+      </div>
+
+      {fns.length>0&&(
+        <button className="sml" style={{fontSize:".6rem",padding:"4px 12px"}} onClick={()=>setFns([])}>clear all</button>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+function SmartCalc(){
+  const [expr,setExpr]=useState("");const [prevExpr,setPrevExpr]=useState("");
+  const [justEval,setJustEval]=useState(false);const [calcType,setCalcType]=useState("basic");
+  const [angleMode,setAngle]=useState("deg");const [fracMode,setFracMode]=useState(false);
+  const [pressed,setPressed]=useState(null);
+  const [lang,setLang]=useState(()=>{try{return localStorage.getItem("sc_lang")||"en";}catch{return"en";}});
+  const [showLangDrop,setShowLangDrop]=useState(false);
+  const [tab,setTab]=useState("calc");const [history,setHistory]=useState([]);
+  const [showHist,setShowHist]=useState(false);const [copied,setCopied]=useState(null);
+  const [toast,setToast]=useState(null);
+  const [fmCat,setFmCat]=useState(Object.keys(FORMULAS)[0]);const [fmSel,setFmSel]=useState(null);
+  const [fmVars,setFmVars]=useState({});const [fmResult,setFmResult]=useState(null);
+  const [fmUnit,setFmUnit]=useState("m"); // selected input unit for geometry formulas
+  const [ucCat,setUcCat]=useState("Length");const [ucFrom,setUcFrom]=useState("m");
+  const [ucTo,setUcTo]=useState("ft");const [ucVal,setUcVal]=useState("");const [ucResult,setUcResult]=useState("");
+  const [cvSubTab,setCvSubTab]=useState("units");
+  const [oilUnit,setOilUnit]=useState("bbl");const [oilQty,setOilQty]=useState("");
+  const [oilPrice,setOilPrice]=useState("75");const [oilCurrency,setOilCurrency]=useState("USD");
+  const [oilFxRates,setOilFxRates]=useState(null);const [oilFxLoading,setOilFxLoad]=useState(false);
+  const [oilPriceLoading,setOilPriceLoad]=useState(false);const [oilPriceStale,setOilPriceStale]=useState(true);
+  const [aiMsgs,setAiMsgs]=useState([]);const [aiInput,setAiInput]=useState("");const [aiLoading,setAiLoad]=useState(false);
+  const [orKey,setOrKey]=useState(()=>{try{return localStorage.getItem("sc_orkey")||"";}catch{return"";}});
+  const [orKeyDraft,setOrKeyDraft]=useState("");const [showKey,setShowKey]=useState(false);
+  const [model,setModel]=useState(FREE_MODELS[0].id);const [showDrop,setShowDrop]=useState(false);
+  const [showSettings,setShowSettings]=useState(false);
+  const [randDice,setRandDice]=useState(6);const [randDiceCount,setRandDiceCount]=useState(1);
+  const [diceResults,setDiceResults]=useState([]);const [randMin,setRandMin]=useState("1");
+  const [randMax,setRandMax]=useState("100");const [randResult,setRandResult]=useState(null);
+  const [coinResult,setCoinResult]=useState(null);const [coinFlipping,setCoinFlipping]=useState(false);
+  const [coinHistory,setCoinHistory]=useState([]);
+  const [diceHistory,setDiceHistory]=useState([]);
+  const [randHistory,setRandHistory]=useState([]);
+  const [mathProb,setMathProb]=useState(null);const [mathAns,setMathAns]=useState("");
+  const [mathScore,setMathScore]=useState({right:0,wrong:0});const [mathChecked,setMathChecked]=useState(null);
+  const [mathDiff,setMathDiff]=useState("Random");const [mathStreak,setMathStreak]=useState(0);
+  const [mathTag,setMathTag]=useState(null);
+  const [mathBestStreak,setMathBestStreak]=useState(0);
+  const [mathTimer,setMathTimer]=useState(null);
+  const [mathTimerActive,setMathTimerActive]=useState(false);
+  const mathTimerRef2=useRef(null);
+  const [mathHintShown,setMathHintShown]=useState(false);const [mathSession,setMathSession]=useState(0);
+  const [showDiffDrop,setShowDiffDrop]=useState(false);const [resultFlash,setResultFlash]=useState(false);
+  const longPressTimerRef=useRef(null); // ref avoids re-render on press
+  const [localAiStatus,setLocalAiStatus]=useState("idle");
+  const [localAiProgress,setLocalAiProgress]=useState(0);const [localAiPhase,setLocalAiPhase]=useState("");
+
+  // ── Refs ──
+  const t=LANGS[lang]||LANGS.en;
+  const langDropRef=useRef(null);const diffDropRef=useRef(null);const mathInputRef=useRef(null);
+  const aiRef=useRef(null);const aiScroll=useRef(null);const dropRef=useRef(null);
+  const handleRef=useRef(null);const exprRef=useRef(expr);const justEvalRef=useRef(justEval);
+  const swipeStartX=useRef(null);const displayRef=useRef(null);const pressedTimerRef=useRef(null);const flashTimerRef=useRef(null);
+  const localModelRef=useRef(null);const localTokenizerRef=useRef(null);
+  const lastProbTypeRef=useRef(null);
+  // ★ Context memory for offline AI
+  const offlineCtx=useRef({vars:{},lastResult:null,lastExpr:null});
+
+  // Cleanup all timer refs on unmount to prevent memory leaks
+  useEffect(()=>{
+    return()=>{
+      if(toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if(copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if(pressedTimerRef.current) clearTimeout(pressedTimerRef.current);
+      if(flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    };
+  },[]);
+
+  // exprRef/justEvalRef are kept in sync directly inside handleBtn — no effects needed
+
+  const parenBalance=useMemo(()=>{const e=expr||"";let open=0;for(const c of e){if(c==="(")open++;else if(c===")")open--;}return open;},[expr]);
+  const displayVal=expr||"0";
+  const[displayFmt,displaySize]=useMemo(()=>{
+    const v=displayVal;let fmt=v;
+    if(v!=="Error"&&v!=="0"&&!v.includes("/")&&!v.includes("e")&&!v.includes("E")){
+      const num=parseFloat(v);
+      if(isFinite(num)){const[int,dec]=v.split(".");const fi=int.replace(/\B(?=(\d{3})+(?!\d))/g,",");fmt=dec!==undefined?`${fi}.${dec}`:fi;}
+    }
+    const sz=v.length>18?".95rem":v.length>13?"1.35rem":v.length>9?"1.85rem":"2.5rem";
+    return[fmt,sz];
+  },[displayVal]);
+  const allBtns=useMemo(()=>calcType==="sci"?[...SCI_BTNS.flat(),...BASIC_BTNS.flat().map(b=>({l:b,v:b}))]:BASIC_BTNS.flat().map(b=>({l:b,v:b})),[calcType]);
+  const sciCount=SCI_BTNS.flat().length;
+  const mathProblems=useMemo(()=>getMathProblems(t.mathQ),[t]);
+  const DIFF_CONFIG=useMemo(()=>{const dc=t.diffConfig||{};const result={};for(const[key,base]of Object.entries(DIFF_BASE)){result[key]={...base,desc:dc[key]?.desc||base.desc||key};}return result;},[t]);
+  const activeModel=useMemo(()=>FREE_MODELS.find(m=>m.id===model)||FREE_MODELS[0],[model]);
+
+  const haptic=(ms=8)=>{try{navigator.vibrate?.(ms);}catch{}};
+  const toastTimerRef=useRef(null);
+  const copiedTimerRef=useRef(null);
+  const showToast=useCallback((msg,type="info")=>{
+    if(toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({msg,type,id:Date.now()});
+    toastTimerRef.current=setTimeout(()=>{setToast(null);toastTimerRef.current=null;},2600);
+  },[]);
+  const copyText=useCallback(async(text,id)=>{
+    try{
+      await navigator.clipboard.writeText(text);haptic(12);
+      if(copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      setCopied(id);
+      copiedTimerRef.current=setTimeout(()=>{setCopied(null);copiedTimerRef.current=null;},2000);
+      showToast("Copied!","success");
+    }catch{}
+  },[showToast]);
+
+  useEffect(()=>{
+    // Always attached but only acts when a dropdown is open – avoids constant re-registration
+    const fn=(e)=>{
+      if(dropRef.current&&!dropRef.current.contains(e.target)) setShowDrop(false);
+      if(diffDropRef.current&&!diffDropRef.current.contains(e.target)) setShowDiffDrop(false);
+      if(langDropRef.current&&!langDropRef.current.contains(e.target)) setShowLangDrop(false);
+    };
+    document.addEventListener("mousedown",fn,{passive:true});
+    return()=>document.removeEventListener("mousedown",fn);
+  },[]);
+  useEffect(()=>{if(!aiRef.current) return;aiRef.current.style.height="auto";aiRef.current.style.height=Math.min(aiRef.current.scrollHeight,130)+"px";},[aiInput]);
+  useEffect(()=>{if(aiScroll.current) aiScroll.current.scrollTop=aiScroll.current.scrollHeight;},[aiMsgs,aiLoading]);
+  useEffect(()=>{
+    if(tab!=="ai") return;
+    const t=setTimeout(()=>aiRef.current?.focus(),80);
+    return()=>clearTimeout(t);
+  },[tab]);
+  useEffect(()=>{
+    if(ucVal===""){setUcResult("");return;}
+    try{setUcResult(fmtNum(convertUnit(parseFloat(ucVal),ucFrom,ucTo,ucCat)));}catch{setUcResult("Error");}
+  },[ucVal,ucFrom,ucTo,ucCat]);
+  useEffect(()=>{
+    if(tab!=="calc") return;
+    const fn=(e)=>{
+      if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
+      const m={"Enter":"=","=":"=","Backspace":"⌫","Escape":"C","+":"+","-":"−","*":"×","/":"÷","(":"(",")":")","^":"^","%":"%",".":"."};
+      if(m[e.key]){e.preventDefault();handleRef.current(m[e.key]);}
+      else if(e.key>="0"&&e.key<="9") handleRef.current(e.key);
+    };
+    window.addEventListener("keydown",fn);return()=>window.removeEventListener("keydown",fn);
+  },[tab]);
+
+  const onDisplayPointerDown=(e)=>{swipeStartX.current=e.clientX;};
+  const onDisplayPointerUp=(e)=>{if(swipeStartX.current===null) return;const dx=e.clientX-swipeStartX.current;swipeStartX.current=null;if(dx<-40){haptic(6);handleRef.current("⌫");}};
+  const onCPointerDown=()=>{longPressTimerRef.current=setTimeout(()=>{haptic([20,50,20]);setHistory([]);setShowHist(false);showToast("History cleared","success");},600);};
+  const onCPointerUp=()=>{if(longPressTimerRef.current){clearTimeout(longPressTimerRef.current);longPressTimerRef.current=null;}};
+
+  const handleBtn=(val)=>{
+    setPressed(val);if(pressedTimerRef.current)clearTimeout(pressedTimerRef.current);pressedTimerRef.current=setTimeout(()=>setPressed(null),90);
+    haptic(val==="="?22:val==="C"?14:6);
+    const curExpr=exprRef.current;const curJustEval=justEvalRef.current;
+    if(val==="C"){exprRef.current="";justEvalRef.current=false;setExpr("");setPrevExpr("");setJustEval(false);return;}
+    if(val==="⌫"){
+      if(curJustEval){exprRef.current="";justEvalRef.current=false;setExpr("");setPrevExpr("");setJustEval(false);return;}
+      const next=curExpr.length>1?curExpr.slice(0,-1):"";exprRef.current=next;setExpr(next);return;
+    }
+    if(val==="±"){const next=curExpr.startsWith("-")?curExpr.slice(1):curExpr?"-"+curExpr:"";exprRef.current=next;setExpr(next);justEvalRef.current=false;setJustEval(false);return;}
+    if(val==="%"){const n=parseFloat(curExpr);if(isNaN(n)) return;const next=fmtNum(n/100);exprRef.current=next;setExpr(next);justEvalRef.current=false;setJustEval(false);return;}
+    if(val==="="){
+      const target=curExpr||"0";
+      try{
+        const r=calcEval(target,angleMode,fracMode);
+        exprRef.current=r;justEvalRef.current=true;
+        setPrevExpr(target+" =");setExpr(r);setJustEval(true);
+        setHistory(h=>[{expr:target,result:r,time:ts()},...h.slice(0,29)]);
+        if(flashTimerRef.current)clearTimeout(flashTimerRef.current);setResultFlash(true);flashTimerRef.current=setTimeout(()=>setResultFlash(false),320);
+      }catch{exprRef.current="Error";justEvalRef.current=true;setPrevExpr(target+" =");setExpr("Error");setJustEval(true);}
+      return;
+    }
+    const isOp=["+","−","×","÷","^"].includes(val);
+    if(curJustEval){const next=isOp?curExpr+val:val;exprRef.current=next;justEvalRef.current=false;setExpr(next);setJustEval(false);return;}
+    let next=curExpr;
+    if(val==="."&&/\.\d*$/.test(next)) return;
+    if(val==="."&&(next===""||isOp)) next=next+"0.";
+    else next=next+val;
+    exprRef.current=next;setExpr(next);
+  };
+  handleRef.current=handleBtn;
+
+  // Unit conversion factors to metres (for length inputs in geometry)
+  const FM_LENGTH_UNITS={
+    mm:{label:"mm",toM:0.001,sq:"mm²",cu:"mm³"},
+    cm:{label:"cm",toM:0.01,sq:"cm²",cu:"cm³"},
+    m:{label:"m",toM:1,sq:"m²",cu:"m³"},
+    km:{label:"km",toM:1000,sq:"km²",cu:"km³"},
+    "in":{label:"in",toM:0.0254,sq:"in²",cu:"in³"},
+    ft:{label:"ft",toM:0.3048,sq:"ft²",cu:"ft³"},
+    yd:{label:"yd",toM:0.9144,sq:"yd²",cu:"yd³"},
+  };
+  const FM_GEOMETRY_CATS=["Geometry"];
+  const isGeomFormula=fmSel&&FM_GEOMETRY_CATS.includes(fmCat);
+  const selUnitCfg=FM_LENGTH_UNITS[fmUnit]||FM_LENGTH_UNITS["m"];
+
+  const calcFormula=useCallback(()=>{
+    if(!fmSel) return;
+    try{
+      const vals={};
+      for(const v of fmSel.vars){
+        let n=parseFloat(fmVars[v.k]);
+        if(isNaN(n)) throw new Error("Fill all fields");
+        // Convert input length to metres for geometry
+        if(isGeomFormula) n=n*(FM_LENGTH_UNITS[fmUnit]?.toM||1);
+        vals[v.k]=n;
+      }
+      const rawResult=fmSel.fn(vals);
+      // Convert result back from m/m²/m³ to chosen unit
+      let displayResult=rawResult;
+      let displayUnit=fmSel.unit;
+      if(isGeomFormula){
+        const factor=FM_LENGTH_UNITS[fmUnit]?.toM||1;
+        if(fmSel.unit==="units²"){displayResult=rawResult/(factor*factor);displayUnit=selUnitCfg.sq;}
+        else if(fmSel.unit==="units³"){displayResult=rawResult/(factor*factor*factor);displayUnit=selUnitCfg.cu;}
+        else if(fmSel.unit==="units"){displayResult=rawResult/factor;displayUnit=selUnitCfg.label;}
+      }
+      setFmResult({value:fmtNum(displayResult),unit:displayUnit});
+      setHistory(h=>[{expr:fmSel.name,result:fmtNum(displayResult)+" "+displayUnit,time:ts()},...h.slice(0,29)]);
+    }catch(e){setFmResult({value:"Error: "+e.message,unit:""});}
+  },[fmSel,fmVars,fmUnit,isGeomFormula,selUnitCfg]);
+
+  const oilInBbl=()=>{const q=parseFloat(oilQty);if(isNaN(q)) return null;return q*(OIL_TO_BBL[oilUnit]||1);};
+  const oilValueUSD=()=>{const b=oilInBbl();if(!b) return null;return b*parseFloat(oilPrice||0);};
+  const fetchOilPrice=useCallback(async()=>{
+    setOilPriceLoad(true);
+    try{const res=await fetch("https://query1.finance.yahoo.com/v8/finance/chart/CL=F?interval=1d&range=1d");const d=await res.json();const price=d?.chart?.result?.[0]?.meta?.regularMarketPrice;if(price){setOilPrice(parseFloat(price).toFixed(2));setOilPriceStale(false);showToast(`✓ WTI: $${parseFloat(price).toFixed(2)}/bbl`,"success");}else throw new Error("No price");}
+    catch{showToast("Couldn't fetch price — enter manually","info");}
+    setOilPriceLoad(false);
+  },[showToast]);
+  const fetchFxRates=useCallback(async()=>{
+    if(oilFxRates) return;setOilFxLoad(true);
+    try{const res=await fetch("https://api.exchangerate-api.com/v4/latest/USD");const d=await res.json();setOilFxRates(d.rates);}catch{}
+    setOilFxLoad(false);
+  },[oilFxRates]);
+
+  // ── Local SLM with math grounding ────────────────────────────────────────
+  const LOCAL_MODEL_ID="LiquidAI/LFM2.5-1.2B-Thinking-ONNX";
+  const initLocalAI=useCallback(async()=>{
+    if(localAiStatus==="ready"||localAiStatus==="loading") return;
+    if(!navigator.gpu){setLocalAiStatus("no-webgpu");showToast(t.wgpuError,"info");return;}
+    setLocalAiStatus("loading");setLocalAiProgress(0);setLocalAiPhase("tokenizer");
+    try{
+      const tfUrl="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/dist/transformers.min.js";
+      const{AutoModelForCausalLM,AutoTokenizer,env}=await import(tfUrl);
+      env.allowLocalModels=false;env.useBrowserCache=true;
+      const tokenizer=await AutoTokenizer.from_pretrained(LOCAL_MODEL_ID,{
+        progress_callback:(p)=>{if(p.status==="progress")setLocalAiProgress(Math.min(8,Math.round((p.progress||0)*8)));}
+      });
+      localTokenizerRef.current=tokenizer;setLocalAiProgress(8);setLocalAiPhase("model");
+      const mdl=await AutoModelForCausalLM.from_pretrained(LOCAL_MODEL_ID,{
+        device:"webgpu",dtype:"q4",
+        progress_callback:(p)=>{if(p.status==="progress")setLocalAiProgress(8+Math.round((p.progress||0)*92));}
+      });
+      localModelRef.current=mdl;setLocalAiStatus("ready");setLocalAiProgress(100);setLocalAiPhase("");
+      showToast("✓ SLM ready — math-grounded, fully offline!","success");
+    }catch(err){
+      setLocalAiPhase("");
+      const msg=(err?.message||"").toLowerCase();
+      setLocalAiStatus(msg.includes("webgpu")?"no-webgpu":"error");
+      showToast(msg.includes("webgpu")?t.wgpuError:"SLM failed to load","info");
+    }
+  },[localAiStatus,showToast,t.wgpuError]);
+
+  const runLocalAI=useCallback(async(text)=>{
+    if(!localModelRef.current||!localTokenizerRef.current) return null;
+    try{
+      const tfUrl="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/dist/transformers.min.js";
+      const{TextStreamer}=await import(tfUrl);
+      // ★ Ground the SLM with pre-computed math facts
+      const mathFacts=extractMathFacts(text,angleMode);
+      const groundedSystem=buildGroundedSLMPrompt(mathFacts);
+      const messages=[{role:"system",content:groundedSystem},{role:"user",content:text}];
+      const input=localTokenizerRef.current.apply_chat_template(messages,{add_generation_prompt:true,return_dict:true});
+      let output="";
+      const streamer=new TextStreamer(localTokenizerRef.current,{
+        skip_prompt:true,skip_special_tokens:true,
+        callback_function:(token)=>{output+=token;}
+      });
+      await localModelRef.current.generate({...input,max_new_tokens:600,do_sample:false,repetition_penalty:1.1,streamer});
+      const m=output.match(/{[\s\S]*}/);
+      if(m){try{return{...JSON.parse(m[0]),engine:"local",mathFacts};}catch{}}
+      return{answer:output.trim(),steps:[],expression:"",engine:"local",mathFacts};
+    }catch(err){console.error("SLM error:",err);return null;}
+  },[angleMode]);
+
+  const saveKey=()=>{
+    const k=orKeyDraft.trim();setOrKey(k);
+    try{if(k)localStorage.setItem("sc_orkey",k);else localStorage.removeItem("sc_orkey");}catch{}
+    setShowSettings(false);setOrKeyDraft("");
+    showToast(k?"✓ OpenRouter key saved":"Key removed",k?"success":"info");
+  };
+
+  // ── sendAi: context-aware, grounded SLM, multi-tier ──────────────────────
+  const sendAi=async(override)=>{
+    const userText=(typeof override==="string"?override:aiInput).trim();
+    if(!userText||aiLoading) return;
+    setAiInput("");setAiLoad(true);
+
+    // ★ Update context vars from this message
+    const newVars=extractContextVars(userText);
+    if(Object.keys(newVars).length>0) offlineCtx.current.vars={...offlineCtx.current.vars,...newVars};
+
+    const nextMsgs=[...aiMsgs.slice(-38),{role:"user",content:userText,time:ts()}]; // cap at 20 exchanges
+    setAiMsgs(nextMsgs);
+
+    // ★ Resolve context references (it, that, known variables)
+    const resolvedText=resolveContextRefs(userText,offlineCtx.current);
+    const wasResolved=resolvedText!==userText;
+    const complexity=scoreComplexity(resolvedText);
+
+    // TIER 1: Pure offline parser — instant, no model
+    if(complexity!=="complex"){
+      const offlineResult=offlineParser(resolvedText,UNITS,convertUnit,fmtNum,offlineCtx.current);
+      if(offlineResult){
+        const numR=parseFloat(offlineResult.answer.replace(/[^\d.\-]/g,""));
+        if(!isNaN(numR)){offlineCtx.current.lastResult=offlineResult.answer;offlineCtx.current.lastExpr=offlineResult.expression;}
+        const ctxNote=wasResolved?` · resolved to "${resolvedText}"`:Object.keys(offlineCtx.current.vars).length>0?" · context-aware":"";
+        setAiMsgs(m=>[...m,{role:"assistant",content:offlineResult.answer,parsed:{answer:offlineResult.answer,steps:offlineResult.steps||[],expression:offlineResult.expression||"",note:`⚡ Offline${ctxNote}`},engine:"offline",time:ts(),mathFacts:[]}]);
+        setHistory(h=>[{expr:userText,result:offlineResult.answer,time:ts()},...h.slice(0,29)]);
+        setAiLoad(false);return;
+      }
+    }
+
+    // TIER 2: SLM (math-grounded, no internet)
+    if(localAiStatus==="ready"&&complexity!=="complex"){
+      const localResult=await runLocalAI(resolvedText);
+      if(localResult?.answer&&!localResult.answer.toLowerCase().startsWith("error")){
+        offlineCtx.current.lastResult=localResult.answer;
+        offlineCtx.current.lastExpr=localResult.expression;
+        const nFacts=localResult.mathFacts?.length||0;
+        const groundNote=nFacts>0?`🔒 ${nFacts} value${nFacts>1?"s":""} verified by math engine`:"🧠 SLM on your device";
+        setAiMsgs(m=>[...m,{role:"assistant",content:localResult.answer,parsed:{answer:localResult.answer,steps:localResult.steps||[],expression:localResult.expression||"",note:`${groundNote} · no internet`},engine:"local",time:ts(),mathFacts:localResult.mathFacts||[]}]);
+        setHistory(h=>[{expr:userText,result:localResult.answer,time:ts()},...h.slice(0,29)]);
+        setAiLoad(false);return;
+      }
+    }
+
+    // TIER 3: Cloud
+    try{
+      let raw="";
+      const apiMsgs=nextMsgs.map(m=>({role:m.role,content:typeof m.content==="string"?m.content:(m.rawText||String(m.content))}));
+      if(orKey){
+        const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${orKey}`,"HTTP-Referer":"https://smartcalc.app","X-Title":"SmartCalc"},body:JSON.stringify({model,max_tokens:1000,messages:[{role:"system",content:AI_SYSTEM},...apiMsgs]})});
+        const d=await res.json();raw=d.choices?.[0]?.message?.content||"";
+        if(!raw&&d.error) throw new Error(d.error.message);
+      }else{
+        const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:AI_SYSTEM,messages:apiMsgs})});
+        const d=await res.json();raw=d.content?.map(b=>b.text||"").join("")||"";
+      }
+      const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
+      offlineCtx.current.lastResult=parsed.answer;
+      setAiMsgs(m=>[...m,{role:"assistant",content:parsed.answer,rawText:raw,parsed,engine:orKey?model:"claude",time:ts(),mathFacts:[]}]);
+      setHistory(h=>[{expr:userText,result:parsed.answer,time:ts()},...h.slice(0,29)]);
+    }catch(err){
+      const isOffline=!navigator.onLine;
+      setAiMsgs(m=>[...m,{role:"assistant",content:"Error",parsed:{answer:isOffline?"You're offline":"Couldn't get a response",steps:isOffline?["No internet — offline handles: tips, %, conversions, mortgage, geometry & more"]:["Check connection or API key"],note:""},isError:true,engine:"error",time:ts(),mathFacts:[]}]);
+    }
+    setAiLoad(false);
+  };
+
+  const btnCls=(b,i)=>{
+    const sci=calcType==="sci"&&i<sciCount;const p=pressed===b.v?" pressed":"";
+    if(sci) return"btn sci"+p;
+    if(b.v==="=") return"btn eq"+p;
+    if(["+","−","×","÷","^"].includes(b.v)) return"btn op"+p;
+    if(b.v==="C") return"btn red"+p;
+    if(["±","%","⌫"].includes(b.v)) return"btn dim"+p;
+    return"btn"+p;
+  };
+
+  const TABS=useMemo(()=>[
+    {id:"calc",icon:"⊞",label:t.tabs[0]},
+    {id:"formula",icon:"∑",label:t.tabs[1]},
+    {id:"convert",icon:"⇌",label:t.tabs[2]},
+    {id:"random",icon:"🎲",label:t.tabs[3]},
+    {id:"graph",icon:"📈",label:t.tabs[4]||"Graph"},
+    {id:"ai",icon:"✦",label:t.tabs[5]||t.tabs[4]||"AI"},
+  ],[t]);
+
+  const newMathProb=useCallback(()=>{
+    let pool=mathProblems;
+    if(mathDiff!=="Random") pool=pool.filter(p=>p.level===mathDiff);
+    if(mathTag) pool=pool.filter(p=>p.tag===mathTag);
+    if(!pool.length) pool=mathProblems;
+    const tagMap=new Map();
+    for(const p of pool){if(!tagMap.has(p.tag))tagMap.set(p.tag,[]);tagMap.get(p.tag).push(p);}
+    let tags=[...tagMap.keys()];
+    if(tags.length>1&&!mathTag) tags=tags.filter(tg=>tg!==lastProbTypeRef.current);
+    const chosenTag=mathTag||tags[Math.floor(Math.random()*tags.length)];
+    lastProbTypeRef.current=chosenTag;
+    const bucket=tagMap.get(chosenTag)||pool;
+    const prob=bucket[Math.floor(Math.random()*bucket.length)];
+    const generated=prob.gen();
+    setMathProb({...generated,tag:prob.tag,level:prob.level});
+    setMathAns("");setMathChecked(null);setMathHintShown(false);
+    setTimeout(()=>mathInputRef.current?.focus(),80);
+  },[mathProblems,mathDiff,mathTag]);
+
+  // ── Context vars display ──
+  const ctxVars=Object.entries(offlineCtx.current.vars||{});
+
+  // ══════════════════════════════════════════════════════════════════════════
+  return(
+    <div style={{minHeight:"100vh",background:"#06060f",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Mono',monospace",padding:"12px 12px 48px",position:"relative",overflow:"hidden"}}>
+      {toast&&(<div className={`toast${toast.type==="success"?" success":""}`}>{toast.msg}</div>)}
+      <div style={{width:"100%",maxWidth:"400px"}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"8px",position:"relative"}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:"1.35rem",color:"#f2f2ff",letterSpacing:"-0.03em",lineHeight:1}}>
+              SMART<span style={{background:"linear-gradient(135deg,#8b7fff,#c070ff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 14px rgba(140,110,255,.5))"}}>CALC</span>
+            </div>
+          </div>
+          <div style={{position:"absolute",right:0,top:0}} ref={langDropRef}>
+            <button className="lang-btn" onClick={()=>setShowLangDrop(v=>!v)}>
+              <span>{LANGS[lang].flag}</span><span style={{fontSize:".6rem",color:"#9090b8"}}>▾</span>
+            </button>
+            {showLangDrop&&(
+              <div className="lang-list fi">
+                {Object.entries(LANGS).map(([code,l])=>(
+                  <div key={code} className={`lang-item${lang===code?" sel":""}`}
+                    onClick={()=>{setLang(code);try{localStorage.setItem("sc_lang",code);}catch{}setShowLangDrop(false);}}>
+                    <span>{l.flag}</span><span>{l.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Main card */}
+        <div style={{background:"linear-gradient(160deg,rgba(255,255,255,.07) 0%,rgba(255,255,255,.03) 100%)",border:"1px solid rgba(255,255,255,.12)",borderRadius:"22px",padding:"14px",boxShadow:"0 30px 90px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.08)"}}>
+
+          {/* Tabs */}
+          <div style={{display:"flex",gap:"1px",marginBottom:"13px",borderRadius:"14px",background:"rgba(0,0,0,.25)",padding:"3px",border:"1px solid rgba(255,255,255,.07)"}}>
+            {TABS.map(tb=>(
+              <button key={tb.id} className={`tab-btn${tab===tb.id?" on":""}`} onClick={()=>setTab(tb.id)}>
+                <span className="t-icon">{tb.icon}</span>
+                <span>{tb.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* History panel */}
+          {showHist&&history.length>0&&(
+            <div className="fi" style={{marginBottom:"11px",background:"rgba(0,0,0,.2)",borderRadius:"14px",padding:"8px 10px",border:"1px solid rgba(255,255,255,.07)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"7px"}}>
+                <span style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em"}}>{t.historyLabel}</span>
+                <button className="sml" style={{fontSize:".58rem",padding:"2px 8px"}} onClick={()=>{setHistory([]);setShowHist(false);}}>{t.clearAll}</button>
+              </div>
+              {history.slice(0,8).map((h,i)=>(
+                <div key={i} className="hr-row" onClick={()=>{setExpr(h.result);setJustEval(true);setShowHist(false);}}>
+                  <span style={{color:"#b0b0e0",fontSize:".67rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{h.expr}</span>
+                  <span style={{color:"#c8bcff",fontSize:".76rem",flexShrink:0}}>{h.result}</span>
+                  <span style={{color:"#6060a0",fontSize:".58rem",flexShrink:0}}>{h.time}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ══ CALC TAB ══ */}
+          {tab==="calc"&&(
+            <div className="fi">
+              <div ref={displayRef} onPointerDown={onDisplayPointerDown} onPointerUp={onDisplayPointerUp}
+                className={resultFlash?"result-flash":""}
+                style={{background:"linear-gradient(160deg,rgba(0,0,0,.62) 0%,rgba(5,3,18,.55) 100%)",borderRadius:"17px",padding:"11px 15px 15px",marginBottom:"10px",minHeight:"96px",display:"flex",flexDirection:"column",justifyContent:"flex-end",border:"1px solid rgba(255,255,255,.07)",boxShadow:"inset 0 2px 12px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)",position:"relative",cursor:"default",userSelect:"none"}}>
+                {parenBalance>0&&(<div className="paren-badge">{"(".repeat(parenBalance)} needs {parenBalance} ")"</div>)}
+                <div style={{color:"#9090d0",fontSize:".65rem",minHeight:"17px",textAlign:"right",fontStyle:"italic"}}>{prevExpr}</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",marginTop:"6px"}}>
+                  <div style={{color:displayVal==="Error"?"#f07080":"#f4f4ff",fontSize:displaySize,fontWeight:300,letterSpacing:"-0.03em",lineHeight:1.1,transition:"font-size .1s",textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{displayFmt}</div>
+                  {!justEval&&<span className="cursor"/>}
+                </div>
+                {displayVal!=="0"&&displayVal!=="Error"&&(
+                  <button className={`cp${copied==="disp"?" ok":""}`} onClick={()=>copyText(displayVal,"disp")} style={{position:"absolute",top:"11px",right:"11px"}}>
+                    {copied==="disp"?"✓":t.copy}
+                  </button>
+                )}
+                <div className="swipe-hint">{t.swipeHint}</div>
+              </div>
+              <div style={{display:"flex",gap:"5px",marginBottom:"8px",alignItems:"center",flexWrap:"wrap"}}>
+                {["basic","sci"].map(ct=>(
+                  <button key={ct} onClick={()=>setCalcType(ct)} style={{background:calcType===ct?(ct==="basic"?"rgba(79,70,229,.16)":"rgba(60,160,110,.12)"):"none",border:`1px solid ${calcType===ct?(ct==="basic"?"rgba(79,70,229,.4)":"rgba(60,160,110,.4)"):"rgba(255,255,255,.08)"}`,color:calcType===ct?(ct==="basic"?"#b0a4f4":"#70d8b0"):"#484878",fontFamily:"'DM Mono',monospace",fontSize:".59rem",padding:"4px 10px",borderRadius:"20px",cursor:"pointer",transition:"all .15s",letterSpacing:".06em",textTransform:"uppercase"}}>
+                    {ct==="basic"?t.basic:t.sci}
+                  </button>
+                ))}
+                {calcType==="sci"&&(<button onClick={()=>setAngle(m=>m==="deg"?"rad":"deg")} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.12)",color:"#8888b8",fontFamily:"'DM Mono',monospace",fontSize:".59rem",padding:"4px 10px",borderRadius:"20px",cursor:"pointer"}}>{angleMode.toUpperCase()}</button>)}
+                <button onClick={()=>setFracMode(f=>!f)} style={{background:fracMode?"rgba(230,160,60,.12)":"none",border:`1px solid ${fracMode?"rgba(230,160,60,.4)":"rgba(255,255,255,.08)"}`,color:fracMode?"#e0b060":"#484878",fontFamily:"'DM Mono',monospace",fontSize:".59rem",padding:"4px 10px",borderRadius:"20px",cursor:"pointer",transition:"all .15s"}}>{t.frac}</button>
+                <div style={{flex:1}}/>
+                <button className="sml" style={{fontSize:".58rem",padding:"3px 9px"}} onClick={()=>setShowHist(h=>!h)}>{showHist?"▲":t.hist}{history.length>0&&` (${history.length})`}</button>
+                {history.length>0&&(<button className="sml" style={{fontSize:".58rem",padding:"3px 9px"}} onClick={()=>{setExpr(history[0].result);setJustEval(true);showToast(t.sentCalc);}}>{t.last}</button>)}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"6px"}}>
+                {allBtns.map((b,i)=>(
+                  <button key={i} className={btnCls(b,i)}
+                    onPointerDown={(e)=>{e.preventDefault();if(b.v==="C") onCPointerDown();handleBtn(b.v);}}
+                    onPointerUp={b.v==="C"?onCPointerUp:undefined}
+                    onPointerLeave={b.v==="C"?onCPointerUp:undefined}>{b.l}</button>
+                ))}
+              </div>
+              <div style={{marginTop:"10px",color:"#a0a0c8",fontSize:".55rem",textAlign:"center",letterSpacing:".05em"}}>{t.kbHint}</div>
+            </div>
+          )}
+
+          {/* ══ FORMULA TAB ══ */}
+          {tab==="formula"&&(
+            <div className="fi">
+              {!fmSel?(
+                <div>
+                  <div style={{display:"flex",gap:"5px",marginBottom:"11px",flexWrap:"wrap"}}>
+                    {Object.keys(FORMULAS).map(cat=>(<button key={cat} className={`unit-pill${fmCat===cat?" on":""}`} onClick={()=>{setFmCat(cat);setFmSel(null);setFmResult(null);}}>{cat}</button>))}
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:"5px",maxHeight:"380px",overflowY:"auto"}}>
+                    {FORMULAS[fmCat].map((fm,i)=>(
+                      <div key={i} className="fm-card" onClick={()=>{setFmSel(fm);setFmVars({});setFmResult(null);setFmUnit("m");}} style={{padding:"9px 12px",gap:"9px"}}>
+                        <div style={{width:"3px",height:"36px",borderRadius:"2px",background:fm.color,opacity:.7,flexShrink:0}}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"baseline",gap:"7px"}}>
+                            <span style={{color:"#d0d0f8",fontSize:".8rem",fontWeight:400}}>{fm.name}</span>
+                            <span style={{color:fm.color,fontSize:".62rem",opacity:.8}}>{fm.expr}</span>
+                          </div>
+                          <div style={{color:"#b8b8e0",fontSize:".68rem",marginTop:"2px"}}>{fm.desc}</div>
+                        </div>
+                        <span style={{color:"#383860",fontSize:".85rem",flexShrink:0}}>{fm.icon}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ):(
+                <div className="fi">
+                  <div style={{display:"flex",alignItems:"center",gap:"9px",marginBottom:"12px"}}>
+                    <button className="sml" onClick={()=>{setFmSel(null);setFmResult(null);}}>{t.formulaBack}</button>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#d8d8ff",fontSize:".84rem",fontWeight:400}}>{fmSel.icon} {fmSel.name}</div>
+                      <div style={{color:"#8888b8",fontSize:".63rem",marginTop:"2px"}}>{fmSel.desc}</div>
+                    </div>
+                  </div>
+                  <div style={{background:`linear-gradient(135deg,rgba(105,82,240,.1),rgba(80,50,210,.05))`,border:`1px solid ${fmSel.color}40`,borderLeft:`3px solid ${fmSel.color}`,borderRadius:"12px",padding:"10px 14px",marginBottom:"12px"}}>
+                    <div style={{color:"#8080b8",fontSize:".58rem",letterSpacing:".1em",marginBottom:"4px"}}>FORMULA</div>
+                    <div style={{color:fmSel.color,fontSize:"1rem",fontFamily:"serif",letterSpacing:".02em"}}>{fmSel.expr}</div>
+                    <div style={{color:"#a0a0d0",fontSize:".62rem",marginTop:"4px"}}>
+                      Result in: {isGeomFormula?(fmSel.unit==="units²"?selUnitCfg.sq:fmSel.unit==="units³"?selUnitCfg.cu:selUnitCfg.label):fmSel.unit}
+                    </div>
+                  </div>
+
+                  {/* ── Unit selector (geometry only) ── */}
+                  {isGeomFormula&&(
+                    <div style={{marginBottom:"12px"}}>
+                      <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em",marginBottom:"7px"}}>INPUT UNIT</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                        {Object.entries(FM_LENGTH_UNITS).map(([key,cfg])=>(
+                          <button key={key}
+                            className={`unit-pill${fmUnit===key?" on":""}`}
+                            onClick={()=>{setFmUnit(key);setFmResult(null);}}
+                          >{cfg.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"11px"}}>
+                    {fmSel.vars.map(v=>{
+                      const filled=fmVars[v.k]&&!isNaN(parseFloat(fmVars[v.k]));
+                      return(
+                        <div key={v.k} style={{display:"grid",gridTemplateColumns:"1fr 1.4fr",gap:"8px",alignItems:"center"}}>
+                          <div>
+                            <div style={{color:"#9090c0",fontSize:".72rem"}}>
+                              {v.label}{isGeomFormula?<span style={{color:"#6868a8",fontSize:".6rem"}}> ({selUnitCfg.label})</span>:null}
+                            </div>
+                            <div style={{color:"#7878b0",fontSize:".6rem"}}>{v.hint}</div>
+                          </div>
+                          <input className="inp" type="number" inputMode="decimal" placeholder={v.hint}
+                            value={fmVars[v.k]||""} onChange={e=>{setFmVars(prev=>({...prev,[v.k]:e.target.value}));setFmResult(null);}}
+                            style={{borderColor:filled?"rgba(105,82,240,.5)":"rgba(255,255,255,.18)"}}/>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button className="sml acc" onClick={calcFormula} style={{width:"100%",padding:"11px",fontSize:".74rem",justifyContent:"center",display:"flex"}}>{t.calculate}</button>
+                  {fmResult&&(
+                    <div className="fi" style={{marginTop:"12px",background:"rgba(0,0,0,.25)",borderRadius:"12px",padding:"12px 14px",border:`1px solid ${fmSel.color}30`}}>
+                      <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em",marginBottom:"5px"}}>{t.result}</div>
+                      <div style={{color:"#f4f4ff",fontSize:"1.5rem",fontWeight:300}}>
+                        {fmResult.value} <span style={{color:"#8080a8",fontSize:".75rem"}}>{fmResult.unit}</span>
+                      </div>
+                      <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
+                        <button className={`cp${copied==="fmr"?" ok":""}`} onClick={()=>copyText(fmResult.value,"fmr")}>{copied==="fmr"?"✓":t.copy}</button>
+                        <button className="sml" style={{fontSize:".6rem",padding:"3px 9px"}} onClick={()=>{setExpr(fmResult.value);setJustEval(true);setTab("calc");showToast(t.sentCalc);}}>→ Calc</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══ CONVERT TAB ══ */}
+          {tab==="convert"&&(
+            <div className="fi">
+              <div style={{display:"flex",gap:"7px",marginBottom:"13px"}}>
+                {["units","oil"].map(st=>(
+                  <button key={st} className={`unit-pill${cvSubTab===st?" on":""}`} onClick={()=>setCvSubTab(st)}>
+                    {st==="units"?t.unitSubUnits:t.unitSubOil}
+                  </button>
+                ))}
+              </div>
+              {cvSubTab==="units"&&(
+                <div>
+                  <div style={{display:"flex",gap:"6px",marginBottom:"12px",flexWrap:"wrap"}}>
+                    {Object.keys(UNITS).map(cat=>(<button key={cat} className={`unit-pill${ucCat===cat?" on":""}`} onClick={()=>{setUcCat(cat);setUcFrom(UNITS[cat].units[0]);setUcTo(UNITS[cat].units[1]||UNITS[cat].units[0]);setUcVal("");setUcResult("");}}>{cat}</button>))}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:"7px",alignItems:"center",marginBottom:"10px"}}>
+                    <select className="sel-box" value={ucFrom} onChange={e=>{setUcFrom(e.target.value);setUcResult("");}}>{UNITS[ucCat].units.map(u=>(<option key={u} value={u}>{u}</option>))}</select>
+                    <button className="sml" style={{padding:"9px 8px",fontSize:".7rem"}} onClick={()=>{const tmp=ucFrom;setUcFrom(ucTo);setUcTo(tmp);setUcResult("");}}>⇄</button>
+                    <select className="sel-box" value={ucTo} onChange={e=>{setUcTo(e.target.value);setUcResult("");}}>{UNITS[ucCat].units.map(u=>(<option key={u} value={u}>{u}</option>))}</select>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"7px"}}>
+                    <div>
+                      <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".08em",marginBottom:"5px"}}>{t.fromLabel} ({ucFrom})</div>
+                      <input className="inp" type="number" inputMode="decimal" placeholder="0" value={ucVal} onChange={e=>{setUcVal(e.target.value);}}/>
+                    </div>
+                    <div>
+                      <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".08em",marginBottom:"5px"}}>{t.toLabel} ({ucTo})</div>
+                      <div style={{background:"rgba(0,0,0,.3)",borderRadius:"11px",padding:"10px 13px",border:"1px solid rgba(255,255,255,.1)",color:"#c8bcff",fontSize:"1rem",fontWeight:300,minHeight:"43px"}}>{ucResult||"—"}</div>
+                    </div>
+                  </div>
+                  {ucResult&&ucResult!=="Error"&&(
+                    <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
+                      <button className={`cp${copied==="ucr"?" ok":""}`} onClick={()=>copyText(ucResult,"ucr")}>{copied==="ucr"?"✓":t.copy}</button>
+                      <button className="sml" style={{fontSize:".6rem",padding:"3px 9px"}} onClick={()=>{setExpr(ucResult);setJustEval(true);setTab("calc");showToast(t.sentCalc);}}>→ Calc</button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {cvSubTab==="oil"&&(
+                <div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}}>
+                    <div>
+                      <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".08em",marginBottom:"5px"}}>QUANTITY</div>
+                      <input className="inp" type="number" inputMode="decimal" placeholder="e.g. 1000" value={oilQty} onChange={e=>setOilQty(e.target.value)}/>
+                    </div>
+                    <div>
+                      <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".08em",marginBottom:"5px"}}>UNIT</div>
+                      <select className="sel-box" value={oilUnit} onChange={e=>setOilUnit(e.target.value)}>{Object.keys(OIL_TO_BBL).map(u=>(<option key={u} value={u}>{u}</option>))}</select>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:"8px",alignItems:"end",marginBottom:"10px"}}>
+                    <div>
+                      <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".08em",marginBottom:"5px"}}>PRICE ($/bbl){oilPriceStale&&<span style={{color:"#f0b040",fontSize:".55rem"}}> · stale</span>}</div>
+                      <input className="inp" type="number" inputMode="decimal" placeholder="75.00" value={oilPrice} onChange={e=>setOilPrice(e.target.value)}/>
+                    </div>
+                    <button className="sml" style={{padding:"10px 10px",fontSize:".6rem",whiteSpace:"nowrap"}} onClick={fetchOilPrice} disabled={oilPriceLoading}>{oilPriceLoading?"…":"↻ Live"}</button>
+                  </div>
+                  <div style={{marginBottom:"10px"}}>
+                    <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".08em",marginBottom:"5px"}}>CURRENCY</div>
+                    <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+                      <select className="sel-box" value={oilCurrency} onChange={e=>{setOilCurrency(e.target.value);fetchFxRates();}}>{OIL_CURRENCIES.map(c=>(<option key={c} value={c}>{c}</option>))}</select>
+                      {oilFxLoading&&<div style={{width:"14px",height:"14px",border:"2px solid rgba(255,255,255,.2)",borderTopColor:"#9090c8",borderRadius:"50%"}} className="spin"/>}
+                    </div>
+                  </div>
+                  {oilQty&&oilValueUSD()&&(
+                    <div className="fi" style={{background:"rgba(0,0,0,.25)",borderRadius:"13px",padding:"13px 15px",border:"1px solid rgba(255,165,0,.2)"}}>
+                      <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em",marginBottom:"6px"}}>🛢 VALUE</div>
+                      <div style={{color:"#f4f4ff",fontSize:"1.4rem",fontWeight:300,marginBottom:"4px"}}>{fmtCurrency(oilValueUSD(),oilCurrency,oilFxRates)}</div>
+                      {oilCurrency!=="USD"&&<div style={{color:"#8888b8",fontSize:".72rem"}}>${fmtNum(oilValueUSD())} USD</div>}
+                      <div style={{color:"#9090c8",fontSize:".65rem",marginTop:"4px"}}>{fmtNum(oilInBbl())} bbl × ${oilPrice}/bbl</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══ RANDOM TAB ══ */}
+          {tab==="random"&&(
+            <div className="fi">
+              <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+
+                {/* ── Dice Roller ── */}
+                <div style={{background:"rgba(0,0,0,.2)",borderRadius:"16px",padding:"13px 14px",border:"1px solid rgba(255,255,255,.08)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+                    <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em"}}>{t.diceLabel}</div>
+                    {/* Active mode badge */}
+                    <div style={{background:"rgba(105,82,240,.15)",border:"1px solid rgba(105,82,240,.35)",borderRadius:"8px",padding:"2px 8px",fontSize:".58rem",color:"#a898ff",fontFamily:"DM Mono,monospace"}}>
+                      {randDiceCount}d{randDice}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"10px"}}>
+                    {DICE_TYPES.map(d=>(<button key={d} className={`unit-pill${randDice===d?" on":""}`} onClick={()=>setRandDice(d)}>d{d}</button>))}
+                  </div>
+                  <div style={{display:"flex",gap:"8px",alignItems:"center",marginBottom:"10px"}}>
+                    <span style={{color:"#8888b8",fontSize:".7rem"}}>Count:</span>
+                    {[1,2,3,4,5,6].map(n=>(<button key={n} className={`unit-pill${randDiceCount===n?" on":""}`} style={{padding:"3px 9px",fontSize:".68rem"}} onClick={()=>setRandDiceCount(n)}>{n}</button>))}
+                  </div>
+                  <button className="sml acc" onClick={()=>{
+                    const rolls=Array.from({length:randDiceCount},()=>Math.floor(Math.random()*randDice)+1);
+                    setDiceResults(rolls);haptic(30);
+                    const sum=rolls.reduce((a,b)=>a+b,0);
+                    setDiceHistory(h=>[{rolls,sum,label:`${randDiceCount}d${randDice}`,time:ts()},...h.slice(0,4)]);
+                  }} style={{width:"100%",justifyContent:"center",display:"flex",padding:"11px"}}>{t.rollBtn}</button>
+                  {diceResults.length>0&&(
+                    <div className="fi" style={{marginTop:"10px",textAlign:"center"}}>
+                      <div style={{display:"flex",gap:"8px",justifyContent:"center",flexWrap:"wrap",marginBottom:"6px"}}>
+                        {diceResults.map((r,i)=>(<div key={i} style={{background:"linear-gradient(145deg,rgba(105,82,240,.2),rgba(80,50,210,.1))",border:"1px solid rgba(105,82,240,.3)",borderRadius:"10px",padding:"6px 12px",color:"#d8d0ff",fontSize:"1.4rem",fontWeight:300,minWidth:"40px"}}>{r}</div>))}
+                      </div>
+                      {randDiceCount>1&&<div style={{color:"#8888b8",fontSize:".72rem",marginBottom:"4px"}}>Sum: <b style={{color:"#d8d0ff"}}>{diceResults.reduce((a,b)=>a+b,0)}</b> · Min: {Math.min(...diceResults)} · Max: {Math.max(...diceResults)}</div>}
+                    </div>
+                  )}
+                  {/* Dice history */}
+                  {diceHistory.length>1&&(
+                    <div style={{marginTop:"8px",borderTop:"1px solid rgba(255,255,255,.06)",paddingTop:"8px"}}>
+                      <div style={{color:"#404080",fontSize:".55rem",letterSpacing:".08em",marginBottom:"5px"}}>RECENT ROLLS</div>
+                      {diceHistory.slice(1).map((h,i)=>(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:".62rem",color:"#6868a8",padding:"2px 0"}}>
+                          <span>{h.label}: [{h.rolls.join(", ")}]</span>
+                          <span style={{color:"#5050a0"}}>{h.rolls.length>1?`Σ${h.sum}`:h.sum}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Coin Flip ── */}
+                <div style={{background:"rgba(0,0,0,.2)",borderRadius:"16px",padding:"13px 14px",border:"1px solid rgba(255,255,255,.08)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+                    <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em"}}>{t.coinLabel}</div>
+                    {coinHistory.length>0&&(
+                      <div style={{display:"flex",gap:"6px",fontSize:".6rem"}}>
+                        <span style={{color:"#70d890"}}>H:{coinHistory.filter(c=>c==="H").length}</span>
+                        <span style={{color:"#f07878"}}>T:{coinHistory.filter(c=>c==="T").length}</span>
+                      </div>
+                    )}
+                  </div>
+                  <button className="sml acc" style={{width:"100%",justifyContent:"center",display:"flex",padding:"11px",opacity:coinFlipping?.8:1}}
+                    onClick={()=>{
+                      if(coinFlipping) return;
+                      setCoinFlipping(true);haptic(15);
+                      setTimeout(()=>{
+                        const r=Math.random()<0.5?"H":"T";
+                        setCoinResult(r);
+                        setCoinHistory(h=>[r,...h.slice(0,19)]);
+                        setCoinFlipping(false);haptic(r==="H"?[5,30,5]:20);
+                      },400);
+                    }}>{coinFlipping?"…":t.flipBtn}</button>
+                  {coinResult&&(
+                    <div className="fi" style={{marginTop:"10px",textAlign:"center"}}>
+                      <div style={{fontSize:"3rem",lineHeight:1.1}}>{coinResult==="H"?"🟡":"⚫"}</div>
+                      <div style={{color:coinResult==="H"?"#f0d060":"#c0c0c0",fontSize:"1rem",fontWeight:300,marginTop:"4px"}}>
+                        {coinResult==="H"?"HEADS":"TAILS"}
+                      </div>
+                    </div>
+                  )}
+                  {coinHistory.length>1&&(
+                    <div style={{marginTop:"8px",borderTop:"1px solid rgba(255,255,255,.06)",paddingTop:"8px"}}>
+                      <div style={{color:"#404080",fontSize:".55rem",letterSpacing:".08em",marginBottom:"5px"}}>LAST {Math.min(coinHistory.length,10)} FLIPS</div>
+                      <div style={{display:"flex",gap:"4px",flexWrap:"wrap"}}>
+                        {coinHistory.slice(0,10).map((c,i)=>(
+                          <span key={i} style={{width:"22px",height:"22px",borderRadius:"50%",background:c==="H"?"rgba(240,208,60,.2)":"rgba(130,130,130,.2)",border:`1px solid ${c==="H"?"rgba(240,208,60,.4)":"rgba(130,130,130,.3)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".6rem",color:c==="H"?"#f0d060":"#a0a0a0"}}>{c}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Number Range ── */}
+                <div style={{background:"rgba(0,0,0,.2)",borderRadius:"16px",padding:"13px 14px",border:"1px solid rgba(255,255,255,.08)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+                    <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em"}}>{t.rangeLabel}</div>
+                    <div style={{background:"rgba(80,200,120,.1)",border:"1px solid rgba(80,200,120,.25)",borderRadius:"8px",padding:"2px 8px",fontSize:".58rem",color:"#70d890",fontFamily:"DM Mono,monospace"}}>
+                      {randMin}–{randMax}
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}}>
+                    <div><div style={{color:"#8888b8",fontSize:".65rem",marginBottom:"4px"}}>Min</div><input className="inp" type="number" value={randMin} onChange={e=>setRandMin(e.target.value)}/></div>
+                    <div><div style={{color:"#8888b8",fontSize:".65rem",marginBottom:"4px"}}>Max</div><input className="inp" type="number" value={randMax} onChange={e=>setRandMax(e.target.value)}/></div>
+                  </div>
+                  <button className="sml acc" onClick={()=>{
+                    const mn=parseInt(randMin),mx=parseInt(randMax);
+                    if(isNaN(mn)||isNaN(mx)||mn>=mx) return;
+                    const r=Math.floor(Math.random()*(mx-mn+1))+mn;
+                    setRandResult(r);haptic(20);
+                    setRandHistory(h=>[r,...h.slice(0,4)]);
+                  }} style={{width:"100%",justifyContent:"center",display:"flex",padding:"11px"}}>{t.pickBtn}</button>
+                  {randResult!==null&&(
+                    <div className="fi" style={{marginTop:"10px",textAlign:"center",color:"#d8d0ff",fontSize:"2.5rem",fontWeight:300}}>{randResult}</div>
+                  )}
+                  {randHistory.length>1&&(
+                    <div style={{marginTop:"8px",borderTop:"1px solid rgba(255,255,255,.06)",paddingTop:"8px"}}>
+                      <div style={{color:"#404080",fontSize:".55rem",letterSpacing:".08em",marginBottom:"5px"}}>RECENT</div>
+                      <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                        {randHistory.slice(1).map((r,i)=>(
+                          <span key={i} style={{color:"#5858a0",fontSize:".65rem",background:"rgba(255,255,255,.04)",padding:"2px 8px",borderRadius:"6px"}}>{r}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Math Practice ── */}
+                <div style={{background:"rgba(0,0,0,.2)",borderRadius:"16px",padding:"13px 14px",border:"1px solid rgba(255,255,255,.08)"}}>
+                  {/* Header with live mode indicator */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+                    <div style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em"}}>{t.mathLabel}</div>
+                    <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+                      {/* Mode badge always visible */}
+                      <div style={{background:DIFF_CONFIG[mathDiff]?.bg||"rgba(105,82,240,.15)",border:`1px solid ${DIFF_CONFIG[mathDiff]?.border||"rgba(105,82,240,.35)"}`,borderRadius:"8px",padding:"2px 8px",fontSize:".58rem",color:DIFF_CONFIG[mathDiff]?.color||"#a898ff",fontFamily:"DM Mono,monospace",display:"flex",alignItems:"center",gap:"4px"}}>
+                        <span>{DIFF_CONFIG[mathDiff]?.emoji}</span>
+                        <span>{mathDiff}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Score bar — always visible once started */}
+                  {(mathScore.right+mathScore.wrong)>0&&(
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px",background:"rgba(0,0,0,.2)",borderRadius:"10px",padding:"6px 10px"}}>
+                      <div style={{display:"flex",gap:"12px"}}>
+                        <span style={{color:"#70d890",fontSize:".7rem"}}>✓ {mathScore.right}</span>
+                        <span style={{color:"#f07878",fontSize:".7rem"}}>✗ {mathScore.wrong}</span>
+                        <span style={{color:"#a0a0c8",fontSize:".7rem"}}>{Math.round(mathScore.right/(mathScore.right+mathScore.wrong)*100)}%</span>
+                      </div>
+                      <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+                        {mathStreak>=3&&<span style={{color:"#f0a060",fontSize:".7rem"}}>🔥{mathStreak}</span>}
+                        {mathBestStreak>=3&&<span style={{color:"#7070c0",fontSize:".62rem"}}>best:{mathBestStreak}</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Difficulty selector */}
+                  <div ref={diffDropRef} style={{marginBottom:"8px",position:"relative"}}>
+                    <button className="diff-btn" onClick={()=>setShowDiffDrop(v=>!v)}>
+                      <span>{DIFF_CONFIG[mathDiff]?.emoji}</span>
+                      <div style={{flex:1}}>
+                        <div style={{color:"#d0d0ff",fontSize:".74rem"}}>{mathDiff}</div>
+                        <div style={{color:"#7070a0",fontSize:".62rem"}}>{DIFF_CONFIG[mathDiff]?.desc}</div>
+                      </div>
+                      <span style={{color:"#6060a0",fontSize:".7rem"}}>▾</span>
+                    </button>
+                    {showDiffDrop&&(
+                      <div className="diff-list fi" style={{position:"absolute",top:"calc(100% + 5px)",left:0,right:0,zIndex:200}}>
+                        {Object.entries(DIFF_CONFIG).map(([key,cfg])=>(
+                          <div key={key} className={`diff-item${mathDiff===key?" sel":""}`}
+                            onClick={()=>{setMathDiff(key);setShowDiffDrop(false);setMathProb(null);setMathScore({right:0,wrong:0});setMathStreak(0);setMathBestStreak(0);setMathTag(null);}}>
+                            <span style={{fontSize:"1rem"}}>{cfg.emoji}</span>
+                            <div>
+                              <div style={{color:"#d0d0ff",fontSize:".74rem"}}>{key}</div>
+                              <div style={{color:"#7070a0",fontSize:".62rem"}}>{cfg.desc}</div>
+                            </div>
+                            {mathDiff===key&&<span style={{color:"#7070d0",fontSize:".7rem",marginLeft:"auto"}}>✓</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tag filter — quick topic picker */}
+                  {!mathProb&&(
+                    <div style={{marginBottom:"8px"}}>
+                      <div style={{color:"#404080",fontSize:".55rem",letterSpacing:".08em",marginBottom:"5px"}}>TOPIC (optional)</div>
+                      <div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}>
+                        <button className={`unit-pill${mathTag===null?" on":""}`} style={{fontSize:".6rem",padding:"3px 8px"}} onClick={()=>setMathTag(null)}>All</button>
+                        {[...new Set(mathProblems.filter(p=>mathDiff==="Random"||p.level===mathDiff).map(p=>p.tag))].slice(0,8).map(tag=>(
+                          <button key={tag} className={`unit-pill${mathTag===tag?" on":""}`} style={{fontSize:".6rem",padding:"3px 8px"}} onClick={()=>setMathTag(tag)}>{tag}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Problem area */}
+                  {!mathProb?(
+                    <button className="sml acc" onClick={()=>{
+                      let pool=mathProblems;
+                      if(mathDiff!=="Random") pool=pool.filter(p=>p.level===mathDiff);
+                      if(mathTag) pool=pool.filter(p=>p.tag===mathTag);
+                      if(!pool.length) pool=mathProblems;
+                      const prob=pool[Math.floor(Math.random()*pool.length)].gen();
+                      setMathProb(prob);setMathAns("");setMathChecked(null);setMathHintShown(false);
+                      setTimeout(()=>mathInputRef.current?.focus(),80);
+                    }} style={{width:"100%",justifyContent:"center",display:"flex",padding:"11px"}}>
+                      {t.startBtn(mathDiff,DIFF_CONFIG[mathDiff]?.emoji)}
+                    </button>
+                  ):(
+                    <div className="fi">
+                      {/* Question — show tag chip */}
+                      <div style={{position:"relative"}}>
+                        {mathProb.tag&&(
+                          <div style={{fontSize:".55rem",color:"#5858a0",marginBottom:"4px",fontFamily:"DM Mono,monospace",letterSpacing:".06em"}}>{mathProb.tag} · {mathDiff}</div>
+                        )}
+                        <div className={`math-q${mathChecked===true?" math-q-ok":mathChecked===false?" math-q-wrong":""}`} style={{border:"1px solid rgba(255,255,255,.08)"}}>{mathProb.q}</div>
+                      </div>
+
+                      {!mathChecked&&(
+                        <div style={{display:"flex",gap:"7px",marginBottom:"9px"}}>
+                          <input ref={mathInputRef} className="inp" type="number" inputMode="decimal" placeholder={t.answerPlaceholder}
+                            value={mathAns} onChange={e=>setMathAns(e.target.value)}
+                            onKeyDown={e=>{if(e.key==="Enter"&&mathAns.trim()){
+                              const correct=Math.abs(parseFloat(mathAns)-mathProb.a)<0.01;
+                              setMathChecked(correct);haptic(correct?[10,50,10]:30);
+                              setMathScore(s=>correct?{...s,right:s.right+1}:{...s,wrong:s.wrong+1});
+                              setMathStreak(s=>{const ns=correct?s+1:0;setMathBestStreak(b=>Math.max(b,ns));return ns;});
+                              setMathSession(s=>s+1);
+                            }}}/>
+                          <button className="sml acc" style={{padding:"10px 13px"}} onClick={()=>{
+                            if(!mathAns.trim()) return;
+                            const correct=Math.abs(parseFloat(mathAns)-mathProb.a)<0.01;
+                            setMathChecked(correct);haptic(correct?[10,50,10]:30);
+                            setMathScore(s=>correct?{...s,right:s.right+1}:{...s,wrong:s.wrong+1});
+                            setMathStreak(s=>{const ns=correct?s+1:0;setMathBestStreak(b=>Math.max(b,ns));return ns;});
+                            setMathSession(s=>s+1);
+                          }}>{t.checkBtn}</button>
+                        </div>
+                      )}
+                      {mathChecked===null&&mathProb.hint&&!mathHintShown&&(
+                        <button className="sml" style={{fontSize:".6rem",marginBottom:"8px"}} onClick={()=>setMathHintShown(true)}>{t.hintBtn}</button>
+                      )}
+                      {mathHintShown&&mathProb.hint&&(
+                        <div style={{color:"#b0a0d8",fontSize:".7rem",marginBottom:"8px",padding:"6px 10px",background:"rgba(104,85,240,.1)",borderRadius:"8px"}}>💡 {mathProb.hint}</div>
+                      )}
+                      {mathChecked!==null&&(
+                        <div className="fi">
+                          <div style={{color:mathChecked?"#70d890":"#f07878",fontSize:".85rem",fontWeight:400,marginBottom:"9px"}}>
+                            {mathChecked?t.correct:t.wrong(mathProb.a)}
+                            {mathChecked&&mathStreak>=3&&<span style={{marginLeft:"8px",animation:"streakPop .4s ease",display:"inline-block"}}>🔥{mathStreak}</span>}
+                          </div>
+                          <div style={{display:"flex",gap:"8px"}}>
+                            <button className="sml acc" onClick={newMathProb} style={{flex:1,justifyContent:"center",display:"flex"}}>{t.nextBtn}</button>
+                            <button className="sml" style={{fontSize:".6rem"}} onClick={()=>{setMathProb(null);setMathScore({right:0,wrong:0});setMathStreak(0);setMathBestStreak(0);setMathSession(0);setMathTag(null);}}>↺ reset</button>
+                          </div>
+                        </div>
+                      )}
+                      {!mathChecked&&(
+                        <button className="sml" style={{marginTop:"5px",fontSize:".6rem"}} onClick={newMathProb}>{t.skipBtn}</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ══ GRAPH TAB ══ */}
+          {tab==="graph"&&(
+            <GraphTab onSendToAI={(msg)=>{setTab("ai");setTimeout(()=>sendAi(msg),100);}}/>
+          )}
+
+          {/* ══ AI TAB ══ */}
+          {tab==="ai"&&(
+            <div className="fi">
+              {/* SLM loader */}
+              {localAiStatus==="idle"&&(
+                <div style={{marginBottom:"11px",background:"linear-gradient(135deg,rgba(140,100,240,.1),rgba(100,70,200,.06))",border:"1px solid rgba(140,100,240,.22)",borderRadius:"14px",padding:"12px 14px"}}>
+                  <div style={{color:"#b0a0e8",fontSize:".73rem",fontWeight:400,marginBottom:"4px"}}>🧠 On-Device SLM (LFM2.5-1.2B)</div>
+                  <div style={{color:"#7878b0",fontSize:".65rem",lineHeight:1.6,marginBottom:"9px"}}>Math-grounded: engine pre-verifies all numbers before passing to SLM — eliminating hallucinations. Runs 100% offline.</div>
+                  <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
+                    <button className="sml acc" onClick={initLocalAI} style={{fontSize:".65rem"}}>⬇ Load SLM</button>
+                    <span style={{color:"#5858a0",fontSize:".6rem"}}>{t.cachedNote}</span>
+                  </div>
+                </div>
+              )}
+              {(localAiStatus==="loading")&&(
+                <div style={{marginBottom:"11px",background:"rgba(0,0,0,.2)",borderRadius:"14px",padding:"12px 14px",border:"1px solid rgba(255,255,255,.1)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+                    <span style={{color:"#a0a0d0",fontSize:".72rem"}}>
+                      {localAiPhase==="tokenizer"?t.loadingTokenizer:t.loadingModel}
+                    </span>
+                    <span style={{color:"#8080c0",fontSize:".68rem"}}>{localAiProgress}%</span>
+                  </div>
+                  <div style={{height:"4px",background:"rgba(255,255,255,.08)",borderRadius:"2px",overflow:"hidden"}}>
+                    <div style={{height:"100%",background:"linear-gradient(90deg,#5b50f2,#b060f8)",borderRadius:"2px",width:`${localAiProgress}%`,transition:"width .3s"}}/>
+                  </div>
+                </div>
+              )}
+              {localAiStatus==="ready"&&(
+                <div style={{marginBottom:"9px",background:"rgba(80,200,120,.06)",border:"1px solid rgba(80,200,120,.2)",borderRadius:"11px",padding:"7px 12px",display:"flex",alignItems:"center",gap:"8px"}}>
+                  <span style={{color:"#70d890",fontSize:".68rem"}}>🔒 SLM ready · math-grounded · fully offline</span>
+                </div>
+              )}
+              {(localAiStatus==="no-webgpu"||localAiStatus==="error")&&(
+                <div style={{marginBottom:"9px",background:"rgba(220,80,80,.06)",border:"1px solid rgba(220,80,80,.2)",borderRadius:"11px",padding:"7px 12px",fontSize:".65rem",color:"#f07878"}}>
+                  {localAiStatus==="no-webgpu"?`⚠ ${t.wgpuDesc}`:"⚠ SLM failed — using cloud fallback"}
+                </div>
+              )}
+
+              {/* Context memory chip */}
+              {ctxVars.length>0&&(
+                <div className="ctx-info" style={{marginBottom:"8px"}}>
+                  <span className="ctx-pill">🧠 context:</span>
+                  {ctxVars.map(([k,v])=>(<span key={k} className="ctx-pill"><span className="ctx-var">{k}</span> = {v}</span>))}
+                  <button style={{background:"none",border:"none",color:"#6060a0",fontSize:".6rem",cursor:"pointer",fontFamily:"DM Mono,monospace"}} onClick={()=>{offlineCtx.current={vars:{},lastResult:null,lastExpr:null};}}>✕ clear</button>
+                </div>
+              )}
+
+              {/* Model selector + settings */}
+              <div style={{display:"flex",gap:"7px",marginBottom:"10px",alignItems:"center"}}>
+                <div style={{flex:1,position:"relative"}} ref={dropRef}>
+                  <button className={`mdrop-btn${showDrop?" open":""}`} onClick={()=>setShowDrop(v=>!v)}>
+                    <span style={{width:"8px",height:"8px",borderRadius:"50%",background:activeModel.color,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div className="m-lbl" style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{orKey?activeModel.label:t.modelDefault}</div>
+                    </div>
+                    <span style={{color:"#6060a0",fontSize:".7rem",flexShrink:0}}>▾</span>
+                  </button>
+                  {showDrop&&orKey&&(
+                    <div className="mdrop-list fi">
+                      {FREE_MODELS.map(m=>(
+                        <div key={m.id} className={`mdrop-item${model===m.id?" sel":""}`} onClick={()=>{setModel(m.id);setShowDrop(false);}}>
+                          <div style={{width:"8px",height:"8px",borderRadius:"50%",background:m.color,flexShrink:0}}/>
+                          <div style={{flex:1}}><div className="m-lbl">{m.label} <span style={{color:m.color,fontSize:".58rem"}}>{m.badge}</span></div><div className="m-dsc">{m.desc}</div></div>
+                          {model===m.id&&<span style={{color:"#7070d0",fontSize:".7rem"}}>✓</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button onClick={()=>setShowSettings(v=>!v)} style={{background:showSettings?"rgba(91,82,240,.18)":"rgba(255,255,255,.04)",border:`1px solid ${showSettings?"rgba(91,82,240,.45)":"rgba(255,255,255,.1)"}`,color:showSettings?"#a89ce0":"#9090c0",width:"36px",height:"36px",borderRadius:"10px",cursor:"pointer",fontSize:".95rem",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>⚙</button>
+              </div>
+
+              {showSettings&&(
+                <div className="spanel fi" style={{marginBottom:"10px"}}>
+                  <div style={{color:"#c0c0e0",fontSize:".62rem",letterSpacing:".1em",marginBottom:"10px"}}>OPENROUTER API KEY</div>
+                  <div style={{color:"#a0a0cc",fontSize:".7rem",lineHeight:1.6,marginBottom:"12px"}}>{t.orKeyDesc}</div>
+                  <div style={{display:"flex",gap:"7px",marginBottom:"9px"}}>
+                    <div style={{position:"relative",flex:1}}>
+                      <input className="key-inp" type={showKey?"text":"password"} placeholder="sk-or-v1-…"
+                        value={orKeyDraft} onChange={e=>setOrKeyDraft(e.target.value)}
+                        onKeyDown={e=>{if(e.key==="Enter") saveKey();}} style={{paddingRight:"36px"}}/>
+                      <button onClick={()=>setShowKey(v=>!v)} style={{position:"absolute",right:"9px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#8888b0",cursor:"pointer",fontSize:".75rem"}}>{showKey?"🙈":"👁"}</button>
+                    </div>
+                    <button className="sml acc" onClick={saveKey}>{t.saveKey}</button>
+                  </div>
+                  {orKey&&(
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{color:"#70d8b0",fontSize:".64rem"}}>{t.keyActive}</span>
+                      <button className="sml" style={{padding:"2px 9px",fontSize:".6rem"}} onClick={()=>{setOrKey("");setOrKeyDraft("");try{localStorage.removeItem("sc_orkey");}catch{}showToast("Key removed");setShowSettings(false);}}>{t.removeKey}</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Messages */}
+              <div ref={aiScroll} className="scroll-momentum" style={{display:"flex",flexDirection:"column",gap:"10px",minHeight:"160px",maxHeight:"320px",overflowY:"auto",paddingRight:"2px"}}>
+                {aiMsgs.length===0&&!aiLoading&&(
+                  <div>
+                    <div style={{color:"#505090",fontSize:".63rem",marginBottom:"11px",letterSpacing:".07em"}}>{t.tryAsking}</div>
+                    {AI_EXAMPLES.map((ex,i)=>(<button key={i} className="ex-btn" onClick={()=>sendAi(ex)}>↗ {ex}</button>))}
+                  </div>
+                )}
+                {aiMsgs.map((msg,i)=>(
+                  <div key={i} className="fi" style={{display:"flex",flexDirection:"column"}}>
+                    {msg.role==="user"?(
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"2px"}}>
+                        <div className="bub-u">{msg.content}</div>
+                        <span style={{color:"#7070a8",fontSize:".57rem"}}>{msg.time}</span>
+                      </div>
+                    ):(
+                      <div className={`bub-a${msg.isError?" err":""}`}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+                          <span className="eng-badge" style={{
+                            background:msg.engine==="offline"?"rgba(80,200,120,.1)":msg.engine==="local"?"rgba(100,140,240,.1)":msg.engine==="error"?"rgba(220,80,80,.1)":"rgba(91,82,240,.1)",
+                            borderColor:msg.engine==="offline"?"rgba(80,200,120,.28)":msg.engine==="local"?"rgba(100,140,240,.3)":msg.engine==="error"?"rgba(220,80,80,.25)":"rgba(91,82,240,.2)",
+                            color:msg.engine==="offline"?"#70d890":msg.engine==="local"?"#90b0f8":msg.engine==="error"?"#f07878":"#9090d0",
+                          }}>
+                            {msg.engine==="offline"?t.offlineEngine:msg.engine==="local"?t.localEngine:msg.engine==="error"?"❌ error":`☁ ${msg.engine==="claude"?"Claude":(FREE_MODELS.find(m=>m.id===msg.engine)?.label||"cloud")}`}
+                          </span>
+                          <span style={{color:"#383860",fontSize:".57rem"}}>{msg.time}</span>
+                        </div>
+                        <div className="b-ans">{msg.parsed?.answer||msg.content}</div>
+                        {msg.parsed?.expression&&<div className="b-expr">{formatMath(msg.parsed.expression)}</div>}
+                        {msg.parsed?.steps?.length>0&&msg.parsed.steps.map((s,j)=>(<div key={j} className="b-step"><span style={{color:"#8080b0"}}>{j+1}. </span>{s}</div>))}
+                        {/* ★ Show grounded math facts badge */}
+                        {msg.mathFacts?.length>0&&(
+                          <div className="b-ground">🔒 Math engine verified: {msg.mathFacts.map(f=>`${f.expr}=${f.result}`).slice(0,3).join(" · ")}{msg.mathFacts.length>3?` + ${msg.mathFacts.length-3} more`:""}</div>
+                        )}
+                        {msg.parsed?.note&&<div className="b-note">ⓘ {msg.parsed.note}</div>}
+                        <div style={{display:"flex",gap:"7px",marginTop:"10px",alignItems:"center",flexWrap:"wrap"}}>
+                          <button className={`cp${copied===`a${i}`?" ok":""}`} onClick={()=>copyText(msg.parsed?.answer||msg.content,`a${i}`)}>{copied===`a${i}`?t.copied:t.copy}</button>
+                          {msg.parsed?.answer&&!msg.isError&&(
+                            <button className="sml" style={{fontSize:".6rem",padding:"3px 9px"}} onClick={()=>{setExpr(msg.parsed.answer.replace(/[^0-9.\-]/g,""));setJustEval(true);setTab("calc");showToast(t.sentCalc);}}>→ Calc</button>
+                          )}
+                          {msg.isError&&(<button className="sml" style={{fontSize:".6rem",padding:"3px 9px"}} onClick={()=>{const prev=aiMsgs[i-1];if(prev) sendAi(prev.content);}}>↺ retry</button>)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {aiLoading&&(
+                  <div className="bub-a fi" style={{display:"flex",gap:"7px",alignItems:"center",padding:"16px"}}>
+                    {[0,.18,.36].map((d,i)=>(<div key={i} className="bounce-dot" style={{width:"7px",height:"7px",background:"#5b52f0",borderRadius:"50%",animationDelay:`${d}s`}}/>))}
+                  </div>
+                )}
+              </div>
+
+              {/* Input row */}
+              <div style={{display:"flex",gap:"8px",alignItems:"flex-end",marginTop:"8px"}}>
+                <textarea ref={aiRef} className="ai-box" rows={1}
+                  placeholder={t.aiPlaceholder}
+                  value={aiInput} onChange={e=>setAiInput(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendAi();}}}
+                />
+                <button className="send" onClick={()=>sendAi()} disabled={aiLoading||!aiInput.trim()}>
+                  {aiLoading?<div style={{width:"15px",height:"15px",border:"2px solid rgba(255,255,255,.25)",borderTopColor:"#fff",borderRadius:"50%"}} className="spin"/>:"↑"}
+                </button>
+              </div>
+              {aiMsgs.length>0&&(
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"8px"}}>
+                  <button onClick={()=>{setAiMsgs([]);offlineCtx.current={vars:{},lastResult:null,lastExpr:null};}} className="sml" style={{fontSize:".6rem",padding:"3px 9px"}}>{t.clearChat}</button>
+                  <span style={{color:"#8888b8",fontSize:".57rem"}}>{Math.ceil(aiMsgs.length/2)} exchange{aiMsgs.length>2?"s":""}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+    // Mount the app
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<SmartCalc />);
+  </script>
+</body>
+</html>
