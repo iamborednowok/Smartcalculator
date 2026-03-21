@@ -228,6 +228,14 @@
     }
   </script>
 
+  <!-- Transformers.js loaded as proper ES module, exposed as global -->
+  <script type="module">
+    import * as HF from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/dist/transformers.min.js';
+    window.HFTransformers = HF;
+    window.HFTransformersReady = true;
+    window.dispatchEvent(new Event('hf-ready'));
+  </script>
+
   <!-- App -->
   <script type="text/babel">
     const { useState, useRef, useEffect, useCallback, useMemo } = React;
@@ -1246,23 +1254,27 @@ function SmartCalc(){
     setOilFxLoad(false);
   },[oilFxRates]);
 
-  // ── Local SLM with math grounding ────────────────────────────────────────
   const LOCAL_MODEL_ID="onnx-community/Qwen2.5-0.5B-Instruct";
-  const TF_URL="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/dist/transformers.min.js";
 
   const initLocalAI=useCallback(async()=>{
     if(localAiStatus==="ready"||localAiStatus==="loading") return;
     setLocalAiStatus("loading");setLocalAiProgress(0);setLocalAiPhase("model");
     try{
-      const{pipeline,env}=await import(TF_URL);
+      // Wait for transformers.js module to be ready (loaded via <script type="module">)
+      if(!window.HFTransformers){
+        await new Promise((res,rej)=>{
+          if(window.HFTransformersReady){res();return;}
+          const t=setTimeout(()=>rej(new Error("HF timeout")),15000);
+          window.addEventListener('hf-ready',()=>{clearTimeout(t);res();},{once:true});
+        });
+      }
+      const{pipeline,env}=window.HFTransformers;
       env.allowLocalModels=false;env.useBrowserCache=true;
       const pipe=await pipeline("text-generation",LOCAL_MODEL_ID,{
         device:"wasm",
         dtype:"q4",
         progress_callback:(p)=>{
-          if(p.status==="progress"){
-            setLocalAiProgress(Math.round((p.progress||0)*100));
-          }
+          if(p.status==="progress") setLocalAiProgress(Math.round((p.progress||0)*100));
         }
       });
       localModelRef.current=pipe;
@@ -1270,9 +1282,8 @@ function SmartCalc(){
       showToast("✓ Qwen2.5 ready — offline AI on device!","success");
     }catch(err){
       console.error("SLM load error:",err);
-      setLocalAiPhase("");
-      setLocalAiStatus("error");
-      showToast("AI offline failed to load — using cloud","info");
+      setLocalAiPhase("");setLocalAiStatus("error");
+      showToast("AI offline failed: "+((err?.message||"unknown").slice(0,60)),"info");
     }
   },[localAiStatus,showToast]);
 
@@ -1283,9 +1294,7 @@ function SmartCalc(){
       const groundedSystem=buildGroundedSLMPrompt(mathFacts);
       const messages=[{role:"system",content:groundedSystem},{role:"user",content:text}];
       const result=await localModelRef.current(messages,{
-        max_new_tokens:512,
-        do_sample:false,
-        repetition_penalty:1.1,
+        max_new_tokens:512,do_sample:false,repetition_penalty:1.1,
       });
       const output=result?.[0]?.generated_text;
       const lastMsg=Array.isArray(output)?output[output.length-1]?.content:output;
