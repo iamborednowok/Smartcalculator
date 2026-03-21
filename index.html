@@ -228,12 +228,45 @@
     }
   </script>
 
-  <!-- Transformers.js loaded as proper ES module, exposed as global -->
-  <script type="module">
-    import * as HF from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/dist/transformers.min.js';
-    window.HFTransformers = HF;
-    window.HFTransformersReady = true;
-    window.dispatchEvent(new Event('hf-ready'));
+  <!-- AI Worker: runs transformers.js in Web Worker so UI never freezes -->
+  <script>
+    const AI_WORKER_CODE = `
+      import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/dist/transformers.min.js';
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
+      let pipe = null;
+      const MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct';
+
+      self.onmessage = async (e) => {
+        const { type, id, payload } = e.data;
+
+        if (type === 'load') {
+          try {
+            pipe = await pipeline('text-generation', MODEL_ID, {
+              device: 'wasm', dtype: 'q4',
+              progress_callback: (p) => { self.postMessage({ type: 'progress', p }); }
+            });
+            self.postMessage({ type: 'load_done', id });
+          } catch(err) {
+            self.postMessage({ type: 'load_error', id, message: err.message });
+          }
+        }
+
+        if (type === 'run') {
+          if (!pipe) { self.postMessage({ type: 'run_error', id, message: 'Model not loaded' }); return; }
+          try {
+            const result = await pipe(payload.messages, {
+              max_new_tokens: 384, do_sample: false, repetition_penalty: 1.1
+            });
+            self.postMessage({ type: 'run_done', id, result });
+          } catch(err) {
+            self.postMessage({ type: 'run_error', id, message: err.message });
+          }
+        }
+      };
+    `;
+    const blob = new Blob([AI_WORKER_CODE], { type: 'application/javascript' });
+    window._aiWorkerUrl = URL.createObjectURL(blob);
   </script>
 
   <!-- App -->
@@ -1262,52 +1295,54 @@ function SmartCalc(){
     setOilFxLoad(false);
   },[oilFxRates]);
 
-  const LOCAL_MODEL_ID="onnx-community/Qwen2.5-0.5B-Instruct";
+  // ── AI Worker (non-blocking inference) ───────────────────────────────────
+  const aiWorkerRef=useRef(null);
+  const workerCallbacks=useRef({});
+  const workerMsgId=useRef(0);
+
+  const getWorker=useCallback(()=>{
+    if(aiWorkerRef.current) return aiWorkerRef.current;
+    const w=new Worker(window._aiWorkerUrl,{type:"module"});
+    w.onmessage=(e)=>{
+      const{type,id,p,result,message}=e.data;
+      if(type==="progress"){
+        const pct=p;
+        if(pct.status==="initiate"){
+          setLocalAiPhase(`Chuẩn bị: ${(pct.file||"").split("/").pop()}`);
+        } else if(pct.status==="download"||pct.status==="progress"){
+          const loaded=pct.loaded||0;const total=pct.total||1;
+          const mb=(loaded/1024/1024).toFixed(1);const tot=(total/1024/1024).toFixed(1);
+          setLocalAiProgress(Math.min(99,Math.round((loaded/total)*100)));
+          setLocalAiPhase(`Đang tải: ${(pct.file||"").split("/").pop()} (${mb}/${tot} MB)`);
+        } else if(pct.status==="done"){
+          setLocalAiPhase(`✓ ${(pct.file||"").split("/").pop()}`);
+        }
+        return;
+      }
+      const cb=workerCallbacks.current[id];
+      if(cb){delete workerCallbacks.current[id];cb({type,result,message});}
+    };
+    w.onerror=(e)=>{console.error("AI Worker error:",e);};
+    aiWorkerRef.current=w;
+    return w;
+  },[]);
+
+  const workerSend=useCallback((type,payload)=>{
+    return new Promise((resolve,reject)=>{
+      const id=++workerMsgId.current;
+      workerCallbacks.current[id]=(resp)=>{
+        if(resp.type.endsWith("_error")) reject(new Error(resp.message));
+        else resolve(resp.result);
+      };
+      getWorker().postMessage({type,id,payload});
+    });
+  },[getWorker]);
 
   const initLocalAI=useCallback(async()=>{
     if(localAiStatus==="ready"||localAiStatus==="loading") return;
     setLocalAiStatus("loading");setLocalAiProgress(0);setLocalAiPhase("Chuẩn bị…");
     try{
-      if(!window.HFTransformers){
-        await new Promise((res,rej)=>{
-          if(window.HFTransformersReady){res();return;}
-          const t=setTimeout(()=>rej(new Error("HF timeout")),15000);
-          window.addEventListener('hf-ready',()=>{clearTimeout(t);res();},{once:true});
-        });
-      }
-      const{pipeline,env}=window.HFTransformers;
-      env.allowLocalModels=false;env.useBrowserCache=true;
-      const fileProgress={};
-      const fileSizes={};
-      const pipe=await pipeline("text-generation",LOCAL_MODEL_ID,{
-        device:"wasm",
-        dtype:"q4",
-        progress_callback:(p)=>{
-          if(p.status==="initiate"){
-            fileSizes[p.file]=p.total||0;
-            fileProgress[p.file]=0;
-            setLocalAiPhase(`Chuẩn bị: ${(p.file||"").split("/").pop()}`);
-          } else if(p.status==="download"||p.status==="progress"){
-            const loaded=p.loaded||0;
-            const total=p.total||fileSizes[p.file]||1;
-            fileProgress[p.file]=loaded/total;
-            const vals=Object.values(fileProgress);
-            const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
-            setLocalAiProgress(Math.min(99,Math.round(avg*100)));
-            const name=(p.file||"").split("/").pop();
-            const mb=(loaded/1024/1024).toFixed(1);
-            const tot=(total/1024/1024).toFixed(1);
-            setLocalAiPhase(`Đang tải: ${name} (${mb}/${tot} MB)`);
-          } else if(p.status==="done"){
-            fileProgress[p.file]=1;
-            const vals=Object.values(fileProgress);
-            const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
-            setLocalAiProgress(Math.min(99,Math.round(avg*100)));
-            setLocalAiPhase(`✓ ${(p.file||"").split("/").pop()}`);
-          }
-        }
-      });
-      localModelRef.current=pipe;
+      await workerSend("load",{});
       setLocalAiStatus("ready");setLocalAiProgress(100);setLocalAiPhase("");
       try{localStorage.setItem("sc_slm_cached","1");}catch{}
       showToast("✓ Qwen2.5 sẵn sàng — AI offline trên thiết bị!","success");
@@ -1316,17 +1351,15 @@ function SmartCalc(){
       setLocalAiPhase("");setLocalAiStatus("error");
       showToast("AI offline lỗi: "+((err?.message||"unknown").slice(0,60)),"info");
     }
-  },[localAiStatus,showToast]);
+  },[localAiStatus,workerSend,showToast]);
 
   const runLocalAI=useCallback(async(text)=>{
-    if(!localModelRef.current) return null;
+    if(localAiStatus!=="ready") return null;
     try{
       const mathFacts=extractMathFacts(text,angleMode);
       const groundedSystem=buildGroundedSLMPrompt(mathFacts);
       const messages=[{role:"system",content:groundedSystem},{role:"user",content:text}];
-      const result=await localModelRef.current(messages,{
-        max_new_tokens:512,do_sample:false,repetition_penalty:1.1,
-      });
+      const result=await workerSend("run",{messages});
       const output=result?.[0]?.generated_text;
       const lastMsg=Array.isArray(output)?output[output.length-1]?.content:output;
       if(!lastMsg) return null;
@@ -1334,7 +1367,7 @@ function SmartCalc(){
       if(m){try{return{...JSON.parse(m[0]),engine:"local",mathFacts};}catch{}}
       return{answer:lastMsg.trim(),steps:[],expression:"",engine:"local",mathFacts};
     }catch(err){console.error("SLM run error:",err);return null;}
-  },[angleMode]);
+  },[localAiStatus,angleMode,workerSend]);
 
   const saveKey=()=>{
     const k=orKeyDraft.trim();setOrKey(k);
