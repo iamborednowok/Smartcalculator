@@ -1163,6 +1163,14 @@ function SmartCalc(){
     window.addEventListener("keydown",fn);return()=>window.removeEventListener("keydown",fn);
   },[tab]);
 
+  // Auto-reload SLM on startup if previously loaded (files cached in browser)
+  useEffect(()=>{
+    try{
+      if(localStorage.getItem("sc_slm_cached")==="1") initLocalAI();
+    }catch{}
+  // eslint-disable-next-line
+  },[]);
+
   const onDisplayPointerDown=(e)=>{swipeStartX.current=e.clientX;};
   const onDisplayPointerUp=(e)=>{if(swipeStartX.current===null) return;const dx=e.clientX-swipeStartX.current;swipeStartX.current=null;if(dx<-40){haptic(6);handleRef.current("⌫");}};
   const onCPointerDown=()=>{longPressTimerRef.current=setTimeout(()=>{haptic([20,50,20]);setHistory([]);setShowHist(false);showToast("History cleared","success");},600);};
@@ -1301,6 +1309,7 @@ function SmartCalc(){
       });
       localModelRef.current=pipe;
       setLocalAiStatus("ready");setLocalAiProgress(100);setLocalAiPhase("");
+      try{localStorage.setItem("sc_slm_cached","1");}catch{}
       showToast("✓ Qwen2.5 sẵn sàng — AI offline trên thiết bị!","success");
     }catch(err){
       console.error("SLM load error:",err);
@@ -1385,19 +1394,38 @@ function SmartCalc(){
       const apiMsgs=nextMsgs.map(m=>({role:m.role,content:typeof m.content==="string"?m.content:(m.rawText||String(m.content))}));
       if(orKey){
         const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${orKey}`,"HTTP-Referer":"https://smartcalc.app","X-Title":"SmartCalc"},body:JSON.stringify({model,max_tokens:1000,messages:[{role:"system",content:AI_SYSTEM},...apiMsgs]})});
+        if(!res.ok){
+          const errBody=await res.json().catch(()=>({}));
+          const msg=errBody?.error?.message||errBody?.message||`HTTP ${res.status}`;
+          if(res.status===401) throw new Error("API key không hợp lệ hoặc hết hạn (401)");
+          if(res.status===402) throw new Error("Tài khoản OpenRouter hết credit (402)");
+          if(res.status===429) throw new Error("Gửi quá nhiều yêu cầu, thử lại sau (429)");
+          throw new Error(`OpenRouter lỗi: ${msg}`);
+        }
         const d=await res.json();raw=d.choices?.[0]?.message?.content||"";
-        if(!raw&&d.error) throw new Error(d.error.message);
+        if(!raw&&d.error) throw new Error(d.error?.message||"OpenRouter không trả về kết quả");
       }else{
         const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:AI_SYSTEM,messages:apiMsgs})});
+        if(!res.ok) throw new Error(`Claude API lỗi HTTP ${res.status}`);
         const d=await res.json();raw=d.content?.map(b=>b.text||"").join("")||"";
       }
-      const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
+      let parsed;
+      try{
+        parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
+      }catch{
+        // If not JSON, wrap plain text as answer
+        parsed={answer:raw.trim(),steps:[],expression:""};
+      }
       offlineCtx.current.lastResult=parsed.answer;
       setAiMsgs(m=>[...m,{role:"assistant",content:parsed.answer,rawText:raw,parsed,engine:orKey?model:"claude",time:ts(),mathFacts:[]}]);
       setHistory(h=>[{expr:userText,result:parsed.answer,time:ts()},...h.slice(0,29)]);
     }catch(err){
       const isOffline=!navigator.onLine;
-      setAiMsgs(m=>[...m,{role:"assistant",content:"Error",parsed:{answer:isOffline?"You're offline":"Couldn't get a response",steps:isOffline?["No internet — offline handles: tips, %, conversions, mortgage, geometry & more"]:["Check connection or API key"],note:""},isError:true,engine:"error",time:ts(),mathFacts:[]}]);
+      const errMsg=isOffline?"Không có mạng":(err?.message||"Không nhận được phản hồi");
+      const errSteps=isOffline
+        ?["Offline: app xử lý được tip, %, đổi đơn vị, thế chấp, hình học và nhiều hơn"]
+        :[errMsg.length>60?errMsg:errMsg+". Kiểm tra lại API key hoặc kết nối."];
+      setAiMsgs(m=>[...m,{role:"assistant",content:"Error",parsed:{answer:errMsg,steps:errSteps,note:""},isError:true,engine:"error",time:ts(),mathFacts:[]}]);
     }
     setAiLoad(false);
   };
