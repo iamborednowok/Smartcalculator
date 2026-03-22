@@ -1,0 +1,6 @@
+// ── MediaPipe / LiteRT dependency ─────────────────────────────────────────────
+// Applied as: apply from: '../../mediapipe.gradle' in android/app/build.gradle
+// This is safer than injecting text into the dependencies{} block via regex.
+dependencies {
+    implementation 'com.google.mediapipe:tasks-genai:0.10.22'
+}
