@@ -37,13 +37,15 @@ jobs:
       - name: Patch Android
         run: python3 patch_android.py ${{ github.run_number }}
 
-      - name: Force minSdk 24 for MediaPipe
+      - name: Fix minSdk for MediaPipe
         run: |
-          # Capacitor 6 uses 'minSdk' without 'Version'
+          echo "=== build.gradle before ==="
+          cat android/app/build.gradle
+          echo "=== patching minSdk ==="
           sed -i 's/minSdk [0-9]*/minSdk 24/g' android/app/build.gradle
           sed -i 's/minSdkVersion [0-9]*/minSdkVersion 24/g' android/app/build.gradle
-          echo "Current minSdk setting:"
-          grep -i "minsdk" android/app/build.gradle
+          echo "=== build.gradle after ==="
+          cat android/app/build.gradle
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -61,8 +63,8 @@ jobs:
         run: |
           cd android
           ./gradlew assembleDebug
-          echo "=== APK files found ==="
-          find . -name "*.apk" 2>/dev/null
+          echo "=== APK files ==="
+          find . -name "*.apk"
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
