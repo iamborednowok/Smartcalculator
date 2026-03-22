@@ -48,8 +48,10 @@ if 'tasks-genai' not in gradle:
 else:
     print('MediaPipe already present')
 
-# Bump minSdkVersion to 24 (required by MediaPipe tasks-genai)
-gradle = re.sub(r'minSdkVersion \d+', 'minSdkVersion 24', gradle)
+# Bump minSdk to 24 (required by MediaPipe tasks-genai)
+# Handle both old (minSdkVersion) and new (minSdk) Capacitor formats
+gradle = re.sub(r'minSdkVersion\s+\d+', 'minSdkVersion 24', gradle)
+gradle = re.sub(r'minSdk\s*=?\s*\d+', 'minSdk 24', gradle)
 
 # Bump versionCode and versionName
 gradle = re.sub(r'versionCode \d+', f'versionCode {build_number}', gradle)
