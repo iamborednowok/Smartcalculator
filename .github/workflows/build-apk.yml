@@ -44,18 +44,40 @@ jobs:
           ls -la www/
           npx cap sync android
 
+      - name: Print build.gradle (debug)
+        run: |
+          echo "=== FULL android/app/build.gradle ==="
+          cat android/app/build.gradle
+          echo "=== END ==="
+
       - name: Fix rootProject bug in build.gradle
         run: |
           python3 - <<'EOF'
           import re
 
-          def remove_gms_block(content):
+          path = 'android/app/build.gradle'
+          with open(path) as f:
+              content = f.read()
+
+          # Most robust approach: regex that handles one level of nested braces
+          # Matches: try { ... servicesJSON ... { ... } ... } catch(...) { ... }
+          fixed = re.sub(
+              r'try\s*\{(?:[^{}]|\{[^{}]*\})*servicesJSON(?:[^{}]|\{[^{}]*\})*\}'
+              r'\s*catch\s*\([^)]*\)\s*\{[^}]*\}',
+              '// google-services removed (no Firebase)',
+              content,
+              flags=re.DOTALL
+          )
+
+          if fixed == content:
+              # Fallback: line-by-line brace counter
+              print("Regex did not match — trying line-by-line parser")
               lines = content.split('\n')
               result = []
               i = 0
               while i < len(lines):
                   line = lines[i]
-                  if re.match(r'\s*try\s*[\{\(]', line):
+                  if re.match(r'\s*try\s*\{', line):
                       block = [line]
                       depth = line.count('{') - line.count('}')
                       j = i + 1
@@ -72,29 +94,31 @@ jobs:
                               depth += lines[j].count('{') - lines[j].count('}')
                               j += 1
                       block_text = '\n'.join(block)
-                      if 'servicesJSON' in block_text or ('google-services' in block_text and 'apply plugin' in block_text):
-                          result.append('// google-services block removed (no Firebase)')
+                      if 'servicesJSON' in block_text:
+                          result.append('// google-services removed (no Firebase)')
                       else:
                           result.extend(block)
                       i = j
                       continue
                   result.append(line)
                   i += 1
-              return '\n'.join(result)
+              fixed = '\n'.join(result)
 
-          path = 'android/app/build.gradle'
-          with open(path) as f:
-              content = f.read()
-          fixed = remove_gms_block(content)
           with open(path, 'w') as f:
               f.write(fixed)
-          print("build.gradle rootProject fix applied")
+
           if 'servicesJSON' in fixed:
-              print("WARNING: servicesJSON still present!")
+              print("ERROR: servicesJSON block still present — fix failed!")
+              print("Lines containing servicesJSON:")
+              for i, l in enumerate(fixed.split('\n'), 1):
+                  if 'servicesJSON' in l:
+                      print(f"  line {i}: {l}")
+              exit(1)
           else:
-              print("OK: servicesJSON block removed successfully")
+              print("OK: google-services block removed successfully")
+
           EOF
-          echo "=== build.gradle lines 1-20 ==="
+          echo "=== build.gradle after fix ==="
           head -20 android/app/build.gradle
 
       - name: Setup Android SDK
