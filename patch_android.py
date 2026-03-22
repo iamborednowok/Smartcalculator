@@ -38,6 +38,9 @@ gradle_path = 'android/app/build.gradle'
 with open(gradle_path) as f:
     gradle = f.read()
 
+print('Original build.gradle:')
+print(gradle[:500])
+
 mediapipe_dep = "    implementation 'com.google.mediapipe:tasks-genai:0.10.22'"
 if 'tasks-genai' not in gradle:
     gradle = gradle.replace(
@@ -48,12 +51,7 @@ if 'tasks-genai' not in gradle:
 else:
     print('MediaPipe already present')
 
-# Bump minSdk to 24 (required by MediaPipe tasks-genai)
-# Handle both old (minSdkVersion) and new (minSdk) Capacitor formats
-gradle = re.sub(r'minSdkVersion\s+\d+', 'minSdkVersion 24', gradle)
-gradle = re.sub(r'minSdk\s*=?\s*\d+', 'minSdk 24', gradle)
-
-# Bump versionCode and versionName
+# Bump versionCode and versionName only (NOT minSdk - handled by sed in workflow)
 gradle = re.sub(r'versionCode \d+', f'versionCode {build_number}', gradle)
 gradle = re.sub(r'versionName "[^"]*"', f'versionName "1.{build_number}"', gradle)
 
@@ -72,13 +70,11 @@ main_path = os.path.join(plugin_dir, 'MainActivity.java')
 with open(main_path) as f:
     main = f.read()
 
-# Add import if missing
 if 'LLMPlugin' not in main:
     main = main.replace(
         'import com.getcapacitor.BridgeActivity;',
         'import com.getcapacitor.BridgeActivity;\nimport com.getcapacitor.Plugin;\nimport java.util.ArrayList;'
     )
-    # Add registerPlugin call
     main = main.replace(
         'public class MainActivity extends BridgeActivity {',
         'public class MainActivity extends BridgeActivity {\n'
@@ -88,7 +84,6 @@ if 'LLMPlugin' not in main:
         '    super.onCreate(savedInstanceState);\n'
         '  }'
     )
-    # Remove duplicate onCreate if any
     with open(main_path, 'w') as f:
         f.write(main)
     print('MainActivity patched OK')
