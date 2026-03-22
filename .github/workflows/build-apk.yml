@@ -47,17 +47,11 @@ jobs:
       - name: Fix rootProject bug in build.gradle
         run: |
           GRADLE=android/app/build.gradle
-          echo "=== build.gradle lines 1-15 before fix ==="
-          head -15 $GRADLE
-          # Remove the Capacitor-generated try/catch block that accesses
-          # rootProject before it is initialised — this causes:
-          # "Cannot get property 'rootProject' on null object" at line 8
           python3 - <<'EOF'
           import re
           path = 'android/app/build.gradle'
           with open(path) as f:
               content = f.read()
-          # Remove the try { ... google-services ... } block Capacitor adds
           fixed = re.sub(
               r'try\s*\{[^{}]*?(?:google-services|servicesJSON)[^{}]*?\}[^\n]*\n?',
               '// google-services removed (no Firebase used)\n',
@@ -68,7 +62,7 @@ jobs:
               f.write(fixed)
           print("build.gradle rootProject fix applied")
           EOF
-          echo "=== build.gradle lines 1-15 after fix ==="
+          echo "=== build.gradle lines 1-15 ==="
           head -15 $GRADLE
 
       - name: Setup Android SDK
@@ -89,14 +83,30 @@ jobs:
 
       - name: Build Debug APK
         run: |
+          set -o pipefail
           cd android
-          ./gradlew assembleDebug --stacktrace 2>&1 | tail -100
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log | tail -150
+          echo "=== Gradle exit code: $? ==="
+
+      - name: Verify APK exists
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          if [ -f "$APK" ]; then
+            SIZE=$(du -sh "$APK" | cut -f1)
+            echo "✅ APK found! Size: $SIZE"
+          else
+            echo "❌ APK not found at $APK"
+            echo "=== Last 50 lines of build log ==="
+            tail -50 android/build.log || echo "(no log)"
+            exit 1
+          fi
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: SmartCalc-v${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
           retention-days: 30
 
       - name: Create Release
