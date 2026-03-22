@@ -115,10 +115,16 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          set -o pipefail
           cd android
-          ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log | tail -150
-          echo "=== Gradle exit code: $? ==="
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log
+          GRADLE_EXIT=${PIPESTATUS[0]}
+          if [ $GRADLE_EXIT -ne 0 ]; then
+            echo "========================================"
+            echo "GRADLE FAILED — FULL LOG:"
+            echo "========================================"
+            cat build.log
+            exit $GRADLE_EXIT
+          fi
 
       - name: Verify APK exists
         run: |
