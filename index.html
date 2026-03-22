@@ -1317,6 +1317,9 @@ function SmartCalc(){
   const [orKeyDraft,setOrKeyDraft]=useState("");const [showKey,setShowKey]=useState(false);
   const [hfToken,setHfToken]=useState(()=>{try{return localStorage.getItem("sc_hftoken")||"";}catch{return"";}});
   const [hfTokenDraft,setHfTokenDraft]=useState("");const [showHfToken,setShowHfToken]=useState(false);
+  // ✅ Ref để tránh stale closure trong useCallback
+  const hfTokenRef=useRef("");
+  useEffect(()=>{ hfTokenRef.current=hfToken; },[hfToken]);
   const [model,setModel]=useState(FREE_MODELS[0].id);const [showDrop,setShowDrop]=useState(false);
   const [showSettings,setShowSettings]=useState(false);
   const [randDice,setRandDice]=useState(6);const [randDiceCount,setRandDiceCount]=useState(1);
@@ -1591,7 +1594,7 @@ function SmartCalc(){
             });
           }catch(e){ console.warn("addListener failed",e); }
           try{
-            await LLM.downloadModel({hfToken: hfToken||""});
+            await LLM.downloadModel({hfToken: hfTokenRef.current||""});
           }finally{
             try{if(dlHandle&&dlHandle.remove)dlHandle.remove();}catch{}
           }
@@ -1662,6 +1665,7 @@ function SmartCalc(){
 
   const saveHfToken=()=>{
     const k=hfTokenDraft.trim();setHfToken(k);
+    hfTokenRef.current=k; // ✅ Update ref ngay lập tức, không chờ re-render
     try{if(k)localStorage.setItem("sc_hftoken",k);else localStorage.removeItem("sc_hftoken");}catch{}
     if(k)showToast(t.hfTokenSaved||"✓ HF Token saved","success");
     setHfTokenDraft("");
@@ -2388,7 +2392,9 @@ function SmartCalc(){
                   <div style={{color:"#c06060",fontSize:".63rem",lineHeight:1.6,marginBottom:"8px"}}>
                     {localAiStatus==="no-webgpu"
                       ?"Thiết bị hoặc trình duyệt không hỗ trợ. Hãy dùng Chrome phiên bản mới nhất."
-                      :"Không thể tải model về thiết bị. Có thể do mạng yếu, bộ nhớ không đủ, hoặc trình duyệt chặn WASM."}
+                      :window._isCapacitor
+                        ?"Không tải được model. Nếu lỗi 401: kiểm tra HuggingFace Token trong ⚙, và đảm bảo đã Accept license tại huggingface.co/litert-community/Gemma3-1B-IT. Nếu lỗi khác: kiểm tra mạng hoặc bộ nhớ còn trống (cần ~700MB)."
+                        :"Không thể tải model về thiết bị. Có thể do mạng yếu, bộ nhớ không đủ, hoặc trình duyệt chặn WASM."}
                   </div>
                   <div style={{color:"#808080",fontSize:".6rem",marginBottom:"8px",background:"rgba(0,0,0,.3)",borderRadius:"8px",padding:"5px 9px"}}>
                     ℹ App vẫn hoạt động bình thường qua Claude cloud khi có mạng.
