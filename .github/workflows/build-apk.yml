@@ -3,15 +3,23 @@ name: Build APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # cho phép bấm Run thủ công trên GitHub
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -21,20 +29,60 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Prepare www folder
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
+          echo "www contents:"
+          ls -la www/
+
       - name: Add Android platform
         run: npx cap add android
 
       - name: Sync Capacitor
-        run: npx cap sync android
+        run: |
+          ls -la www/
+          npx cap sync android
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+      - name: Fix rootProject bug in build.gradle
+        run: |
+          GRADLE=android/app/build.gradle
+          echo "=== build.gradle lines 1-15 before fix ==="
+          head -15 $GRADLE
+          # Remove the Capacitor-generated try/catch block that accesses
+          # rootProject before it is initialised — this causes:
+          # "Cannot get property 'rootProject' on null object" at line 8
+          python3 - <<'EOF'
+          import re
+          path = 'android/app/build.gradle'
+          with open(path) as f:
+              content = f.read()
+          # Remove the try { ... google-services ... } block Capacitor adds
+          fixed = re.sub(
+              r'try\s*\{[^{}]*?(?:google-services|servicesJSON)[^{}]*?\}[^\n]*\n?',
+              '// google-services removed (no Firebase used)\n',
+              content,
+              flags=re.DOTALL
+          )
+          with open(path, 'w') as f:
+              f.write(fixed)
+          print("build.gradle rootProject fix applied")
+          EOF
+          echo "=== build.gradle lines 1-15 after fix ==="
+          head -15 $GRADLE
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Patch Android
+        run: python3 patch_android.py ${{ github.run_number }}
+
+      - name: Force minSdk 24 for MediaPipe
+        run: |
+          sed -i 's/minSdk [0-9]*/minSdk 24/g' android/app/build.gradle
+          sed -i 's/minSdkVersion [0-9]*/minSdkVersion 24/g' android/app/build.gradle
+          echo "Current minSdk setting:"
+          grep -i "minsdk" android/app/build.gradle
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -42,12 +90,12 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace 2>&1 | tail -100
 
-      - name: Upload APK
+      - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartCalc-APK
+          name: SmartCalc-v${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
@@ -59,11 +107,6 @@ jobs:
           name: SmartCalc v${{ github.run_number }}
           files: android/app/build/outputs/apk/debug/app-debug.apk
           generate_release_notes: false
-          body: |
-            📱 **SmartCalc APK**
-            
-            Tải file `app-debug.apk` về → cài trên Android.
-            
-            > Cần bật: Cài đặt → Bảo mật → Cho phép cài từ nguồn không xác định
+          body: SmartCalc v${{ github.run_number }} - tai app-debug.apk ve cai tren Android
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
