@@ -38,14 +38,53 @@ public class LLMPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    // ✅ FIX: Dùng RETURN_PROMISE thay RETURN_CALLBACK
-    // Progress báo qua notifyListeners("downloadProgress") 
-    // JS gọi LLM.downloadModel({}) trả về Promise bình thường
+    // ✅ Mở connection với auth header, tự xử lý redirect để giữ Authorization
+    private HttpURLConnection openWithAuth(String urlStr, String token) throws Exception {
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setConnectTimeout(15_000);
+        conn.setReadTimeout(120_000);
+        conn.setInstanceFollowRedirects(false); // tắt auto-redirect để tự xử lý
+        if (token != null && !token.isEmpty()) {
+            conn.setRequestProperty("Authorization", "Bearer " + token);
+        }
+        conn.setRequestProperty("User-Agent", "SmartCalc/1.0");
+        conn.connect();
+
+        int code = conn.getResponseCode();
+
+        // Xử lý redirect thủ công — giữ Authorization header qua các lần redirect
+        int redirectCount = 0;
+        while ((code == 301 || code == 302 || code == 303 || code == 307 || code == 308)
+                && redirectCount < 10) {
+            String location = conn.getHeaderField("Location");
+            if (location == null) break;
+            conn.disconnect();
+            redirectCount++;
+
+            URL redirectUrl = new URL(url, location); // xử lý relative URL
+            conn = (HttpURLConnection) redirectUrl.openConnection();
+            conn.setConnectTimeout(15_000);
+            conn.setReadTimeout(120_000);
+            conn.setInstanceFollowRedirects(false);
+
+            // ✅ Giữ Authorization qua redirect (Java mặc định xóa → 403)
+            if (token != null && !token.isEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer " + token);
+            }
+            conn.setRequestProperty("User-Agent", "SmartCalc/1.0");
+            conn.connect();
+            code = conn.getResponseCode();
+            url = redirectUrl;
+        }
+
+        return conn;
+    }
+
     @PluginMethod
     public void downloadModel(PluginCall call) {
         File modelFile = getModelFile();
 
-        // Đã tải xong → resolve ngay
         if (modelFile.exists() && modelFile.length() > 50_000_000L) {
             JSObject ret = new JSObject();
             ret.put("status", "cached");
@@ -54,23 +93,16 @@ public class LLMPlugin extends Plugin {
             return;
         }
 
+        String token = call.getString("hfToken", "");
+
         new Thread(() -> {
+            HttpURLConnection conn = null;
             try {
-                URL url = new URL(MODEL_URL);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(15_000);
-                conn.setReadTimeout(60_000);
-                conn.setInstanceFollowRedirects(true);
-                // ✅ HuggingFace token (Gemma requires auth)
-                String token = call.getString("hfToken", "");
-                if (token != null && !token.isEmpty()) {
-                    conn.setRequestProperty("Authorization", "Bearer " + token);
-                }
-                conn.connect();
+                conn = openWithAuth(MODEL_URL, token);
 
                 int httpCode = conn.getResponseCode();
                 if (httpCode < 200 || httpCode >= 300) {
-                    modelFile.delete();
+                    if (modelFile.exists()) modelFile.delete();
                     call.reject("HTTP error: " + httpCode);
                     return;
                 }
@@ -79,7 +111,7 @@ public class LLMPlugin extends Plugin {
 
                 try (InputStream in = conn.getInputStream();
                      FileOutputStream out = new FileOutputStream(modelFile)) {
-                    byte[] buf = new byte[65536]; // 64KB buffer (tăng từ 32KB → nhanh hơn)
+                    byte[] buf = new byte[65536];
                     long downloaded = 0;
                     long lastReport = 0;
                     int n;
@@ -89,7 +121,6 @@ public class LLMPlugin extends Plugin {
                         long now = System.currentTimeMillis();
                         if (now - lastReport > 400) {
                             lastReport = now;
-                            // ✅ Dùng notifyListeners thay vì call.resolve() nhiều lần
                             JSObject p = new JSObject();
                             p.put("status", "downloading");
                             p.put("downloaded", downloaded);
@@ -103,7 +134,6 @@ public class LLMPlugin extends Plugin {
                     out.flush();
                 }
 
-                // Kiểm tra file tải xong hợp lệ
                 if (modelFile.length() < 50_000_000L) {
                     modelFile.delete();
                     call.reject("Download incomplete: file too small");
@@ -113,12 +143,14 @@ public class LLMPlugin extends Plugin {
                 JSObject ret = new JSObject();
                 ret.put("status", "done");
                 ret.put("path", modelFile.getAbsolutePath());
-                call.resolve(ret); // ✅ Chỉ gọi resolve() 1 lần duy nhất
+                call.resolve(ret);
 
             } catch (Exception e) {
                 Log.e(TAG, "Download error", e);
                 if (modelFile.exists()) modelFile.delete();
                 call.reject("Download failed: " + e.getMessage());
+            } finally {
+                if (conn != null) conn.disconnect();
             }
         }).start();
     }
