@@ -46,8 +46,11 @@ jobs:
           echo "=== BEFORE FIX (lines 1-20) ==="
           head -20 $GRADLE
 
-          # Fix 1: Replace rootProject.ext.versionCode/versionName with real values
-          # Capacitor 6 generates these references which crash Gradle at startup
+          # Fix 1: Replace ALL rootProject.ext references with hardcoded values
+          # Capacitor 6 generates these which crash Gradle before project is initialized
+          sed -i 's/compileSdk\s*rootProject\.ext\.compileSdkVersion/compileSdk 34/g' $GRADLE
+          sed -i 's/minSdkVersion\s*rootProject\.ext\.minSdkVersion/minSdkVersion 24/g' $GRADLE
+          sed -i 's/targetSdkVersion\s*rootProject\.ext\.targetSdkVersion/targetSdkVersion 34/g' $GRADLE
           sed -i "s/versionCode\s*rootProject\.ext\.versionCode/versionCode ${{ github.run_number }}/g" $GRADLE
           sed -i "s/versionName\s*rootProject\.ext\.versionName/versionName \"1.${{ github.run_number }}\"/g" $GRADLE
 
