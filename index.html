@@ -1573,11 +1573,14 @@ function SmartCalc(){
         const status=await LLM.getStatus();
         if(!status.modelExists){
           await new Promise((resolve,reject)=>{
-            const sub=LLM.addListener("downloadProgress",(r)=>{
+            // Capacitor 6: addListener trả về Promise<PluginListenerHandle>
+            let subHandle=null;
+            Promise.resolve(LLM.addListener("downloadProgress",(r)=>{
               setLocalAiProgress(r.percent||0);
               setLocalAiPhase(`Đang tải: ${r.mb||"?"}/${r.totalMb||600} MB`);
-            });
-            LLM.downloadModel({}).then(r=>{sub.remove();resolve(r);}).catch(e=>{sub.remove();reject(e);});
+            })).then(h=>{ subHandle=h; });
+            const cleanup=()=>{ try{if(subHandle&&subHandle.remove)subHandle.remove();}catch{} };
+            LLM.downloadModel({}).then(r=>{cleanup();resolve(r);}).catch(e=>{cleanup();reject(e);});
           });
         }else{
           setLocalAiPhase("Model sẵn sàng, đang load…");setLocalAiProgress(90);
@@ -1589,7 +1592,12 @@ function SmartCalc(){
         showToast("✓ Gemma 3 1B — native AI sẵn sàng!","success");
         return;
       }catch(err){
-        console.warn("Native LLM failed, fallback WASM:",err.message);
+        // Hiện lỗi rõ ràng thay vì fallback WASM (không có WebGPU trên Android app)
+        const msg=err?.message||String(err);
+        setLocalAiPhase(""); setLocalAiStatus("error");
+        showToast("Native LLM lỗi: "+msg.slice(0,80),"info");
+        console.error("Native LLM error:",err);
+        return;
       }
     }
 
