@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Smart Calculator</title>
 
@@ -20,10 +21,33 @@
   <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExMiIgZmlsbD0iIzA2MDYwZiIvPjxyZWN0IHg9IjY0IiB5PSI2NCIgd2lkdGg9IjM4NCIgaGVpZ2h0PSIzODQiIHJ4PSI1NiIgZmlsbD0iIzBkMGQyMCIgc3Ryb2tlPSIjMzAzMDYwIiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIyNTYiIHk9IjMyMCIgZm9udC1mYW1pbHk9Im1vbm9zcGFjZSIgZm9udC1zaXplPSIyMjAiIGZpbGw9IiM1YjUyZjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPsKrPC90ZXh0Pjwvc3ZnPg==" />
 
   <!-- Libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+  <script>
+    // Show visible error if any CDN script fails to load
+    window.__scriptErrors = [];
+    window.__showError = function(msg) {
+      window.__scriptErrors.push(msg);
+      var d = document.getElementById('__err');
+      if (!d) {
+        d = document.createElement('div');
+        d.id = '__err';
+        d.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#1a0010;color:#ff6b6b;padding:20px;font-family:monospace;font-size:13px;z-index:99999;overflow:auto;white-space:pre-wrap;';
+        d.innerHTML = '<b style="font-size:16px">⚠️ LOAD ERROR</b>\n\n';
+        document.body ? document.body.appendChild(d) : document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(d); });
+      }
+      d.innerHTML += msg + '\n';
+    };
+    window.onerror = function(msg, src, line) {
+      window.__showError('JS Error: ' + msg + '\n  at ' + src + ':' + line);
+    };
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js"
+    onerror="window.__showError('FAILED: math.min.js - no internet or CDN blocked')"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"
+    onerror="window.__showError('FAILED: react.production.min.js')"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"
+    onerror="window.__showError('FAILED: react-dom.production.min.js')"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"
+    onerror="window.__showError('FAILED: babel-standalone - this is the main cause of blank screen')"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -99,6 +123,45 @@
 </head>
 <body>
   <div id="root"></div>
+  <!-- Debug overlay: shows loading status, auto-hides when React mounts -->
+  <div id="__dbg" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#06060f;color:#888;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;font-size:13px;z-index:99998;padding:20px;text-align:center;">
+    <div style="color:#5b52f0;font-size:20px;margin-bottom:16px">⚡ SmartCalc</div>
+    <div id="__dbg_status">Initializing...</div>
+    <div id="__dbg_detail" style="margin-top:12px;font-size:11px;color:#555;max-width:300px"></div>
+  </div>
+  <script>
+    function dbgStatus(msg, detail) {
+      var s = document.getElementById('__dbg_status');
+      var d = document.getElementById('__dbg_detail');
+      if (s) s.textContent = msg;
+      if (d && detail) d.textContent = detail;
+    }
+    function dbgHide() {
+      var el = document.getElementById('__dbg');
+      if (el) el.style.display = 'none';
+    }
+    // Check libraries after page load
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        var missing = [];
+        if (!window.math) missing.push('math.js');
+        if (!window.React) missing.push('React');
+        if (!window.ReactDOM) missing.push('ReactDOM');
+        if (!window.Babel) missing.push('Babel');
+        if (missing.length > 0) {
+          dbgStatus('❌ Failed to load: ' + missing.join(', '),
+            'Check internet connection. These libraries must load from CDN on first launch.');
+          document.getElementById('__dbg').style.background = '#1a0010';
+          document.getElementById('__dbg_status').style.color = '#ff6b6b';
+        } else {
+          dbgStatus('✓ Libraries loaded, starting app...');
+        }
+      }, 3000);
+    });
+    // Called by React mount to hide this overlay
+    window.__appReady = function() { dbgHide(); };
+    dbgStatus('Loading libraries...');
+  </script>
   <div id="offline-badge">● OFFLINE</div>
 
   <!-- Install Banner (Android / Desktop) -->
@@ -2454,6 +2517,7 @@ ${m.content}`).join("
     // Mount the app
     const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<SmartCalc />);
+    window.__appReady && window.__appReady();
   </script>
 </body>
 </html>
