@@ -61,6 +61,11 @@ public class LLMPlugin extends Plugin {
                 conn.setConnectTimeout(15_000);
                 conn.setReadTimeout(60_000);
                 conn.setInstanceFollowRedirects(true);
+                // ✅ HuggingFace token (Gemma requires auth)
+                String token = call.getString("hfToken", "");
+                if (token != null && !token.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + token);
+                }
                 conn.connect();
 
                 int httpCode = conn.getResponseCode();
