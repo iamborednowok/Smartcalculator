@@ -38,12 +38,14 @@ public class LLMPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    @PluginMethod(returnType = PluginMethod.RETURN_CALLBACK)
+    // ✅ FIX: Dùng RETURN_PROMISE thay RETURN_CALLBACK
+    // Progress báo qua notifyListeners("downloadProgress") 
+    // JS gọi LLM.downloadModel({}) trả về Promise bình thường
+    @PluginMethod
     public void downloadModel(PluginCall call) {
-        call.setKeepAlive(true);
         File modelFile = getModelFile();
 
-        // Already downloaded
+        // Đã tải xong → resolve ngay
         if (modelFile.exists() && modelFile.length() > 50_000_000L) {
             JSObject ret = new JSObject();
             ret.put("status", "cached");
@@ -56,13 +58,23 @@ public class LLMPlugin extends Plugin {
             try {
                 URL url = new URL(MODEL_URL);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(15_000);
+                conn.setReadTimeout(60_000);
                 conn.setInstanceFollowRedirects(true);
                 conn.connect();
+
+                int httpCode = conn.getResponseCode();
+                if (httpCode < 200 || httpCode >= 300) {
+                    modelFile.delete();
+                    call.reject("HTTP error: " + httpCode);
+                    return;
+                }
+
                 long total = conn.getContentLengthLong();
 
                 try (InputStream in = conn.getInputStream();
                      FileOutputStream out = new FileOutputStream(modelFile)) {
-                    byte[] buf = new byte[32768];
+                    byte[] buf = new byte[65536]; // 64KB buffer (tăng từ 32KB → nhanh hơn)
                     long downloaded = 0;
                     long lastReport = 0;
                     int n;
@@ -72,6 +84,7 @@ public class LLMPlugin extends Plugin {
                         long now = System.currentTimeMillis();
                         if (now - lastReport > 400) {
                             lastReport = now;
+                            // ✅ Dùng notifyListeners thay vì call.resolve() nhiều lần
                             JSObject p = new JSObject();
                             p.put("status", "downloading");
                             p.put("downloaded", downloaded);
@@ -79,19 +92,27 @@ public class LLMPlugin extends Plugin {
                             p.put("percent", total > 0 ? (int)(downloaded * 100 / total) : 0);
                             p.put("mb", String.format("%.1f", downloaded / 1048576.0));
                             p.put("totalMb", String.format("%.0f", total / 1048576.0));
-                            call.resolve(p);
+                            notifyListeners("downloadProgress", p);
                         }
                     }
+                    out.flush();
+                }
+
+                // Kiểm tra file tải xong hợp lệ
+                if (modelFile.length() < 50_000_000L) {
+                    modelFile.delete();
+                    call.reject("Download incomplete: file too small");
+                    return;
                 }
 
                 JSObject ret = new JSObject();
                 ret.put("status", "done");
                 ret.put("path", modelFile.getAbsolutePath());
-                call.resolve(ret);
+                call.resolve(ret); // ✅ Chỉ gọi resolve() 1 lần duy nhất
 
             } catch (Exception e) {
                 Log.e(TAG, "Download error", e);
-                modelFile.delete();
+                if (modelFile.exists()) modelFile.delete();
                 call.reject("Download failed: " + e.getMessage());
             }
         }).start();
@@ -137,5 +158,14 @@ public class LLMPlugin extends Plugin {
                 call.reject("Inference failed: " + e.getMessage());
             }
         }).start();
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (llmInference != null) {
+            try { llmInference.close(); } catch (Exception ignored) {}
+            llmInference = null;
+        }
+        super.handleOnDestroy();
     }
 }
