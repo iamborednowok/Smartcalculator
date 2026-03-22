@@ -662,6 +662,23 @@ function sanitizeLLMResult(raw, mathFacts){
   return { answer, steps, expression };
 }
 
+
+// ─── Try render chart from AI JSON result ─────────────────────────────────────
+// Called after SLM / cloud returns JSON — if graphExprs present, render PNG.
+function tryRenderChart(parsed) {
+  const exprs = parsed?.graphExprs;
+  if (!Array.isArray(exprs) || exprs.length === 0) return null;
+  const validExprs = exprs.filter(e => typeof e === "string" && /x/i.test(e)).slice(0, 4);
+  if (validExprs.length === 0) return null;
+  const xMin = typeof parsed.xMin === "number" ? parsed.xMin : -8;
+  const xMax = typeof parsed.xMax === "number" ? parsed.xMax : 8;
+  const yMin = typeof parsed.yMin === "number" ? parsed.yMin : -5;
+  const yMax = typeof parsed.yMax === "number" ? parsed.yMax : 5;
+  const dataUrl = renderChartToDataURL(validExprs, { xMin, xMax, yMin, yMax });
+  if (!dataUrl) return null;
+  return { dataUrl, exprs: validExprs, view: { xMin, xMax, yMin, yMax } };
+}
+
 function buildGroundedSLMPrompt(mathFacts){
   let sys="You are a math translator. Convert the user question into a math.js expression.\n";
   sys+="Available math.js functions:\n"+MATHJS_CAPABILITIES+"\n";
@@ -677,8 +694,10 @@ function buildGroundedSLMPrompt(mathFacts){
   sys+="4. For derivatives: derivative('x^2+3*x','x')\n";
   sys+="5. NEVER calculate yourself. Only translate.\n\n";
   sys+="Respond ONLY with raw JSON:\n";
-  sys+='{"mathExpr":"math.js expression or empty","answer":"final answer as plain text","explanation":"brief explanation in same language as user","steps":["step 1","step 2"]}';
+  sys+='{"mathExpr":"math.js expression or empty","answer":"final answer as plain text","explanation":"brief explanation in same language as user","steps":["step 1","step 2"],"graphExprs":["expr1","expr2"],"xMin":-8,"xMax":8}';
   sys+="\nIMPORTANT: answer field must always be present and be a string.";
+  sys+="\nFor graph/plot/vẽ requests: populate graphExprs with valid math.js expressions in x. Set xMin/xMax if user specifies range.";
+  sys+="\nFor non-graph requests: omit graphExprs entirely (do NOT include empty array).";
   return sys;
 }
 
@@ -953,7 +972,7 @@ const FREE_MODELS=[
   {id:"mistralai/mistral-7b-instruct:free",label:"Mistral 7B",badge:"free",color:"#e8a870",desc:"Fast and efficient"},
   {id:"openrouter/auto",label:"Auto-select",badge:"🎲",color:"#8080c0",desc:"OpenRouter picks best"},
 ];
-const AI_SYSTEM=`You are a brilliant math assistant in a calculator app. Solve any math problem, conversion, or financial question clearly.\nRespond ONLY with a raw JSON object — no markdown, no preamble:\n{"answer":"final answer","steps":["step 1","step 2"],"expression":"optional math","note":"optional caveat"}`;
+const AI_SYSTEM=`You are a brilliant math assistant in a calculator app. Solve any math problem, conversion, or financial question clearly.\nRespond ONLY with a raw JSON object — no markdown, no preamble:\n{"answer":"final answer","steps":["step 1","step 2"],"expression":"optional math","note":"optional caveat","graphExprs":["expr1","expr2"],"xMin":-8,"xMax":8}\nGRAPH RULE: If the user asks to plot/graph/draw/vẽ, populate graphExprs with valid math.js expressions in x (e.g. "sin(x)", "x^2-4"). Set xMin/xMax if they specify a range. For non-graph requests omit graphExprs entirely.`;
 const AI_EXAMPLES_BY_LANG={
   en:["⚡ 15% tip on $84.50, split 3 people","⚡ 30% off $249.99","⚡ $400k mortgage at 6.5% for 30 years","⚡ compound interest $5k at 7% for 20 years","⚡ area of circle radius 8.5","⚡ hypotenuse a=3 b=4","⚡ sin of 45 degrees","⚡ standard deviation of 4 7 13 2","⚡ my salary is 5000, what is 15% of it?","⚡ 98.6°F to Celsius","☁ what is the probability of rolling two sixes in a row?"],
   vi:["⚡ tiền tip 15% cho hóa đơn $84.50, chia 3 người","⚡ giảm 30% từ $249.99","⚡ vay $400k lãi 6.5% trong 30 năm","⚡ lãi kép $5k lãi suất 7% trong 20 năm","⚡ diện tích hình tròn bán kính 8.5","⚡ cạnh huyền a=3 b=4","⚡ sin của 45 độ","⚡ độ lệch chuẩn của 4 7 13 2","⚡ lương tháng 5000, 15% là bao nhiêu?","⚡ 98.6°F sang Celsius","☁ xác suất tung hai con xúc xắc đều ra 6?"],
@@ -969,8 +988,8 @@ function ts(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-
 
 // ─── Languages (compact — en + vi only for brevity, others same as original) ─
 const LANGS={
-  en:{name:"English",flag:"🇬🇧",tabs:["Calc","Formula","Convert","Random","Graph","AI"],hist:"Hist",clearAll:"clear all",copy:"copy",copied:"✓ copied",basic:"basic",sci:"sci",frac:"½ frac",last:"↩ last",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc · Backspace · hold C = clear history",formulaBack:"← back",calculate:"Calculate",result:"RESULT",sentCalc:"Sent to calculator",unitSubUnits:"⇄ Units",unitSubOil:"🛢 Oil → Money",rollBtn:"Roll!",flipBtn:"Flip",pickBtn:"Pick",diceLabel:"🎲 DICE ROLLER",coinLabel:"🪙 COIN",rangeLabel:"🎯 RANGE",mathLabel:"🧮 MATH PRACTICE",startBtn:(d,e)=>`Start — ${d} ${e}`,nextBtn:"Next →",skipBtn:"skip",checkBtn:"Check",answerPlaceholder:"Your answer…",correct:"✓ Correct!",wrong:(a)=>`✗ Answer: ${a}`,resetScore:"reset",hintBtn:"hint",aiPlaceholder:"Ask anything… context-aware (Enter to send)",clearChat:"clear chat",tryAsking:"TRY ASKING…",offlineEngine:"⚡ offline",localEngine:"🧠 SLM+grounded",cloudEngine:"☁",modelDefault:"Claude (default)",thinking:"🧠 THINKING…",saveKey:"Save",removeKey:"remove",keyActive:"✓ Key active",orKeyDesc:"Free key at openrouter.ai — no credit card.",hfTokenLabel:"HUGGINGFACE TOKEN (for Gemma 3)",hfTokenDesc:"Required to download Gemma 3 1B. Free at huggingface.co/settings/tokens (read access).",hfTokenSaved:"✓ HF Token saved",hfTokenPlaceholder:"hf_…",wgpuError:"WebGPU not available",wgpuDesc:"SLM needs WebGPU. Use Chrome on Android.",historyLabel:"HISTORY",noWebGPU:"needs Chrome on Android",loadingTokenizer:"Loading tokenizer…",loadingModel:"Downloading SmolLM2-360M (~250MB)…",cachedNote:"Cached in browser after download",loadOfflineBtn:"⬇ Load offline AI",offlineDescNative:"Math-grounded: engine pre-verifies all numbers before passing to AI — eliminates hallucinations. Runs 100% offline after download (~600MB).",offlineDescWasm:"Math-grounded: engine pre-verifies all numbers before passing to AI — eliminates hallucinations. Runs 100% offline after download (~250MB).",loadingNative:"Loading Gemma 3 1B…",loadingWasm:"Loading SmolLM2-360M…",loadingNote:"First download ~{size} • Cached for offline use after",startingUp:"Starting up…",offlineReady:"🔒 Offline AI ready · math-grounded · fully offline",offlineProcessing:"🧠 Processing offline…",precision:"PRECISION · OFFLINE · AI-POWERED",fromLabel:"FROM",toLabel:"TO",swipeHint:"← swipe to delete",holdC:"hold C = clear history",mathQ:{tagAdd:"Addition",tagSub:"Subtraction",tagMul:"Multiplication",tagDiv:"Division",tagSq:"Squares",tagSqrt:"Square Root",tagPct:"Percentage",tagFrac:"Fractions",tagCbrt:"Cube Root",tagPow:"Powers",tagLog:"Logarithm",tagTrig:"Trig",tagQuad:"Quadratic",tagSeq:"Sequence",tagFin:"Finance",pctOf:(r,a)=>`${r}% of ${a}`,sumSeq:(a,b,c,n)=>`Sum: ${a} + ${b} + ${c} + … (${n} terms)`,quadratic:(b,c)=>`x²${b}x${c}=0 larger root=?`,finance:(P,r,n)=>`${P} at ${r}%/yr for ${n}yr\nFinal = ?`,tagMissing:"Missing",tagDouble:"Times Table",tagRound:"Rounding",tagPctChg:"% Change",tagDecMul:"Decimals",tagAlg1:"Algebra",tagAlg2:"Quadratic Eq",tagNeg:"Negatives",tagGeo:"Geo Series",tagBinom:"Binomial",tagMod:"Modular",tagSimult:"Simultaneous",tagDet:"Determinant",roundTo:(n,t)=>`Round ${n} to nearest ${t}`,pctChange:(a,p,up)=>`${up?"Increase":"Decrease"} ${a} by ${p}%`,geoSeq:(a,ar,n)=>`Geo sum: ${a} + ${ar} + … (${n} terms)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"All levels mixed"},Easy:{desc:"Basic arithmetic"},Hard:{desc:"Multi-step problems"},Nightmare:{desc:"Fractions, cubes, mixed"},Impossible:{desc:"Logs, trig, series"}},
-  vi:{name:"Tiếng Việt",flag:"🇻🇳",tabs:["Tính","Công thức","Đổi đơn vị","Ngẫu nhiên","Đồ thị","AI"],hist:"Lịch sử",clearAll:"xóa tất cả",copy:"sao chép",copied:"✓ đã sao chép",basic:"cơ bản",sci:"khoa học",frac:"½ phân số",last:"↩ lần trước",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← quay lại",calculate:"Tính",result:"KẾT QUẢ",sentCalc:"Đã gửi tới máy tính",unitSubUnits:"⇄ Đơn vị",unitSubOil:"🛢 Dầu → Tiền",rollBtn:"Tung!",flipBtn:"Tung đồng xu",pickBtn:"Chọn",diceLabel:"🎲 TUNG XÚC XẮC",coinLabel:"🪙 ĐỒNG XU",rangeLabel:"🎯 KHOẢNG",mathLabel:"🧮 LUYỆN TOÁN",startBtn:(d,e)=>`Bắt đầu — ${d} ${e}`,nextBtn:"Tiếp →",skipBtn:"bỏ qua",checkBtn:"Kiểm tra",answerPlaceholder:"Câu trả lời…",correct:"✓ Đúng rồi!",wrong:(a)=>`✗ Đáp án: ${a}`,resetScore:"đặt lại",hintBtn:"gợi ý",aiPlaceholder:"Hỏi gì cũng được…",clearChat:"xóa cuộc trò chuyện",tryAsking:"THỬ HỎI…",offlineEngine:"⚡ ngoại tuyến",localEngine:"🧠 SLM+nền tảng",cloudEngine:"☁",modelDefault:"Claude (mặc định)",thinking:"🧠 ĐANG SUY NGHĨ…",saveKey:"Lưu",removeKey:"xóa",keyActive:"✓ Khóa hoạt động",orKeyDesc:"Lấy khóa miễn phí tại openrouter.ai.",hfTokenLabel:"HUGGINGFACE TOKEN (để tải Gemma 3)",hfTokenDesc:"Bắt buộc để tải Gemma 3 1B. Lấy miễn phí tại huggingface.co/settings/tokens (read access).",hfTokenSaved:"✓ Đã lưu HF Token",hfTokenPlaceholder:"hf_…",wgpuError:"WebGPU không khả dụng",wgpuDesc:"SLM cần WebGPU. Dùng Chrome Android.",historyLabel:"LỊCH SỬ",noWebGPU:"cần Chrome Android",loadingTokenizer:"Đang tải tokenizer…",loadingModel:"Đang tải SmolLM2-360M (~250MB)…",cachedNote:"Lưu cache sau khi tải",loadOfflineBtn:"⬇ Tải AI ngoại tuyến",offlineDescNative:"Toán học làm nền: engine kiểm tra số trước khi gửi AI — loại bỏ ảo giác. Chạy 100% ngoại tuyến sau khi tải (~600MB).",offlineDescWasm:"Toán học làm nền: engine kiểm tra số trước khi gửi AI — loại bỏ ảo giác. Chạy 100% ngoại tuyến sau khi tải (~250MB).",loadingNative:"Đang tải Gemma 3 1B…",loadingWasm:"Đang tải SmolLM2-360M…",loadingNote:"Lần đầu tải ~{size} • Cache lại, dùng ngoại tuyến được",startingUp:"Đang khởi động…",offlineReady:"🔒 AI ngoại tuyến sẵn sàng · math-grounded · hoàn toàn ngoại tuyến",offlineProcessing:"🧠 Đang xử lý ngoại tuyến…",precision:"CHÍNH XÁC · NGOẠI TUYẾN · AI",fromLabel:"TỪ",toLabel:"ĐẾN",swipeHint:"← vuốt để xóa",holdC:"giữ C = xóa lịch sử",mathQ:{tagAdd:"Cộng",tagSub:"Trừ",tagMul:"Nhân",tagDiv:"Chia",tagSq:"Bình phương",tagSqrt:"Căn bậc hai",tagPct:"Phần trăm",tagFrac:"Phân số",tagCbrt:"Căn bậc ba",tagPow:"Lũy thừa",tagLog:"Logarit",tagTrig:"Lượng giác",tagQuad:"PT bậc 2",tagSeq:"Dãy số",tagFin:"Tài chính",pctOf:(r,a)=>`${r}% của ${a}`,sumSeq:(a,b,c,n)=>`Tổng: ${a} + ${b} + ${c} + … (${n} số hạng)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} lãi ${r}%/năm ${n} năm\nSố tiền cuối = ?`,tagMissing:"Số bị thiếu",tagDouble:"Bảng nhân",tagRound:"Làm tròn",tagPctChg:"Thay đổi %",tagDecMul:"Số thập phân",tagAlg1:"Đại số",tagAlg2:"PT bậc 2",tagNeg:"Số âm",tagGeo:"Cấp số nhân",tagBinom:"Nhị thức",tagMod:"Số dư",tagSimult:"Hệ PT",tagDet:"Định thức",roundTo:(n,t)=>`Làm tròn ${n} đến ${t}`,pctChange:(a,p,up)=>`${up?"Tăng":"Giảm"} ${a} thêm ${p}%`,geoSeq:(a,ar,n)=>`Tổng CSN: ${a} + ${ar} + … (${n} số hạng)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"Tất cả cấp độ"},Easy:{desc:"Số học cơ bản"},Hard:{desc:"Nhiều bước tính"},Nightmare:{desc:"Phân số, căn bậc ba"},Impossible:{desc:"Log, lượng giác, dãy số"}},
+  en:{name:"English",flag:"🇬🇧",tabs:["Calc","Formula","Convert","Random","Graph","AI"],hist:"Hist",clearAll:"clear all",copy:"copy",copied:"✓ copied",basic:"basic",sci:"sci",frac:"½ frac",last:"↩ last",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc · Backspace · hold C = clear history",formulaBack:"← back",calculate:"Calculate",result:"RESULT",sentCalc:"Sent to calculator",unitSubUnits:"⇄ Units",unitSubOil:"🛢 Oil → Money",rollBtn:"Roll!",flipBtn:"Flip",pickBtn:"Pick",diceLabel:"🎲 DICE ROLLER",coinLabel:"🪙 COIN",rangeLabel:"🎯 RANGE",mathLabel:"🧮 MATH PRACTICE",startBtn:(d,e)=>`Start — ${d} ${e}`,nextBtn:"Next →",skipBtn:"skip",checkBtn:"Check",answerPlaceholder:"Your answer…",correct:"✓ Correct!",wrong:(a)=>`✗ Answer: ${a}`,resetScore:"reset",hintBtn:"hint",aiPlaceholder:"Ask anything… context-aware (Enter to send)",clearChat:"clear chat",tryAsking:"TRY ASKING…",offlineEngine:"⚡ offline",localEngine:"🧠 SLM+grounded",cloudEngine:"☁",modelDefault:"Claude (default)",thinking:"🧠 THINKING…",saveKey:"Save",removeKey:"remove",keyActive:"✓ Key active",orKeyDesc:"Free key at openrouter.ai — no credit card.",hfTokenLabel:"HUGGINGFACE TOKEN (for Qwen2.5)",hfTokenDesc:"Required to download Qwen2.5 1.5B. Free at huggingface.co/settings/tokens (read access).",hfTokenSaved:"✓ HF Token saved",hfTokenPlaceholder:"hf_…",wgpuError:"WebGPU not available",wgpuDesc:"SLM needs WebGPU. Use Chrome on Android.",historyLabel:"HISTORY",noWebGPU:"needs Chrome on Android",loadingTokenizer:"Loading tokenizer…",loadingModel:"Downloading SmolLM2-360M (~250MB)…",cachedNote:"Cached in browser after download",loadOfflineBtn:"⬇ Load offline AI",offlineDescNative:"Math-grounded: engine pre-verifies all numbers before passing to AI — eliminates hallucinations. Runs 100% offline after download (~500MB).",offlineDescWasm:"Math-grounded: engine pre-verifies all numbers before passing to AI — eliminates hallucinations. Runs 100% offline after download (~250MB).",loadingNative:"Loading Qwen2.5 1.5B…",loadingWasm:"Loading SmolLM2-360M…",loadingNote:"First download ~{size} • Cached for offline use after",startingUp:"Starting up…",offlineReady:"🔒 Offline AI ready · math-grounded · fully offline",offlineProcessing:"🧠 Processing offline…",precision:"PRECISION · OFFLINE · AI-POWERED",fromLabel:"FROM",toLabel:"TO",swipeHint:"← swipe to delete",holdC:"hold C = clear history",mathQ:{tagAdd:"Addition",tagSub:"Subtraction",tagMul:"Multiplication",tagDiv:"Division",tagSq:"Squares",tagSqrt:"Square Root",tagPct:"Percentage",tagFrac:"Fractions",tagCbrt:"Cube Root",tagPow:"Powers",tagLog:"Logarithm",tagTrig:"Trig",tagQuad:"Quadratic",tagSeq:"Sequence",tagFin:"Finance",pctOf:(r,a)=>`${r}% of ${a}`,sumSeq:(a,b,c,n)=>`Sum: ${a} + ${b} + ${c} + … (${n} terms)`,quadratic:(b,c)=>`x²${b}x${c}=0 larger root=?`,finance:(P,r,n)=>`${P} at ${r}%/yr for ${n}yr\nFinal = ?`,tagMissing:"Missing",tagDouble:"Times Table",tagRound:"Rounding",tagPctChg:"% Change",tagDecMul:"Decimals",tagAlg1:"Algebra",tagAlg2:"Quadratic Eq",tagNeg:"Negatives",tagGeo:"Geo Series",tagBinom:"Binomial",tagMod:"Modular",tagSimult:"Simultaneous",tagDet:"Determinant",roundTo:(n,t)=>`Round ${n} to nearest ${t}`,pctChange:(a,p,up)=>`${up?"Increase":"Decrease"} ${a} by ${p}%`,geoSeq:(a,ar,n)=>`Geo sum: ${a} + ${ar} + … (${n} terms)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"All levels mixed"},Easy:{desc:"Basic arithmetic"},Hard:{desc:"Multi-step problems"},Nightmare:{desc:"Fractions, cubes, mixed"},Impossible:{desc:"Logs, trig, series"}},
+  vi:{name:"Tiếng Việt",flag:"🇻🇳",tabs:["Tính","Công thức","Đổi đơn vị","Ngẫu nhiên","Đồ thị","AI"],hist:"Lịch sử",clearAll:"xóa tất cả",copy:"sao chép",copied:"✓ đã sao chép",basic:"cơ bản",sci:"khoa học",frac:"½ phân số",last:"↩ lần trước",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← quay lại",calculate:"Tính",result:"KẾT QUẢ",sentCalc:"Đã gửi tới máy tính",unitSubUnits:"⇄ Đơn vị",unitSubOil:"🛢 Dầu → Tiền",rollBtn:"Tung!",flipBtn:"Tung đồng xu",pickBtn:"Chọn",diceLabel:"🎲 TUNG XÚC XẮC",coinLabel:"🪙 ĐỒNG XU",rangeLabel:"🎯 KHOẢNG",mathLabel:"🧮 LUYỆN TOÁN",startBtn:(d,e)=>`Bắt đầu — ${d} ${e}`,nextBtn:"Tiếp →",skipBtn:"bỏ qua",checkBtn:"Kiểm tra",answerPlaceholder:"Câu trả lời…",correct:"✓ Đúng rồi!",wrong:(a)=>`✗ Đáp án: ${a}`,resetScore:"đặt lại",hintBtn:"gợi ý",aiPlaceholder:"Hỏi gì cũng được…",clearChat:"xóa cuộc trò chuyện",tryAsking:"THỬ HỎI…",offlineEngine:"⚡ ngoại tuyến",localEngine:"🧠 SLM+nền tảng",cloudEngine:"☁",modelDefault:"Claude (mặc định)",thinking:"🧠 ĐANG SUY NGHĨ…",saveKey:"Lưu",removeKey:"xóa",keyActive:"✓ Khóa hoạt động",orKeyDesc:"Lấy khóa miễn phí tại openrouter.ai.",hfTokenLabel:"HUGGINGFACE TOKEN (để tải Qwen2.5)",hfTokenDesc:"Bắt buộc để tải Qwen2.5 1.5B. Lấy miễn phí tại huggingface.co/settings/tokens (read access).",hfTokenSaved:"✓ Đã lưu HF Token",hfTokenPlaceholder:"hf_…",wgpuError:"WebGPU không khả dụng",wgpuDesc:"SLM cần WebGPU. Dùng Chrome Android.",historyLabel:"LỊCH SỬ",noWebGPU:"cần Chrome Android",loadingTokenizer:"Đang tải tokenizer…",loadingModel:"Đang tải SmolLM2-360M (~250MB)…",cachedNote:"Lưu cache sau khi tải",loadOfflineBtn:"⬇ Tải AI ngoại tuyến",offlineDescNative:"Toán học làm nền: engine kiểm tra số trước khi gửi AI — loại bỏ ảo giác. Chạy 100% ngoại tuyến sau khi tải (~500MB).",offlineDescWasm:"Toán học làm nền: engine kiểm tra số trước khi gửi AI — loại bỏ ảo giác. Chạy 100% ngoại tuyến sau khi tải (~250MB).",loadingNative:"Đang tải Qwen2.5 1.5B…",loadingWasm:"Đang tải SmolLM2-360M…",loadingNote:"Lần đầu tải ~{size} • Cache lại, dùng ngoại tuyến được",startingUp:"Đang khởi động…",offlineReady:"🔒 AI ngoại tuyến sẵn sàng · math-grounded · hoàn toàn ngoại tuyến",offlineProcessing:"🧠 Đang xử lý ngoại tuyến…",precision:"CHÍNH XÁC · NGOẠI TUYẾN · AI",fromLabel:"TỪ",toLabel:"ĐẾN",swipeHint:"← vuốt để xóa",holdC:"giữ C = xóa lịch sử",mathQ:{tagAdd:"Cộng",tagSub:"Trừ",tagMul:"Nhân",tagDiv:"Chia",tagSq:"Bình phương",tagSqrt:"Căn bậc hai",tagPct:"Phần trăm",tagFrac:"Phân số",tagCbrt:"Căn bậc ba",tagPow:"Lũy thừa",tagLog:"Logarit",tagTrig:"Lượng giác",tagQuad:"PT bậc 2",tagSeq:"Dãy số",tagFin:"Tài chính",pctOf:(r,a)=>`${r}% của ${a}`,sumSeq:(a,b,c,n)=>`Tổng: ${a} + ${b} + ${c} + … (${n} số hạng)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} lãi ${r}%/năm ${n} năm\nSố tiền cuối = ?`,tagMissing:"Số bị thiếu",tagDouble:"Bảng nhân",tagRound:"Làm tròn",tagPctChg:"Thay đổi %",tagDecMul:"Số thập phân",tagAlg1:"Đại số",tagAlg2:"PT bậc 2",tagNeg:"Số âm",tagGeo:"Cấp số nhân",tagBinom:"Nhị thức",tagMod:"Số dư",tagSimult:"Hệ PT",tagDet:"Định thức",roundTo:(n,t)=>`Làm tròn ${n} đến ${t}`,pctChange:(a,p,up)=>`${up?"Tăng":"Giảm"} ${a} thêm ${p}%`,geoSeq:(a,ar,n)=>`Tổng CSN: ${a} + ${ar} + … (${n} số hạng)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"Tất cả cấp độ"},Easy:{desc:"Số học cơ bản"},Hard:{desc:"Nhiều bước tính"},Nightmare:{desc:"Phân số, căn bậc ba"},Impossible:{desc:"Log, lượng giác, dãy số"}},
   fr:{name:"Français",flag:"🇫🇷",tabs:["Calc","Formule","Conversion","Aléatoire","Graphe","IA"],hist:"Hist.",clearAll:"tout effacer",copy:"copier",copied:"✓ copié",basic:"basique",sci:"scientifique",frac:"½ fraction",last:"↩ dernier",kbHint:"⌨ 0–9 · +-*/ · Entrée · Échap",formulaBack:"← retour",calculate:"Calculer",result:"RÉSULTAT",sentCalc:"Envoyé",unitSubUnits:"⇄ Unités",unitSubOil:"🛢 Pétrole → Monnaie",rollBtn:"Lancer!",flipBtn:"Lancer",pickBtn:"Choisir",diceLabel:"🎲 DÉS",coinLabel:"🪙 PIÈCE",rangeLabel:"🎯 INTERVALLE",mathLabel:"🧮 ENTRAÎNEMENT",startBtn:(d,e)=>`Démarrer — ${d} ${e}`,nextBtn:"Suivant →",skipBtn:"passer",checkBtn:"Vérifier",answerPlaceholder:"Votre réponse…",correct:"✓ Correct !",wrong:(a)=>`✗ Réponse : ${a}`,resetScore:"réinitialiser",hintBtn:"indice",aiPlaceholder:"Posez une question…",clearChat:"effacer",tryAsking:"ESSAYEZ…",offlineEngine:"⚡ hors ligne",localEngine:"🧠 SLM+ancré",cloudEngine:"☁",modelDefault:"Claude (défaut)",thinking:"🧠 EN RÉFLEXION…",saveKey:"Sauvegarder",removeKey:"supprimer",keyActive:"✓ Clé active",orKeyDesc:"Clé gratuite sur openrouter.ai.",wgpuError:"WebGPU indisponible",wgpuDesc:"SLM nécessite WebGPU. Chrome Android.",historyLabel:"HISTORIQUE",noWebGPU:"Chrome Android requis",loadingTokenizer:"Chargement tokenizer…",loadingModel:"Téléchargement LFM2.5…",cachedNote:"Mis en cache",precision:"PRÉCISION · HORS LIGNE · IA",fromLabel:"DE",toLabel:"VERS",swipeHint:"← glisser pour supprimer",holdC:"maintenir C = effacer",mathQ:{tagAdd:"Addition",tagSub:"Soustraction",tagMul:"Multiplication",tagDiv:"Division",tagSq:"Carrés",tagSqrt:"Racine carrée",tagPct:"Pourcentage",tagFrac:"Fractions",tagCbrt:"Racine cubique",tagPow:"Puissances",tagLog:"Logarithme",tagTrig:"Trigonométrie",tagQuad:"Équation 2e degré",tagSeq:"Suite",tagFin:"Finance",pctOf:(r,a)=>`${r}% de ${a}`,sumSeq:(a,b,c,n)=>`Somme: ${a}+${b}+${c}+… (${n} termes)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P}$ à ${r}%/an pour ${n}ans`,tagMissing:"Manquant",tagDouble:"Tables",tagRound:"Arrondi",tagPctChg:"Variation %",tagDecMul:"Décimaux",tagAlg1:"Algèbre",tagAlg2:"Éq. 2e degré",tagNeg:"Négatifs",tagGeo:"Géo. suite",tagBinom:"Binôme",tagMod:"Modulo",tagSimult:"Système",tagDet:"Déterminant",roundTo:(n,t)=>`Arrondir ${n} à ${t}`,pctChange:(a,p,up)=>`${up?"Augmenter":"Diminuer"} ${a} de ${p}%`,geoSeq:(a,ar,n)=>`Somme géo: ${a}+${ar}+… (${n})`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"Tous niveaux"},Easy:{desc:"Arithmétique"},Hard:{desc:"Multi-étapes"},Nightmare:{desc:"Fractions, racines"},Impossible:{desc:"Log, trigonométrie"}},
   es:{name:"Español",flag:"🇪🇸",tabs:["Calc","Fórmula","Conversión","Aleatorio","Gráfica","IA"],hist:"Hist.",clearAll:"borrar todo",copy:"copiar",copied:"✓ copiado",basic:"básico",sci:"científico",frac:"½ fracción",last:"↩ último",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← volver",calculate:"Calcular",result:"RESULTADO",sentCalc:"Enviado",unitSubUnits:"⇄ Unidades",unitSubOil:"🛢 Petróleo → Moneda",rollBtn:"¡Tirar!",flipBtn:"Lanzar",pickBtn:"Elegir",diceLabel:"🎲 DADOS",coinLabel:"🪙 MONEDA",rangeLabel:"🎯 RANGO",mathLabel:"🧮 PRÁCTICA",startBtn:(d,e)=>`Empezar — ${d} ${e}`,nextBtn:"Siguiente →",skipBtn:"saltar",checkBtn:"Verificar",answerPlaceholder:"Tu respuesta…",correct:"✓ ¡Correcto!",wrong:(a)=>`✗ Respuesta: ${a}`,resetScore:"reiniciar",hintBtn:"pista",aiPlaceholder:"Pregunta lo que quieras…",clearChat:"borrar",tryAsking:"INTENTA PREGUNTAR…",offlineEngine:"⚡ sin conexión",localEngine:"🧠 SLM+fundado",cloudEngine:"☁",modelDefault:"Claude (predeterminado)",thinking:"🧠 PENSANDO…",saveKey:"Guardar",removeKey:"eliminar",keyActive:"✓ Clave activa",orKeyDesc:"Clave gratis en openrouter.ai.",wgpuError:"WebGPU no disponible",wgpuDesc:"SLM necesita WebGPU. Chrome Android.",historyLabel:"HISTORIAL",noWebGPU:"requiere Chrome Android",loadingTokenizer:"Cargando…",loadingModel:"Descargando LFM2.5…",cachedNote:"En caché",precision:"PRECISIÓN · SIN CONEXIÓN · IA",fromLabel:"DE",toLabel:"A",swipeHint:"← deslizar para borrar",holdC:"mantener C = borrar",mathQ:{tagAdd:"Suma",tagSub:"Resta",tagMul:"Multiplicación",tagDiv:"División",tagSq:"Cuadrados",tagSqrt:"Raíz cuadrada",tagPct:"Porcentaje",tagFrac:"Fracciones",tagCbrt:"Raíz cúbica",tagPow:"Potencias",tagLog:"Logaritmo",tagTrig:"Trigonometría",tagQuad:"Cuadrática",tagSeq:"Sucesión",tagFin:"Finanzas",pctOf:(r,a)=>`${r}% de ${a}`,sumSeq:(a,b,c,n)=>`Suma: ${a}+${b}+${c}+… (${n})`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} al ${r}%/año ${n}años`,tagMissing:"Faltante",tagDouble:"Tablas",tagRound:"Redondeo",tagPctChg:"Cambio %",tagDecMul:"Decimales",tagAlg1:"Álgebra",tagAlg2:"Ec. cuadrática",tagNeg:"Negativos",tagGeo:"Serie geométrica",tagBinom:"Binomio",tagMod:"Módulo",tagSimult:"Simultáneas",tagDet:"Determinante",roundTo:(n,t)=>`Redondear ${n} a ${t}`,pctChange:(a,p,up)=>`${up?"Aumentar":"Disminuir"} ${a} un ${p}%`,geoSeq:(a,ar,n)=>`Suma geom.: ${a}+${ar}+… (${n})`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"Todos los niveles"},Easy:{desc:"Aritmética básica"},Hard:{desc:"Varios pasos"},Nightmare:{desc:"Fracciones, raíces"},Impossible:{desc:"Log, trigonometría"}},
   zh:{name:"中文",flag:"🇨🇳",tabs:["计算","公式","换算","随机","图形","AI"],hist:"历史",clearAll:"全部清除",copy:"复制",copied:"✓ 已复制",basic:"基础",sci:"科学",frac:"½ 分数",last:"↩ 上次",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← 返回",calculate:"计算",result:"结果",sentCalc:"已发送",unitSubUnits:"⇄ 单位",unitSubOil:"🛢 石油 → 货币",rollBtn:"掷骰!",flipBtn:"抛硬币",pickBtn:"随机选",diceLabel:"🎲 掷骰子",coinLabel:"🪙 硬币",rangeLabel:"🎯 范围",mathLabel:"🧮 数学练习",startBtn:(d,e)=>`开始 — ${d} ${e}`,nextBtn:"下一题 →",skipBtn:"跳过",checkBtn:"检查",answerPlaceholder:"你的答案…",correct:"✓ 正确！",wrong:(a)=>`✗ 答案是：${a}`,resetScore:"重置",hintBtn:"提示",aiPlaceholder:"随便问…",clearChat:"清除对话",tryAsking:"试试问…",offlineEngine:"⚡ 离线",localEngine:"🧠 SLM+接地",cloudEngine:"☁",modelDefault:"Claude (默认)",thinking:"🧠 思考中…",saveKey:"保存",removeKey:"删除",keyActive:"✓ 密钥已激活",orKeyDesc:"在openrouter.ai免费获取。",wgpuError:"WebGPU不可用",wgpuDesc:"SLM需要WebGPU，Chrome Android。",historyLabel:"历史记录",noWebGPU:"需要Chrome Android",loadingTokenizer:"加载分词器…",loadingModel:"下载LFM2.5…",cachedNote:"已缓存",precision:"精准·离线·AI",fromLabel:"从",toLabel:"到",swipeHint:"← 左划删除",holdC:"长按C=清除历史",mathQ:{tagAdd:"加法",tagSub:"减法",tagMul:"乘法",tagDiv:"除法",tagSq:"平方",tagSqrt:"平方根",tagPct:"百分比",tagFrac:"分数",tagCbrt:"立方根",tagPow:"幂次",tagLog:"对数",tagTrig:"三角函数",tagQuad:"二次方程",tagSeq:"数列",tagFin:"金融",pctOf:(r,a)=>`${a}的${r}%`,sumSeq:(a,b,c,n)=>`求和：${a}+${b}+${c}+… (${n}项)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} 年利率${r}% ${n}年`,tagMissing:"填数",tagDouble:"乘法表",tagRound:"四舍五入",tagPctChg:"百分比变化",tagDecMul:"小数",tagAlg1:"代数",tagAlg2:"二次方程",tagNeg:"负数",tagGeo:"等比数列",tagBinom:"二项式",tagMod:"取模",tagSimult:"联立方程",tagDet:"行列式",roundTo:(n,t)=>`将${n}四舍五入到${t}`,pctChange:(a,p,up)=>`将${a}${up?"增加":"减少"}${p}%`,geoSeq:(a,ar,n)=>`等比求和：${a}+${ar}+… (${n}项)`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"所有难度混合"},Easy:{desc:"基础四则运算"},Hard:{desc:"多步骤计算"},Nightmare:{desc:"分数、立方根"},Impossible:{desc:"对数、三角、数列"}},
@@ -1007,6 +1026,7 @@ button,select,input,textarea{touch-action:manipulation;-webkit-tap-highlight-col
 .b-expr{color:#c0a0f8;font-size:.73rem;margin-bottom:9px;font-style:italic;}
 .b-step{color:#c0c0e8;font-size:.74rem;line-height:1.72;}
 .b-note{color:#a0d0a8;font-size:.71rem;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.08);}
+.b-chart{width:100%;max-width:320px;border-radius:10px;display:block;border:1px solid rgba(255,255,255,.1);margin-bottom:6px;}
 .b-ground{color:#70b8f8;font-size:.64rem;margin-top:6px;padding:5px 9px;border-radius:8px;background:rgba(70,140,240,.08);border:1px solid rgba(70,140,240,.18);}
 .ctx-info{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:7px;}
 .ctx-pill{background:rgba(104,85,240,.12);border:1px solid rgba(104,85,240,.22);border-radius:8px;padding:2px 8px;font-size:.6rem;color:#b0a8e8;font-family:'DM Mono',monospace;}
@@ -1137,11 +1157,220 @@ function convertUnit(val,from,to,cat){
 }
 
 // ─── Graph Tab ────────────────────────────────────────────────────────────────
+
+// ─── Offscreen Chart Renderer ─────────────────────────────────────────────────
+// Renders one or more math.js expressions to a small PNG data URL.
+// Used by AI chat to embed charts inline without opening the Graph tab.
+function renderChartToDataURL(exprs, opts = {}) {
+  const {
+    width = 320, height = 200,
+    xMin = -8, xMax = 8, yMin = -5, yMax = 5,
+    bg = "#06060f",
+  } = opts;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const W = width, H = height;
+  const wx = x => (x - xMin) / (xMax - xMin) * W;
+  const wy = y => H - (y - yMin) / (yMax - yMin) * H;
+
+  function niceStep(raw) {
+    if (!raw || raw <= 0) return 1;
+    const exp = Math.floor(Math.log10(raw));
+    const frac = raw / Math.pow(10, exp);
+    const nice = frac < 1.5 ? 1 : frac < 3.5 ? 2 : frac < 7.5 ? 5 : 10;
+    return nice * Math.pow(10, exp);
+  }
+
+  // Background
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  const xStep = niceStep((xMax - xMin) / 6);
+  const yStep = niceStep((yMax - yMin) / 5);
+  const xStart = Math.ceil(xMin / xStep) * xStep;
+  const yStart = Math.ceil(yMin / yStep) * yStep;
+
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.lineWidth = 1;
+  for (let x = xStart; x <= xMax + xStep; x += xStep) {
+    ctx.beginPath(); ctx.moveTo(wx(x), 0); ctx.lineTo(wx(x), H); ctx.stroke();
+  }
+  for (let y = yStart; y <= yMax + yStep; y += yStep) {
+    ctx.beginPath(); ctx.moveTo(0, wy(y)); ctx.lineTo(W, wy(y)); ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.lineWidth = 1.2;
+  if (xMin < 0 && xMax > 0) { ctx.beginPath(); ctx.moveTo(wx(0), 0); ctx.lineTo(wx(0), H); ctx.stroke(); }
+  if (yMin < 0 && yMax > 0) { ctx.beginPath(); ctx.moveTo(0, wy(0)); ctx.lineTo(W, wy(0)); ctx.stroke(); }
+
+  // Axis labels
+  ctx.font = "9px DM Mono,monospace";
+  ctx.fillStyle = "rgba(180,180,255,0.4)";
+  ctx.textAlign = "center";
+  for (let x = xStart; x <= xMax; x += xStep * 2) {
+    if (Math.abs(x) < xStep * 0.01) continue;
+    const py = Math.min(H - 4, Math.max(11, wy(0) + 11));
+    ctx.fillText(parseFloat(x.toPrecision(3)).toString(), wx(x), py);
+  }
+  ctx.textAlign = "right";
+  for (let y = yStart; y <= yMax; y += yStep * 2) {
+    if (Math.abs(y) < yStep * 0.01) continue;
+    const px = Math.min(W - 4, Math.max(22, wx(0) - 3));
+    ctx.fillText(parseFloat(y.toPrecision(3)).toString(), px, wy(y) + 3);
+  }
+
+  // Plot each function
+  const scope = Object.create(mathScope);
+  const colors = GRAPH_COLORS;
+  exprs.forEach((expr, ei) => {
+    try {
+      const safe = expr.replace(/\^/g, "**")
+        .replace(/\bpi\b/gi, String(Math.PI))
+        .replace(/\bphi\b/gi, "1.6180339887");
+      ctx.strokeStyle = colors[ei % colors.length];
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      let inPath = false;
+      let prevY = null;
+      ctx.beginPath();
+      for (let px = 0; px <= W; px++) {
+        scope.x = xMin + (px / W) * (xMax - xMin);
+        scope.X = scope.x;
+        try {
+          let y = math.evaluate(safe, scope);
+          y = typeof y === "object" ? math.number(y) : Number(y);
+          if (!isFinite(y) || isNaN(y) || Math.abs(y) > 1e8) {
+            if (inPath) { ctx.stroke(); ctx.beginPath(); inPath = false; }
+            prevY = null; continue;
+          }
+          if (prevY !== null && Math.abs(y - prevY) > (yMax - yMin) * 3) {
+            ctx.stroke(); ctx.beginPath(); inPath = false;
+          }
+          const py2 = wy(y);
+          if (!inPath) { ctx.moveTo(px, py2); inPath = true; }
+          else ctx.lineTo(px, py2);
+          prevY = y;
+        } catch { if (inPath) { ctx.stroke(); ctx.beginPath(); inPath = false; } prevY = null; }
+      }
+      if (inPath) ctx.stroke();
+    } catch (e) { console.warn("[chart] render error:", e); }
+  });
+
+  // Legend (if multiple functions)
+  if (exprs.length > 1) {
+    ctx.font = "9px DM Mono,monospace";
+    ctx.textAlign = "left";
+    exprs.forEach((expr, ei) => {
+      const lx = 6, ly = 12 + ei * 14;
+      ctx.fillStyle = colors[ei % colors.length];
+      ctx.fillRect(lx, ly - 7, 12, 2);
+      ctx.fillText(expr.length > 18 ? expr.slice(0, 16) + "…" : expr, lx + 16, ly);
+    });
+  }
+
+  try { return canvas.toDataURL("image/png", 0.85); }
+  catch (e) { console.error("[chart] toDataURL failed:", e); return null; }
+}
+
+// ─── Chart Intent Detector ────────────────────────────────────────────────────
+// Returns {exprs, xMin, xMax, yMin, yMax} if text is a graph request, else null.
+function detectChartRequest(text) {
+  const t = text.toLowerCase().trim();
+
+  // Trigger keywords
+  const triggers = [
+    /\b(?:plot|graph|draw|vẽ|đồ thị|biểu đồ|chart|sketch)\b/,
+    /\bshow\b.*\b(?:function|curve|graph|plot)\b/,
+    /\bfunci[oó]n\b.*\b(?:gr[aá]fica|dibuj)\b/,
+    /\bграфик\b/,
+  ];
+  const hasTrigger = triggers.some(r => r.test(t));
+
+  // Also auto-detect if text is just a math expression
+  const looksLikeExpr = /^\s*[a-zA-Z0-9^*+\-/(). ,|]+\s*$/.test(t) &&
+    /[a-zA-Z(]/.test(t) &&
+    !/(what|how|why|when|who|is|are|the|a |an |\?$)/.test(t);
+
+  if (!hasTrigger && !looksLikeExpr) return null;
+
+  // Extract expressions — look for math-like tokens
+  const exprPatterns = [
+    // Explicit "y = ..." or "f(x) = ..."
+    /(?:y\s*=|f\s*\(x\)\s*=)\s*([^,;\n]+)/gi,
+    // Quoted expressions
+    /"([^"]+)"/g,
+    // Bare expressions after common prepositions
+    /(?:of|for|:)\s*([x0-9a-zA-Z^*/+\-().\s]{3,30})/gi,
+  ];
+
+  let exprs = [];
+  for (const pat of exprPatterns) {
+    let m;
+    while ((m = pat.exec(text)) !== null) {
+      const candidate = m[1].trim()
+        .replace(/[.,;]$/, "")
+        .replace(/\s+/g, "");
+      // Must contain x and at least one operator/function
+      if (/x/i.test(candidate) && /[+\-*/^()a-zA-Z]/.test(candidate)) {
+        exprs.push(candidate);
+      }
+    }
+  }
+
+  // Fallback: try to extract any tokens that look like math expressions
+  if (exprs.length === 0) {
+    const tokens = text.split(/[,;\s]+/).filter(tok =>
+      /x/i.test(tok) &&
+      tok.length >= 2 &&
+      /[+\-*/^()a-zA-Z0-9]/.test(tok)
+    );
+    exprs = tokens.slice(0, 4);
+  }
+
+  if (exprs.length === 0) return null;
+
+  // Parse optional x range: "from -5 to 5" / "x in [-π, π]"
+  let xMin = -8, xMax = 8;
+  const rangeM = text.match(/(?:from|x\s*[=∈in]*)\s*(-?[\d.π]+)\s*(?:to|,|--)\s*(-?[\d.π]+)/i);
+  if (rangeM) {
+    const parseVal = v => v.replace("π", String(Math.PI));
+    xMin = parseFloat(parseVal(rangeM[1]));
+    xMax = parseFloat(parseVal(rangeM[2]));
+  }
+
+  return { exprs: [...new Set(exprs)].slice(0, 4), xMin, xMax, yMin: -5, yMax: 5 };
+}
+
 function GraphTab({onSendToAI}){
   const canvasRef=useRef(null);
   const [fns,setFns]=useState([{id:1,expr:"sin(x)",color:GRAPH_COLORS[0]}]);
   const [inputExpr,setInputExpr]=useState("");
   const [view,setView]=useState({xMin:-8,xMax:8,yMin:-5,yMax:5});
+
+  // Listen for AI → Graph requests
+  useEffect(()=>{
+    const handler = (e) => {
+      const {exprs, view: v} = e.detail || {};
+      if (!exprs || exprs.length === 0) return;
+      setFns(exprs.map((expr, i) => ({
+        id: i + 1,
+        expr,
+        color: GRAPH_COLORS[i % GRAPH_COLORS.length],
+      })));
+      if (v) setView(v);
+      nextId.current = exprs.length + 1;
+    };
+    window.addEventListener("openGraphWithExprs", handler);
+    return () => window.removeEventListener("openGraphWithExprs", handler);
+  }, []);
   const [graphError,setGraphError]=useState(null);
   const [isDragging,setIsDragging]=useState(false);
   const dragRef=useRef({x:0,y:0,view:null});
@@ -1367,10 +1596,11 @@ function SmartCalc(){
   const [justEval,setJustEval]=useState(false);const [calcType,setCalcType]=useState("basic");
   const [angleMode,setAngle]=useState("deg");const [fracMode,setFracMode]=useState(false);
   const [pressed,setPressed]=useState(null);
+  const [darkMode,setDarkMode]=useState(()=>{try{return localStorage.getItem('sc_theme')!=='light';}catch{return true;}});
   const [lang,setLang]=useState(()=>{try{return localStorage.getItem("sc_lang")||"en";}catch{return"en";}});
   const [showLangDrop,setShowLangDrop]=useState(false);
   const [tab,setTab]=useState("calc");const [history,setHistory]=useState([]);
-  const [showHist,setShowHist]=useState(false);const [copied,setCopied]=useState(null);
+  const [showHist,setShowHist]=useState(false);const [histSearch,setHistSearch]=useState("");const [copied,setCopied]=useState(null);
   const [toast,setToast]=useState(null);
   const [fmCat,setFmCat]=useState(Object.keys(FORMULAS)[0]);const [fmSel,setFmSel]=useState(null);
   const [fmVars,setFmVars]=useState({});const [fmResult,setFmResult]=useState(null);
@@ -1454,6 +1684,12 @@ function SmartCalc(){
   const activeModel=useMemo(()=>FREE_MODELS.find(m=>m.id===model)||FREE_MODELS[0],[model]);
 
   const haptic=(ms=8)=>{try{navigator.vibrate?.(ms);}catch{}};
+  // Apply theme to document
+  useEffect(()=>{
+    document.documentElement.classList.toggle('light-mode',!darkMode);
+    try{localStorage.setItem('sc_theme',darkMode?'dark':'light');}catch{}
+  },[darkMode]);
+  const toggleTheme=()=>{haptic(10);setDarkMode(d=>!d);};
   const toastTimerRef=useRef(null);
   const copiedTimerRef=useRef(null);
   const showToast=useCallback((msg,type="info")=>{
@@ -1533,7 +1769,7 @@ function SmartCalc(){
         const r=calcEval(target,angleMode,fracMode);
         exprRef.current=r;justEvalRef.current=true;
         setPrevExpr(target+" =");setExpr(r);setJustEval(true);
-        setHistory(h=>[{expr:target,result:r,time:ts()},...h.slice(0,29)]);
+        setHistory(h=>[{expr:target,result:r,time:ts()},...h.slice(0,19)]);
         if(flashTimerRef.current)clearTimeout(flashTimerRef.current);setResultFlash(true);flashTimerRef.current=setTimeout(()=>setResultFlash(false),320);
       }catch{exprRef.current="Error";justEvalRef.current=true;setPrevExpr(target+" =");setExpr("Error");setJustEval(true);}
       return;
@@ -1584,7 +1820,7 @@ function SmartCalc(){
         else if(fmSel.unit==="units"){displayResult=rawResult/factor;displayUnit=selUnitCfg.label;}
       }
       setFmResult({value:fmtNum(displayResult),unit:displayUnit});
-      setHistory(h=>[{expr:fmSel.name,result:fmtNum(displayResult)+" "+displayUnit,time:ts()},...h.slice(0,29)]);
+      setHistory(h=>[{expr:fmSel.name,result:fmtNum(displayResult)+" "+displayUnit,time:ts()},...h.slice(0,19)]);
     }catch(e){setFmResult({value:"Error: "+e.message,unit:""});}
   },[fmSel,fmVars,fmUnit,isGeomFormula,selUnitCfg]);
 
@@ -1649,7 +1885,7 @@ function SmartCalc(){
     if(localAiStatus==="ready"||localAiStatus==="loading") return;
     setLocalAiStatus("loading");setLocalAiProgress(0);setLocalAiPhase("Chuẩn bị…");
 
-    // Native Capacitor plugin (Gemma 3 1B, nhanh 5-10x)
+    // Native Capacitor plugin (Qwen2.5 1.5B)
     if(window._isCapacitor&&window._nativeLLM()){
       try{
         const LLM=window._nativeLLM();
@@ -1671,11 +1907,11 @@ function SmartCalc(){
         }else{
           setLocalAiPhase("Model sẵn sàng, đang load…");setLocalAiProgress(90);
         }
-        setLocalAiPhase("Đang khởi động Gemma 3 1B…");
+        setLocalAiPhase("Đang khởi động Qwen2.5 1.5B…");
         await LLM.loadModel({path:status.modelPath});
         setLocalAiStatus("ready");setLocalAiProgress(100);setLocalAiPhase("");
         try{localStorage.setItem("sc_slm_cached","native");}catch{}
-        showToast("✓ Gemma 3 1B — native AI sẵn sàng!","success");
+        showToast("✓ Qwen2.5 1.5B — native AI sẵn sàng!","success");
         return;
       }catch(err){
         // Hiện lỗi rõ ràng thay vì fallback WASM (không có WebGPU trên Android app)
@@ -1709,7 +1945,7 @@ function SmartCalc(){
 
       // Native Capacitor plugin → nhanh hơn 5-10x so với WASM
       if(window._isCapacitor&&window._nativeLLM()){
-        const chatPrompt=messages.map(m=>`<|${m.role}|>\n${m.content}`).join("\n")+`<|assistant|>\n`;
+        const chatPrompt=messages.map(m=>`<|im_start|>${m.role}\n${m.content}<|im_end|>`).join("\n")+"\n<|im_start|>assistant\n";
         const {result}=await Promise.race([
           window._nativeLLM().runInference({prompt:chatPrompt}),
           new Promise((_,rej)=>setTimeout(()=>rej(new Error("Native timeout")),60000))
@@ -1723,7 +1959,7 @@ function SmartCalc(){
             if(safe) return{...safe,engine:"native",mathFacts};
           }catch(e){ console.warn("[native] JSON parse failed:",e.message); }
         }
-        return{answer:result.trim(),steps:[],expression:"",note:"🚀 Gemma 3 1B",engine:"native",mathFacts};
+        return{answer:result.trim(),steps:[],expression:"",note:"🚀 Qwen2.5 1.5B",engine:"native",mathFacts};
       }
 
       // WASM fallback
@@ -1771,13 +2007,45 @@ function SmartCalc(){
     const newVars=extractContextVars(userText);
     if(Object.keys(newVars).length>0) offlineCtx.current.vars={...offlineCtx.current.vars,...newVars};
 
-    const nextMsgs=[...aiMsgs.slice(-38),{role:"user",content:userText,time:ts()}]; // cap at 20 exchanges
+    const nextMsgs=[...aiMsgs.slice(-20),{role:"user",content:userText,time:ts()}]; // cap at 20 exchanges
     setAiMsgs(nextMsgs);
 
     // ★ Resolve context references (it, that, known variables)
     const resolvedText=resolveContextRefs(userText,offlineCtx.current);
     const wasResolved=resolvedText!==userText;
     const complexity=scoreComplexity(resolvedText);
+
+    // TIER 0: Chart detection — render inline PNG before any AI tier
+    const chartReq = detectChartRequest(resolvedText);
+    if (chartReq && chartReq.exprs.length > 0) {
+      const dataUrl = renderChartToDataURL(chartReq.exprs, {
+        xMin: chartReq.xMin, xMax: chartReq.xMax,
+        yMin: chartReq.yMin, yMax: chartReq.yMax,
+      });
+      if (dataUrl) {
+        haptic(10);
+        const label = chartReq.exprs.join(", ");
+        setAiMsgs(m => [...m, {
+          role: "assistant",
+          content: label,
+          parsed: {
+            answer: label,
+            steps: [`x ∈ [${chartReq.xMin}, ${chartReq.xMax}]`, `Functions: ${chartReq.exprs.join(", ")}`],
+            expression: chartReq.exprs[0],
+            note: "📈 Rendered locally · no internet"
+          },
+          chartDataUrl: dataUrl,
+          chartExprs: chartReq.exprs,
+          chartView: { xMin: chartReq.xMin, xMax: chartReq.xMax, yMin: chartReq.yMin, yMax: chartReq.yMax },
+          engine: "offline",
+          time: ts(),
+          mathFacts: [],
+        }]);
+        setHistory(h => [{ expr: resolvedText, result: label, time: ts() }, ...h.slice(0, 19)]);
+        setAiLoad(false);
+        return;
+      }
+    }
 
     // TIER 1: Pure offline parser — instant, no model
     if(complexity!=="complex"){
@@ -1787,7 +2055,7 @@ function SmartCalc(){
         if(!isNaN(numR)){offlineCtx.current.lastResult=offlineResult.answer;offlineCtx.current.lastExpr=offlineResult.expression;}
         const ctxNote=wasResolved?` · resolved to "${resolvedText}"`:Object.keys(offlineCtx.current.vars).length>0?" · context-aware":"";
         setAiMsgs(m=>[...m,{role:"assistant",content:offlineResult.answer,parsed:{answer:offlineResult.answer,steps:offlineResult.steps||[],expression:offlineResult.expression||"",note:`⚡ Offline${ctxNote}`},engine:"offline",time:ts(),mathFacts:[]}]);
-        setHistory(h=>[{expr:userText,result:offlineResult.answer,time:ts()},...h.slice(0,29)]);
+        setHistory(h=>[{expr:userText,result:offlineResult.answer,time:ts()},...h.slice(0,19)]);
         setAiLoad(false);return;
       }
     }
@@ -1800,8 +2068,10 @@ function SmartCalc(){
         offlineCtx.current.lastExpr=localResult.expression;
         const nFacts=localResult.mathFacts?.length||0;
         const groundNote=nFacts>0?`🔒 ${nFacts} value${nFacts>1?"s":""} verified by math engine`:"🧠 SLM on your device";
-        setAiMsgs(m=>[...m,{role:"assistant",content:localResult.answer,parsed:{answer:localResult.answer,steps:localResult.steps||[],expression:localResult.expression||"",note:`${groundNote} · no internet`},engine:"local",time:ts(),mathFacts:localResult.mathFacts||[]}]);
-        setHistory(h=>[{expr:userText,result:localResult.answer,time:ts()},...h.slice(0,29)]);
+        // ✅ Check if SLM returned graph request
+        const slmChart=tryRenderChart(localResult);
+        setAiMsgs(m=>[...m,{role:"assistant",content:localResult.answer,parsed:{answer:localResult.answer,steps:localResult.steps||[],expression:localResult.expression||"",note:`${groundNote} · no internet`},engine:"local",time:ts(),mathFacts:localResult.mathFacts||[],...(slmChart?{chartDataUrl:slmChart.dataUrl,chartExprs:slmChart.exprs,chartView:slmChart.view}:{})}]);
+        setHistory(h=>[{expr:userText,result:localResult.answer,time:ts()},...h.slice(0,19)]);
         setAiLoad(false);return;
       }
     }
@@ -1835,8 +2105,10 @@ function SmartCalc(){
         parsed={answer:raw.trim(),steps:[],expression:""};
       }
       offlineCtx.current.lastResult=parsed.answer;
-      setAiMsgs(m=>[...m,{role:"assistant",content:parsed.answer,rawText:raw,parsed,engine:orKey?model:"claude",time:ts(),mathFacts:[]}]);
-      setHistory(h=>[{expr:userText,result:parsed.answer,time:ts()},...h.slice(0,29)]);
+      // ✅ Check if cloud AI returned graph request
+      const cloudChart=tryRenderChart(parsed);
+      setAiMsgs(m=>[...m,{role:"assistant",content:parsed.answer,rawText:raw,parsed,engine:orKey?model:"claude",time:ts(),mathFacts:[],...(cloudChart?{chartDataUrl:cloudChart.dataUrl,chartExprs:cloudChart.exprs,chartView:cloudChart.view}:{})}]);
+      setHistory(h=>[{expr:userText,result:parsed.answer,time:ts()},...h.slice(0,19)]);
     }catch(err){
       const isOffline=!navigator.onLine;
       const errMsg=isOffline?"Không có mạng":(err?.message||"Không nhận được phản hồi");
@@ -1901,7 +2173,9 @@ function SmartCalc(){
               SMART<span style={{background:"linear-gradient(135deg,#8b7fff,#c070ff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 14px rgba(140,110,255,.5))"}}>CALC</span>
             </div>
           </div>
-          <div style={{position:"absolute",right:0,top:0}} ref={langDropRef}>
+          <div style={{position:"absolute",right:0,top:0,display:"flex",gap:"6px",alignItems:"center"}}>
+            <button onClick={toggleTheme} title="Toggle theme" style={{background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.13)",borderRadius:"10px",width:"32px",height:"32px",cursor:"pointer",fontSize:".9rem",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{darkMode?"☀️":"🌙"}</button>
+            <div ref={langDropRef} style={{position:"relative"}}>
             <button className="lang-btn" onClick={()=>setShowLangDrop(v=>!v)}>
               <span>{LANGS[lang].flag}</span><span style={{fontSize:".6rem",color:"#9090b8"}}>▾</span>
             </button>
@@ -1915,6 +2189,7 @@ function SmartCalc(){
                 ))}
               </div>
             )}
+            </div>
           </div>
         </div>
 
@@ -1936,15 +2211,20 @@ function SmartCalc(){
             <div className="fi" style={{marginBottom:"11px",background:"rgba(0,0,0,.2)",borderRadius:"14px",padding:"8px 10px",border:"1px solid rgba(255,255,255,.07)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"7px"}}>
                 <span style={{color:"#6060a0",fontSize:".58rem",letterSpacing:".1em"}}>{t.historyLabel}</span>
-                <button className="sml" style={{fontSize:".58rem",padding:"2px 8px"}} onClick={()=>{setHistory([]);setShowHist(false);}}>{t.clearAll}</button>
+                <button className="sml" style={{fontSize:".58rem",padding:"2px 8px"}} onClick={()=>{haptic([15,30,15]);setHistory([]);setShowHist(false);setHistSearch("");}}>{t.clearAll}</button>
               </div>
-              {history.slice(0,8).map((h,i)=>(
-                <div key={i} className="hr-row" onClick={()=>{setExpr(h.result);setJustEval(true);setShowHist(false);}}>
+              <input value={histSearch} onChange={e=>setHistSearch(e.target.value)}
+                placeholder="🔍 search…" style={{width:"100%",background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.09)",borderRadius:"8px",padding:"5px 10px",color:"#c0c0e8",fontSize:".63rem",fontFamily:"DM Mono,monospace",outline:"none",marginBottom:"6px",boxSizing:"border-box"}}/>
+              {history.filter(h=>!histSearch||h.expr.toLowerCase().includes(histSearch.toLowerCase())||h.result.toLowerCase().includes(histSearch.toLowerCase())).slice(0,10).map((h,i)=>(
+                <div key={i} className="hr-row" onClick={()=>{haptic(8);setExpr(h.result);setJustEval(true);setShowHist(false);setHistSearch("");}}>
                   <span style={{color:"#b0b0e0",fontSize:".67rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{h.expr}</span>
                   <span style={{color:"#c8bcff",fontSize:".76rem",flexShrink:0}}>{h.result}</span>
                   <span style={{color:"#6060a0",fontSize:".58rem",flexShrink:0}}>{h.time}</span>
                 </div>
               ))}
+              {histSearch&&history.filter(h=>h.expr.toLowerCase().includes(histSearch.toLowerCase())||h.result.toLowerCase().includes(histSearch.toLowerCase())).length===0&&(
+                <div style={{color:"#5858a0",fontSize:".62rem",textAlign:"center",padding:"8px 0"}}>Không tìm thấy kết quả</div>
+              )}
             </div>
           )}
 
@@ -2438,7 +2718,7 @@ function SmartCalc(){
               {/* SLM loader */}
               {localAiStatus==="idle"&&(
                 <div style={{marginBottom:"11px",background:"linear-gradient(135deg,rgba(140,100,240,.1),rgba(100,70,200,.06))",border:"1px solid rgba(140,100,240,.22)",borderRadius:"14px",padding:"12px 14px"}}>
-                  <div style={{color:"#b0a0e8",fontSize:".73rem",fontWeight:400,marginBottom:"4px"}}>🧠 On-Device AI ({window._isCapacitor?"Gemma 3 1B":"SmolLM2-360M"})</div>
+                  <div style={{color:"#b0a0e8",fontSize:".73rem",fontWeight:400,marginBottom:"4px"}}>🧠 On-Device AI ({window._isCapacitor?"Qwen2.5 1.5B":"SmolLM2-360M"})</div>
                   <div style={{color:"#7878b0",fontSize:".65rem",lineHeight:1.6,marginBottom:"9px"}}>{window._isCapacitor?t.offlineDescNative:t.offlineDescWasm}</div>
                   <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
                     <button className="sml acc" onClick={initLocalAI} style={{fontSize:".65rem"}}>{t.loadOfflineBtn}</button>
@@ -2459,7 +2739,7 @@ function SmartCalc(){
                     {localAiPhase||t.startingUp}
                   </div>
                   <div style={{color:"#454580",fontSize:".57rem",marginTop:"5px"}}>
-                    {(t.loadingNote||"").replace("{size}",window._isCapacitor?"600MB":"250MB")}
+                    {(t.loadingNote||"").replace("{size}",window._isCapacitor?"500MB":"250MB")}
                   </div>
                 </div>
               )}
@@ -2477,7 +2757,7 @@ function SmartCalc(){
                     {localAiStatus==="no-webgpu"
                       ?"Thiết bị hoặc trình duyệt không hỗ trợ. Hãy dùng Chrome phiên bản mới nhất."
                       :window._isCapacitor
-                        ?"Không tải được model. Nếu lỗi 401: kiểm tra HuggingFace Token trong ⚙, và đảm bảo đã Accept license tại huggingface.co/litert-community/Gemma3-1B-IT. Nếu lỗi khác: kiểm tra mạng hoặc bộ nhớ còn trống (cần ~700MB)."
+                        ?"Không tải được model. Nếu lỗi 401: kiểm tra HuggingFace Token trong ⚙, và đảm bảo đã Accept license tại huggingface.co/litert-community/Qwen2.5-1.5B-Instruct. Nếu lỗi khác: kiểm tra mạng hoặc bộ nhớ còn trống (cần ~600MB)."
                         :"Không thể tải model về thiết bị. Có thể do mạng yếu, bộ nhớ không đủ, hoặc trình duyệt chặn WASM."}
                   </div>
                   <div style={{color:"#808080",fontSize:".6rem",marginBottom:"8px",background:"rgba(0,0,0,.3)",borderRadius:"8px",padding:"5px 9px"}}>
@@ -2529,7 +2809,7 @@ function SmartCalc(){
                   {window._isCapacitor&&(
                     <div style={{marginBottom:"14px",paddingBottom:"14px",borderBottom:"1px solid rgba(255,255,255,.07)"}}>
                       <div style={{color:"#c0c0e0",fontSize:".62rem",letterSpacing:".1em",marginBottom:"6px"}}>{t.hfTokenLabel||"HUGGINGFACE TOKEN"}</div>
-                      <div style={{color:"#a0a0cc",fontSize:".65rem",lineHeight:1.6,marginBottom:"10px"}}>{t.hfTokenDesc||"Required to download Gemma 3 1B."}</div>
+                      <div style={{color:"#a0a0cc",fontSize:".65rem",lineHeight:1.6,marginBottom:"10px"}}>{t.hfTokenDesc||"Required to download Qwen2.5 1.5B."}</div>
                       <div style={{display:"flex",gap:"7px",marginBottom:"6px"}}>
                         <div style={{position:"relative",flex:1}}>
                           <input className="key-inp" type={showHfToken?"text":"password"}
@@ -2596,7 +2876,17 @@ function SmartCalc(){
                           </span>
                           <span style={{color:"#383860",fontSize:".57rem"}}>{msg.time}</span>
                         </div>
-                        <div className="b-ans">{msg.parsed?.answer||msg.content}</div>
+                        {msg.chartDataUrl ? (
+                          <div style={{marginBottom:"8px"}}>
+                            <img
+                              src={msg.chartDataUrl}
+                              alt={msg.chartExprs?.join(", ")||"chart"}
+                              style={{width:"100%",maxWidth:"320px",borderRadius:"10px",display:"block",border:"1px solid rgba(255,255,255,.1)"}}
+                            />
+                          </div>
+                        ) : (
+                          <div className="b-ans">{msg.parsed?.answer||msg.content}</div>
+                        )}
                         {msg.parsed?.expression&&<div className="b-expr">{formatMath(msg.parsed.expression)}</div>}
                         {msg.parsed?.steps?.length>0&&msg.parsed.steps.map((s,j)=>(<div key={j} className="b-step"><span style={{color:"#8080b0"}}>{j+1}. </span>{s}</div>))}
                         {/* ★ Show grounded math facts badge */}
@@ -2608,6 +2898,14 @@ function SmartCalc(){
                           <button className={`cp${copied===`a${i}`?" ok":""}`} onClick={()=>copyText(msg.parsed?.answer||msg.content,`a${i}`)}>{copied===`a${i}`?t.copied:t.copy}</button>
                           {msg.parsed?.answer&&!msg.isError&&(
                             <button className="sml" style={{fontSize:".6rem",padding:"3px 9px"}} onClick={()=>{setExpr(msg.parsed.answer.replace(/[^0-9.\-]/g,""));setJustEval(true);setTab("calc");showToast(t.sentCalc);}}>→ Calc</button>
+                          )}
+                          {msg.chartExprs&&msg.chartExprs.length>0&&(
+                            <button className="sml" style={{fontSize:".6rem",padding:"3px 9px",borderColor:"rgba(91,82,240,.3)",color:"#9090e0"}} onClick={()=>{
+                              haptic(8);
+                              // Pass chart to Graph tab via custom event
+                              window.dispatchEvent(new CustomEvent("openGraphWithExprs",{detail:{exprs:msg.chartExprs,view:msg.chartView}}));
+                              setTab("graph");
+                            }}>→ Graph</button>
                           )}
                           {msg.isError&&(<button className="sml" style={{fontSize:".6rem",padding:"3px 9px"}} onClick={()=>{const prev=aiMsgs[i-1];if(prev) sendAi(prev.content);}}>↺ retry</button>)}
                         </div>
