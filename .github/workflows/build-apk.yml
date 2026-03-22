@@ -3,13 +3,11 @@ name: Build APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # cho phép bấm Run thủ công trên GitHub
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout code
@@ -18,34 +16,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
 
       - name: Install dependencies
         run: npm install
-
-      - name: Prepare www folder
-        run: |
-          mkdir -p www
-          cp index.html www/index.html
 
       - name: Add Android platform
         run: npx cap add android
 
       - name: Sync Capacitor
         run: npx cap sync android
-
-      - name: Patch Android
-        run: python3 patch_android.py ${{ github.run_number }}
-
-      - name: Fix minSdk for MediaPipe
-        run: |
-          echo "=== build.gradle before ==="
-          cat android/app/build.gradle
-          echo "=== patching minSdk ==="
-          sed -i 's/minSdk [0-9]*/minSdk 24/g' android/app/build.gradle
-          sed -i 's/minSdkVersion [0-9]*/minSdkVersion 24/g' android/app/build.gradle
-          echo "=== build.gradle after ==="
-          cat android/app/build.gradle
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -63,13 +43,11 @@ jobs:
         run: |
           cd android
           ./gradlew assembleDebug
-          echo "=== APK files ==="
-          find . -name "*.apk"
 
-      - name: Upload APK as artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SmartCalc-v${{ github.run_number }}
+          name: SmartCalc-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
@@ -81,7 +59,11 @@ jobs:
           name: SmartCalc v${{ github.run_number }}
           files: android/app/build/outputs/apk/debug/app-debug.apk
           generate_release_notes: false
-          body: SmartCalc v${{ github.run_number }} - tai app-debug.apk ve cai tren Android
+          body: |
+            📱 **SmartCalc APK**
+            
+            Tải file `app-debug.apk` về → cài trên Android.
+            
+            > Cần bật: Cài đặt → Bảo mật → Cho phép cài từ nguồn không xác định
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
