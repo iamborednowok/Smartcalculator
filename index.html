@@ -1615,10 +1615,7 @@ function SmartCalc(){
 
       // Native Capacitor plugin → nhanh hơn 5-10x so với WASM
       if(window._isCapacitor&&window._nativeLLM()){
-        const chatPrompt=messages.map(m=>`<|${m.role}|>
-${m.content}`).join("
-")+"<|assistant|>
-";
+        const chatPrompt=messages.map(m=>`<|${m.role}|>\n${m.content}`).join("\n")+`<|assistant|>\n`;
         const {result}=await Promise.race([
           window._nativeLLM().runInference({prompt:chatPrompt}),
           new Promise((_,rej)=>setTimeout(()=>rej(new Error("Native timeout")),60000))
