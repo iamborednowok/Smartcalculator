@@ -12,160 +12,115 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      # ── 2. Java + Node ───────────────────────────────────────────────────────
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '21'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
 
+      # ── 3. Install JS deps ───────────────────────────────────────────────────
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Prepare www folder
+      # ── 4. Build web assets ──────────────────────────────────────────────────
+      # Problem 1 fix (pre-compile) will be added here in Phase 2.
+      # For now: copy index.html as-is.
+      - name: Prepare www
         run: |
           mkdir -p www
           cp index.html www/index.html
 
+      # ── 5. Generate Android platform (always fresh) ──────────────────────────
       - name: Add Android platform
         run: npx cap add android
 
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Fix build.gradle (rootProject bug)
-        run: |
-          GRADLE=android/app/build.gradle
-          echo "=== BEFORE FIX (lines 1-20) ==="
-          head -20 $GRADLE
-
-          # Fix 1: Replace ALL rootProject.ext references with hardcoded values
-          # Capacitor 6 generates these which crash Gradle before project is initialized
-          sed -i 's/compileSdk\s*rootProject\.ext\.compileSdkVersion/compileSdk 34/g' $GRADLE
-          sed -i 's/minSdkVersion\s*rootProject\.ext\.minSdkVersion/minSdkVersion 24/g' $GRADLE
-          sed -i 's/targetSdkVersion\s*rootProject\.ext\.targetSdkVersion/targetSdkVersion 34/g' $GRADLE
-          sed -i "s/versionCode\s*rootProject\.ext\.versionCode/versionCode ${{ github.run_number }}/g" $GRADLE
-          sed -i "s/versionName\s*rootProject\.ext\.versionName/versionName \"1.${{ github.run_number }}\"/g" $GRADLE
-
-          # Fix 2: Remove the google-services try/catch block (no Firebase used)
-          # This block also uses rootProject and causes the same crash
-          python3 - << 'EOF'
-          import re
-          path = 'android/app/build.gradle'
-          with open(path) as f:
-              lines = f.readlines()
-
-          result = []
-          i = 0
-          while i < len(lines):
-              line = lines[i]
-              if re.match(r'\s*try\s*\{', line):
-                  block = [line]
-                  depth = line.count('{') - line.count('}')
-                  j = i + 1
-                  while j < len(lines) and depth > 0:
-                      block.append(lines[j])
-                      depth += lines[j].count('{') - lines[j].count('}')
-                      j += 1
-                  while j < len(lines) and re.match(r'\s*catch', lines[j]):
-                      block.append(lines[j])
-                      depth = lines[j].count('{') - lines[j].count('}')
-                      j += 1
-                      while j < len(lines) and depth > 0:
-                          block.append(lines[j])
-                          depth += lines[j].count('{') - lines[j].count('}')
-                          j += 1
-                  block_text = ''.join(block)
-                  if 'servicesJSON' in block_text or 'google-services' in block_text:
-                      result.append('// google-services block removed\n')
-                      print(f"Removed google-services block ({len(block)} lines)")
-                  else:
-                      result.extend(block)
-                  i = j
-                  continue
-              result.append(line)
-              i += 1
-
-          with open(path, 'w') as f:
-              f.writelines(result)
-
-          # Verify no rootProject references remain
-          content = open(path).read()
-          remaining = [l for l in content.split('\n') if 'rootProject' in l]
-          if remaining:
-              print("ERROR: rootProject still present:")
-              for l in remaining:
-                  print(f"  {l}")
-              exit(1)
-          print("OK: No rootProject references remain")
-          EOF
-
-          echo "=== AFTER FIX (lines 1-20) ==="
-          head -20 $GRADLE
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
+      # ── 6. Patch Android (new robust script) ─────────────────────────────────
+      # patch_android.py now:
+      #   - COPIES templates/ instead of regex-patching generated files
+      #   - Uses XML parser for AndroidManifest (not string.replace)
+      #   - Uses balanced-brace parser for google-services removal
+      #   - Uses `apply from:` for MediaPipe (not dep-block injection)
+      #   - variables.gradle is the official Capacitor SDK version mechanism
       - name: Patch Android
         run: python3 patch_android.py ${{ github.run_number }}
 
-      - name: Force minSdk 24 for MediaPipe
+      # ── 7. Validate patch results ────────────────────────────────────────────
+      - name: Validate patch
         run: |
-          sed -i 's/minSdk [0-9]*/minSdk 24/g' android/app/build.gradle
-          sed -i 's/minSdkVersion [0-9]*/minSdkVersion 24/g' android/app/build.gradle
-          echo "minSdk setting:"
-          grep -i "minsdk" android/app/build.gradle
+          echo "=== Checking for rootProject references ==="
+          if grep -r "rootProject" android/app/build.gradle; then
+            echo "❌ rootProject still present!"
+            exit 1
+          fi
+          echo "✅ No rootProject references"
 
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
+          echo "=== Checking minSdk ==="
+          grep -i "minsdk" android/variables.gradle
+          
+          echo "=== Checking MediaPipe dependency ==="
+          grep "tasks-genai" android/mediapipe.gradle
 
+          echo "=== Checking LLMPlugin registration ==="
+          grep "registerPlugin" android/app/src/main/java/com/iamborednowok/smartcalc/MainActivity.java
+
+          echo "=== build.gradle head ==="
+          head -30 android/app/build.gradle
+
+      # ── 8. Android SDK ───────────────────────────────────────────────────────
+      - uses: android-actions/setup-android@v3
+
+      # ── 9. Build APK ─────────────────────────────────────────────────────────
       - name: Build Debug APK
         run: |
+          chmod +x android/gradlew
           cd android
           ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log
           GRADLE_EXIT=${PIPESTATUS[0]}
           if [ $GRADLE_EXIT -ne 0 ]; then
-            echo "========================================"
-            echo "GRADLE FAILED — FULL LOG:"
-            echo "========================================"
-            cat build.log
+            echo "════════════════════════════════════"
+            echo "GRADLE FAILED — last 100 lines:"
+            echo "════════════════════════════════════"
+            tail -100 build.log
             exit $GRADLE_EXIT
           fi
 
-      - name: Verify APK exists
+      # ── 10. Verify APK ───────────────────────────────────────────────────────
+      - name: Verify APK
         run: |
           APK=android/app/build/outputs/apk/debug/app-debug.apk
-          if [ -f "$APK" ]; then
-            SIZE=$(du -sh "$APK" | cut -f1)
-            echo "✅ APK found! Size: $SIZE"
-          else
-            echo "❌ APK not found"
-            exit 1
-          fi
+          [ -f "$APK" ] || (echo "❌ APK not found"; exit 1)
+          echo "✅ APK size: $(du -sh $APK | cut -f1)"
 
-      - name: Upload APK as artifact
-        uses: actions/upload-artifact@v4
+      # ── 11. Upload artifact ──────────────────────────────────────────────────
+      - uses: actions/upload-artifact@v4
         with:
           name: SmartCalc-v${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      # ── 12. Create GitHub Release ────────────────────────────────────────────
+      - uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
           tag_name: v${{ github.run_number }}
           name: SmartCalc v${{ github.run_number }}
           files: android/app/build/outputs/apk/debug/app-debug.apk
           generate_release_notes: false
-          body: SmartCalc v${{ github.run_number }} - tai app-debug.apk ve cai tren Android
+          body: |
+            SmartCalc v${{ github.run_number }}
+            Tải app-debug.apk về cài trên Android.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
