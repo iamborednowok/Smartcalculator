@@ -235,7 +235,7 @@
       env.allowLocalModels = false;
       env.useBrowserCache = true;
       let pipe = null;
-      const MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct';
+      const MODEL_ID = 'HuggingFaceTB/SmolLM2-135M-Instruct';
 
       self.onmessage = async (e) => {
         const { type, id, payload } = e.data;
@@ -472,16 +472,36 @@ function extractMathFacts(query,angleMode="deg"){
   }
   return facts;
 }
+// ─── math.js capability reference (passed to SLM as context) ────────────────
+const MATHJS_CAPABILITIES=`
+math.js functions available (use these in mathExpr):
+  Basic: +, -, *, /, ^, %, sqrt(x), cbrt(x), abs(x)
+  Trig: sin(x), cos(x), tan(x), asin(x), acos(x), atan(x) [radians]
+  Log: log(x) [base10], log(x,base), log2(x), exp(x)
+  Stats: mean([...]), std([...]), variance([...]), median([...])
+  Algebra: simplify("expr"), derivative("expr","x")
+  Number: factorial(n), combinations(n,r), permutations(n,r), gcd(a,b), lcm(a,b)
+  Matrix: det([[a,b],[c,d]]), inv([[...]]), multiply([[...]])
+  Finance: no built-in, use: P*((1+r)^n - 1)/r for annuity
+  Constants: pi, e, phi, Infinity
+`;
+
 function buildGroundedSLMPrompt(mathFacts){
-  let sys="You are a precise math assistant. Explain clearly and concisely.\n\n";
+  let sys="You are a math translator. Convert the user question into a math.js expression.\n";
+  sys+="Available math.js functions:\n"+MATHJS_CAPABILITIES+"\n";
   if(mathFacts.length>0){
-    sys+="╔══ VERIFIED BY MATH ENGINE (use EXACT values, do NOT recalculate) ══╗\n";
+    sys+="Pre-computed facts (already verified):\n";
     mathFacts.forEach(f=>{sys+=`  ${f.expr} = ${f.result}\n`;});
-    sys+="╚═══════════════════════════════════════════════════════════════════╝\n\n";
-    sys+="Instructions: Use the pre-computed values above. Do NOT do arithmetic yourself.\n\n";
+    sys+="\n";
   }
-  sys+='Respond ONLY with raw JSON (no markdown, no backticks):\n';
-  sys+='{"answer":"final answer","steps":["step 1","step 2"],"expression":"math notation","note":"optional"}';
+  sys+="Rules:\n";
+  sys+="1. If the question can be expressed as math.js, output mathExpr.\n";
+  sys+="2. If it cannot (pure language/concept), output mathExpr as empty string.\n";
+  sys+="3. For trig: convert degrees to radians: sin(30*pi/180)\n";
+  sys+="4. For derivatives: derivative('x^2+3*x','x')\n";
+  sys+="5. NEVER calculate yourself. Only translate.\n\n";
+  sys+="Respond ONLY with raw JSON:\n";
+  sys+='{"mathExpr":"math.js expression or empty","explanation":"brief explanation in same language as user","steps":["step 1","step 2"]}';
   return sys;
 }
 
@@ -558,6 +578,73 @@ function offlineParser(text,unitsConfig,convertFn,fmtFn,ctx){
       if(t.match(/\b(?:square|squared)\b/))return{answer:fmtFn(numOnly**2),steps:[`${numOnly}² = ${fmtFn(numOnly**2)}`],expression:`${numOnly}²`,engine:"offline"};
       if(t.match(/\b(?:negate|opposite|negative)\b/))return{answer:fmtFn(-numOnly),steps:[`-${numOnly} = ${fmtFn(-numOnly)}`],expression:`-${numOnly}`,engine:"offline"};
     }
+  }
+  // ── Giải phương trình bậc nhất: ax + b = c hoặc 2x + 3 = 11 ──
+  m=t.match(/(-?\d+(?:\.\d+)?)\s*x\s*([+-]\s*\d+(?:\.\d+)?)\s*=\s*(-?\d+(?:\.\d+)?)/)||t.match(/(-?\d+(?:\.\d+)?)x\s*=\s*(-?\d+(?:\.\d+)?)/);
+  if(m&&(t.includes("solve")||t.includes("x=")||t.match(/\d+x/))){
+    if(m[2]===undefined){const a=parseFloat(m[1]),c=parseFloat(m[2]||m[3]),x=c/a;return{answer:`x = ${fmtFn(x)}`,steps:[`${a}x = ${c}`,`x = ${c} ÷ ${a} = ${fmtFn(x)}`],expression:`x=${fmtFn(x)}`,engine:"offline"};}
+    const a=parseFloat(m[1]),b=parseFloat(m[2].replace(/\s/g,"")),c=parseFloat(m[3]),x=(c-b)/a;
+    return{answer:`x = ${fmtFn(x)}`,steps:[`${a}x + ${b} = ${c}`,`${a}x = ${c} - ${b} = ${c-b}`,`x = ${fmtFn(x)}`],expression:`x=${fmtFn(x)}`,engine:"offline"};
+  }
+  // ── PT bậc 2 dạng tự nhiên: x² + 5x + 6 = 0 ──
+  m=t.match(/x[²2]\s*([+-]\s*\d+(?:\.\d+)?)\s*x\s*([+-]\s*\d+(?:\.\d+)?)\s*=\s*0/)||t.match(/x[²2]\s*([+-]\d+(?:\.\d+)?)x\s*([+-]\d+(?:\.\d+)?)\s*=\s*0/);
+  if(m){
+    const b=parseFloat(m[1].replace(/\s/g,"")),c=parseFloat(m[2].replace(/\s/g,""));
+    const disc=b*b-4*c;
+    if(disc<0)return{answer:"Vô nghiệm thực",steps:[`Δ = ${b}²-4×${c} = ${disc} < 0`],expression:`x²${m[1]}x${m[2]}=0`,engine:"offline"};
+    const x1=(-b+Math.sqrt(disc))/2,x2=(-b-Math.sqrt(disc))/2;
+    return{answer:Math.abs(x1-x2)<1e-10?`x = ${fmtFn(x1)}`:`x₁=${fmtFn(x1)}, x₂=${fmtFn(x2)}`,steps:[`Δ = ${b}²-4×${c} = ${disc}`,`x = (-${b} ± √${disc}) / 2`,`x₁=${fmtFn(x1)}, x₂=${fmtFn(x2)}`],expression:`x²${m[1]}x${m[2]}=0`,engine:"offline"};
+  }
+  // ── Đạo hàm cơ bản ──
+  m=t.match(/(?:derivative|d\/dx|đạo hàm)\s+(?:of\s+)?x\^(\d+)/)||t.match(/(?:derivative|d\/dx|đạo hàm)\s+(?:of\s+)?x²/);
+  if(m){
+    const n=m[1]?parseInt(m[1]):2;
+    return{answer:`${n}x^${n-1}${n-1===1?"→ "+n+"x":""}`,steps:[`d/dx(xⁿ) = n·xⁿ⁻¹`,`d/dx(x^${n}) = ${n}x^${n-1}`],expression:`d/dx(x^${n})=${n}x^${n-1}`,engine:"offline"};
+  }
+  // ── Dãy số Fibonacci ──
+  m=t.match(/fibonacci.*?(\d+)\s*(?:term|số hạng|phần tử)/)||t.match(/(\d+)(?:st|nd|rd|th)\s+fibonacci/);
+  if(m){
+    const n=Math.min(parseInt(m[1]),50);let a=0,b2=1;
+    for(let i=2;i<n;i++){const tmp=a+b2;a=b2;b2=tmp;}
+    const result=n===1?0:n===2?1:b2;
+    return{answer:String(result),steps:[`Fibonacci(${n}) = ${result}`,`Dãy: 0,1,1,2,3,5,8,13,21,34,55…`],expression:`fib(${n})`,engine:"offline"};
+  }
+  // ── Kiểm tra số nguyên tố ──
+  m=t.match(/(?:is|có phải|kiểm tra)\s+(\d+)\s+(?:prime|nguyên tố|a prime)/)||t.match(/(\d+)\s+(?:is|có phải)\s+(?:a\s+)?(?:prime|nguyên tố)/);
+  if(m&&(t.includes("prime")||t.includes("nguyên tố"))){
+    const n=parseInt(m[1]);
+    const isPrime=(n)=>{if(n<2)return false;if(n===2)return true;if(n%2===0)return false;for(let i=3;i<=Math.sqrt(n);i+=2)if(n%i===0)return false;return true;};
+    const p=isPrime(n);
+    return{answer:p?`${n} là số nguyên tố ✓`:`${n} không phải số nguyên tố`,steps:[p?`${n} chỉ chia hết cho 1 và chính nó`:`${n} chia hết cho ${[2,3,5,7,11,13].find(d=>n%d===0&&d!==n)||"..."}`],expression:`isPrime(${n})`,engine:"offline"};
+  }
+  // ── Tổng dãy số cấp số cộng ──
+  m=t.match(/arithmetic\s+series|cấp\s+số\s+cộng|tổng\s+(?:từ\s+)?(\d+)\s+đến\s+(\d+)/)||t.match(/sum\s+(?:from\s+)?(\d+)\s+to\s+(\d+)/);
+  if(m&&m[1]&&m[2]){
+    const a=parseInt(m[1]),b2=parseInt(m[2]),n=b2-a+1,s=n*(a+b2)/2;
+    return{answer:fmtFn(s),steps:[`n = ${n}, a₁=${a}, aₙ=${b2}`,`S = n(a₁+aₙ)/2 = ${n}×${a+b2}/2 = ${fmtFn(s)}`],expression:`Σ(${a}→${b2})`,engine:"offline"};
+  }
+  // ── Lãi suất tương lai (FV) ──
+  m=t.match(/(?:future\s+value|fv|giá\s+trị\s+tương\s+lai).*?\$?(\d+(?:\.\d+)?k?)\s*.*?(\d+(?:\.\d+)?)\s*%.*?(\d+)\s*(?:year|yr|năm)/);
+  if(m){
+    const P=extractNums(m[1])[0]||parseFloat(m[1]),r=parseFloat(m[2])/100,t2=parseInt(m[3]);
+    const fv=P*Math.pow(1+r,t2);
+    return{answer:`$${fmtFn(fv)}`,steps:[`FV = ${P} × (1+${r})^${t2}`,`FV = $${fmtFn(fv)}`,`Lãi: $${fmtFn(fv-P)}`],expression:`FV=${P}×(1+${r})^${t2}`,engine:"offline"};
+  }
+  // ── Hệ 2 phương trình (a1x+b1y=c1, a2x+b2y=c2) ──
+  m=t.match(/(\d+)x\s*[+]\s*(\d+)y\s*=\s*(\d+).*?(\d+)x\s*[-]\s*(\d+)y\s*=\s*(\d+)/)||t.match(/(\d+)x\s*\+\s*(\d+)y\s*=\s*(\d+)[\s,;]+(\d+)x\s*\+\s*(\d+)y\s*=\s*(\d+)/);
+  if(m&&t.match(/system|simultaneous|hệ|solve/)){
+    const a1=parseFloat(m[1]),b1=parseFloat(m[2]),c1=parseFloat(m[3]);
+    const a2=parseFloat(m[4]),b2s=parseFloat(m[5]),c2=parseFloat(m[6]);
+    const det=a1*b2s-a2*b1;
+    if(Math.abs(det)<1e-10)return{answer:"Vô số nghiệm hoặc vô nghiệm",steps:["Định thức = 0"],expression:"hệ PT",engine:"offline"};
+    const x=(c1*b2s-c2*b1)/det,y=(a1*c2-a2*c1)/det;
+    return{answer:`x=${fmtFn(x)}, y=${fmtFn(y)}`,steps:[`${a1}x+${b1}y=${c1}`,`${a2}x+${b2s}y=${c2}`,`Det=${det}`,`x=${fmtFn(x)}, y=${fmtFn(y)}`],expression:`x=${fmtFn(x)},y=${fmtFn(y)}`,engine:"offline"};
+  }
+  // ── Xác suất cơ bản ──
+  m=t.match(/probability.*?(\d+)\s*(?:out\s+of|\/|trong)\s*(\d+)/)||t.match(/(\d+)\s*(?:out\s+of|\/|trong)\s*(\d+)\s*(?:probability|xác suất|chance)/);
+  if(m&&(t.includes("probability")||t.includes("xác suất")||t.includes("chance"))){
+    const a=parseInt(m[1]),b=parseInt(m[2]),p=a/b;
+    return{answer:`${fmtFn(p*100)}% (${a}/${b})`,steps:[`P = ${a}/${b} = ${fmtFn(p)}`,`= ${fmtFn(p*100)}%`],expression:`${a}/${b}`,engine:"offline"};
   }
   const words=t.split(/\s+/);let fromUnit=null,toUnit=null,numVal=null;
   for(let i=0;i<words.length;i++){if(!numVal&&/\d/.test(words[i])){numVal=parseFloat(words[i]);}const u=resolveUnit(words[i]);if(u){if(!fromUnit)fromUnit=u;else if(!toUnit)toUnit=u;}}
@@ -667,8 +754,8 @@ function ts(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-
 
 // ─── Languages (compact — en + vi only for brevity, others same as original) ─
 const LANGS={
-  en:{name:"English",flag:"🇬🇧",tabs:["Calc","Formula","Convert","Random","Graph","AI"],hist:"Hist",clearAll:"clear all",copy:"copy",copied:"✓ copied",basic:"basic",sci:"sci",frac:"½ frac",last:"↩ last",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc · Backspace · hold C = clear history",formulaBack:"← back",calculate:"Calculate",result:"RESULT",sentCalc:"Sent to calculator",unitSubUnits:"⇄ Units",unitSubOil:"🛢 Oil → Money",rollBtn:"Roll!",flipBtn:"Flip",pickBtn:"Pick",diceLabel:"🎲 DICE ROLLER",coinLabel:"🪙 COIN",rangeLabel:"🎯 RANGE",mathLabel:"🧮 MATH PRACTICE",startBtn:(d,e)=>`Start — ${d} ${e}`,nextBtn:"Next →",skipBtn:"skip",checkBtn:"Check",answerPlaceholder:"Your answer…",correct:"✓ Correct!",wrong:(a)=>`✗ Answer: ${a}`,resetScore:"reset",hintBtn:"hint",aiPlaceholder:"Ask anything… context-aware (Enter to send)",clearChat:"clear chat",tryAsking:"TRY ASKING…",offlineEngine:"⚡ offline",localEngine:"🧠 SLM+grounded",cloudEngine:"☁",modelDefault:"Claude (default)",thinking:"🧠 THINKING…",saveKey:"Save",removeKey:"remove",keyActive:"✓ Key active",orKeyDesc:"Free key at openrouter.ai — no credit card.",wgpuError:"WebGPU not available",wgpuDesc:"SLM needs WebGPU. Use Chrome on Android.",historyLabel:"HISTORY",noWebGPU:"needs Chrome on Android",loadingTokenizer:"Loading tokenizer…",loadingModel:"Downloading Qwen2.5 (~400MB)…",cachedNote:"Cached in browser after download",precision:"PRECISION · OFFLINE · AI-POWERED",fromLabel:"FROM",toLabel:"TO",swipeHint:"← swipe to delete",holdC:"hold C = clear history",mathQ:{tagAdd:"Addition",tagSub:"Subtraction",tagMul:"Multiplication",tagDiv:"Division",tagSq:"Squares",tagSqrt:"Square Root",tagPct:"Percentage",tagFrac:"Fractions",tagCbrt:"Cube Root",tagPow:"Powers",tagLog:"Logarithm",tagTrig:"Trig",tagQuad:"Quadratic",tagSeq:"Sequence",tagFin:"Finance",pctOf:(r,a)=>`${r}% of ${a}`,sumSeq:(a,b,c,n)=>`Sum: ${a} + ${b} + ${c} + … (${n} terms)`,quadratic:(b,c)=>`x²${b}x${c}=0 larger root=?`,finance:(P,r,n)=>`${P} at ${r}%/yr for ${n}yr\nFinal = ?`,tagMissing:"Missing",tagDouble:"Times Table",tagRound:"Rounding",tagPctChg:"% Change",tagDecMul:"Decimals",tagAlg1:"Algebra",tagAlg2:"Quadratic Eq",tagNeg:"Negatives",tagGeo:"Geo Series",tagBinom:"Binomial",tagMod:"Modular",tagSimult:"Simultaneous",tagDet:"Determinant",roundTo:(n,t)=>`Round ${n} to nearest ${t}`,pctChange:(a,p,up)=>`${up?"Increase":"Decrease"} ${a} by ${p}%`,geoSeq:(a,ar,n)=>`Geo sum: ${a} + ${ar} + … (${n} terms)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"All levels mixed"},Easy:{desc:"Basic arithmetic"},Hard:{desc:"Multi-step problems"},Nightmare:{desc:"Fractions, cubes, mixed"},Impossible:{desc:"Logs, trig, series"}},
-  vi:{name:"Tiếng Việt",flag:"🇻🇳",tabs:["Tính","Công thức","Đổi đơn vị","Ngẫu nhiên","Đồ thị","AI"],hist:"Lịch sử",clearAll:"xóa tất cả",copy:"sao chép",copied:"✓ đã sao chép",basic:"cơ bản",sci:"khoa học",frac:"½ phân số",last:"↩ lần trước",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← quay lại",calculate:"Tính",result:"KẾT QUẢ",sentCalc:"Đã gửi tới máy tính",unitSubUnits:"⇄ Đơn vị",unitSubOil:"🛢 Dầu → Tiền",rollBtn:"Tung!",flipBtn:"Tung đồng xu",pickBtn:"Chọn",diceLabel:"🎲 TUNG XÚC XẮC",coinLabel:"🪙 ĐỒNG XU",rangeLabel:"🎯 KHOẢNG",mathLabel:"🧮 LUYỆN TOÁN",startBtn:(d,e)=>`Bắt đầu — ${d} ${e}`,nextBtn:"Tiếp →",skipBtn:"bỏ qua",checkBtn:"Kiểm tra",answerPlaceholder:"Câu trả lời…",correct:"✓ Đúng rồi!",wrong:(a)=>`✗ Đáp án: ${a}`,resetScore:"đặt lại",hintBtn:"gợi ý",aiPlaceholder:"Hỏi gì cũng được…",clearChat:"xóa cuộc trò chuyện",tryAsking:"THỬ HỎI…",offlineEngine:"⚡ ngoại tuyến",localEngine:"🧠 SLM+nền tảng",cloudEngine:"☁",modelDefault:"Claude (mặc định)",thinking:"🧠 ĐANG SUY NGHĨ…",saveKey:"Lưu",removeKey:"xóa",keyActive:"✓ Khóa hoạt động",orKeyDesc:"Lấy khóa miễn phí tại openrouter.ai.",wgpuError:"WebGPU không khả dụng",wgpuDesc:"SLM cần WebGPU. Dùng Chrome Android.",historyLabel:"LỊCH SỬ",noWebGPU:"cần Chrome Android",loadingTokenizer:"Đang tải tokenizer…",loadingModel:"Đang tải Qwen2.5 (~400MB)…",cachedNote:"Lưu cache sau khi tải",precision:"CHÍNH XÁC · NGOẠI TUYẾN · AI",fromLabel:"TỪ",toLabel:"ĐẾN",swipeHint:"← vuốt để xóa",holdC:"giữ C = xóa lịch sử",mathQ:{tagAdd:"Cộng",tagSub:"Trừ",tagMul:"Nhân",tagDiv:"Chia",tagSq:"Bình phương",tagSqrt:"Căn bậc hai",tagPct:"Phần trăm",tagFrac:"Phân số",tagCbrt:"Căn bậc ba",tagPow:"Lũy thừa",tagLog:"Logarit",tagTrig:"Lượng giác",tagQuad:"PT bậc 2",tagSeq:"Dãy số",tagFin:"Tài chính",pctOf:(r,a)=>`${r}% của ${a}`,sumSeq:(a,b,c,n)=>`Tổng: ${a} + ${b} + ${c} + … (${n} số hạng)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} lãi ${r}%/năm ${n} năm\nSố tiền cuối = ?`,tagMissing:"Số bị thiếu",tagDouble:"Bảng nhân",tagRound:"Làm tròn",tagPctChg:"Thay đổi %",tagDecMul:"Số thập phân",tagAlg1:"Đại số",tagAlg2:"PT bậc 2",tagNeg:"Số âm",tagGeo:"Cấp số nhân",tagBinom:"Nhị thức",tagMod:"Số dư",tagSimult:"Hệ PT",tagDet:"Định thức",roundTo:(n,t)=>`Làm tròn ${n} đến ${t}`,pctChange:(a,p,up)=>`${up?"Tăng":"Giảm"} ${a} thêm ${p}%`,geoSeq:(a,ar,n)=>`Tổng CSN: ${a} + ${ar} + … (${n} số hạng)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"Tất cả cấp độ"},Easy:{desc:"Số học cơ bản"},Hard:{desc:"Nhiều bước tính"},Nightmare:{desc:"Phân số, căn bậc ba"},Impossible:{desc:"Log, lượng giác, dãy số"}},
+  en:{name:"English",flag:"🇬🇧",tabs:["Calc","Formula","Convert","Random","Graph","AI"],hist:"Hist",clearAll:"clear all",copy:"copy",copied:"✓ copied",basic:"basic",sci:"sci",frac:"½ frac",last:"↩ last",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc · Backspace · hold C = clear history",formulaBack:"← back",calculate:"Calculate",result:"RESULT",sentCalc:"Sent to calculator",unitSubUnits:"⇄ Units",unitSubOil:"🛢 Oil → Money",rollBtn:"Roll!",flipBtn:"Flip",pickBtn:"Pick",diceLabel:"🎲 DICE ROLLER",coinLabel:"🪙 COIN",rangeLabel:"🎯 RANGE",mathLabel:"🧮 MATH PRACTICE",startBtn:(d,e)=>`Start — ${d} ${e}`,nextBtn:"Next →",skipBtn:"skip",checkBtn:"Check",answerPlaceholder:"Your answer…",correct:"✓ Correct!",wrong:(a)=>`✗ Answer: ${a}`,resetScore:"reset",hintBtn:"hint",aiPlaceholder:"Ask anything… context-aware (Enter to send)",clearChat:"clear chat",tryAsking:"TRY ASKING…",offlineEngine:"⚡ offline",localEngine:"🧠 SLM+grounded",cloudEngine:"☁",modelDefault:"Claude (default)",thinking:"🧠 THINKING…",saveKey:"Save",removeKey:"remove",keyActive:"✓ Key active",orKeyDesc:"Free key at openrouter.ai — no credit card.",wgpuError:"WebGPU not available",wgpuDesc:"SLM needs WebGPU. Use Chrome on Android.",historyLabel:"HISTORY",noWebGPU:"needs Chrome on Android",loadingTokenizer:"Loading tokenizer…",loadingModel:"Downloading SmolLM2 (~135MB)…",cachedNote:"Cached in browser after download",precision:"PRECISION · OFFLINE · AI-POWERED",fromLabel:"FROM",toLabel:"TO",swipeHint:"← swipe to delete",holdC:"hold C = clear history",mathQ:{tagAdd:"Addition",tagSub:"Subtraction",tagMul:"Multiplication",tagDiv:"Division",tagSq:"Squares",tagSqrt:"Square Root",tagPct:"Percentage",tagFrac:"Fractions",tagCbrt:"Cube Root",tagPow:"Powers",tagLog:"Logarithm",tagTrig:"Trig",tagQuad:"Quadratic",tagSeq:"Sequence",tagFin:"Finance",pctOf:(r,a)=>`${r}% of ${a}`,sumSeq:(a,b,c,n)=>`Sum: ${a} + ${b} + ${c} + … (${n} terms)`,quadratic:(b,c)=>`x²${b}x${c}=0 larger root=?`,finance:(P,r,n)=>`${P} at ${r}%/yr for ${n}yr\nFinal = ?`,tagMissing:"Missing",tagDouble:"Times Table",tagRound:"Rounding",tagPctChg:"% Change",tagDecMul:"Decimals",tagAlg1:"Algebra",tagAlg2:"Quadratic Eq",tagNeg:"Negatives",tagGeo:"Geo Series",tagBinom:"Binomial",tagMod:"Modular",tagSimult:"Simultaneous",tagDet:"Determinant",roundTo:(n,t)=>`Round ${n} to nearest ${t}`,pctChange:(a,p,up)=>`${up?"Increase":"Decrease"} ${a} by ${p}%`,geoSeq:(a,ar,n)=>`Geo sum: ${a} + ${ar} + … (${n} terms)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"All levels mixed"},Easy:{desc:"Basic arithmetic"},Hard:{desc:"Multi-step problems"},Nightmare:{desc:"Fractions, cubes, mixed"},Impossible:{desc:"Logs, trig, series"}},
+  vi:{name:"Tiếng Việt",flag:"🇻🇳",tabs:["Tính","Công thức","Đổi đơn vị","Ngẫu nhiên","Đồ thị","AI"],hist:"Lịch sử",clearAll:"xóa tất cả",copy:"sao chép",copied:"✓ đã sao chép",basic:"cơ bản",sci:"khoa học",frac:"½ phân số",last:"↩ lần trước",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← quay lại",calculate:"Tính",result:"KẾT QUẢ",sentCalc:"Đã gửi tới máy tính",unitSubUnits:"⇄ Đơn vị",unitSubOil:"🛢 Dầu → Tiền",rollBtn:"Tung!",flipBtn:"Tung đồng xu",pickBtn:"Chọn",diceLabel:"🎲 TUNG XÚC XẮC",coinLabel:"🪙 ĐỒNG XU",rangeLabel:"🎯 KHOẢNG",mathLabel:"🧮 LUYỆN TOÁN",startBtn:(d,e)=>`Bắt đầu — ${d} ${e}`,nextBtn:"Tiếp →",skipBtn:"bỏ qua",checkBtn:"Kiểm tra",answerPlaceholder:"Câu trả lời…",correct:"✓ Đúng rồi!",wrong:(a)=>`✗ Đáp án: ${a}`,resetScore:"đặt lại",hintBtn:"gợi ý",aiPlaceholder:"Hỏi gì cũng được…",clearChat:"xóa cuộc trò chuyện",tryAsking:"THỬ HỎI…",offlineEngine:"⚡ ngoại tuyến",localEngine:"🧠 SLM+nền tảng",cloudEngine:"☁",modelDefault:"Claude (mặc định)",thinking:"🧠 ĐANG SUY NGHĨ…",saveKey:"Lưu",removeKey:"xóa",keyActive:"✓ Khóa hoạt động",orKeyDesc:"Lấy khóa miễn phí tại openrouter.ai.",wgpuError:"WebGPU không khả dụng",wgpuDesc:"SLM cần WebGPU. Dùng Chrome Android.",historyLabel:"LỊCH SỬ",noWebGPU:"cần Chrome Android",loadingTokenizer:"Đang tải tokenizer…",loadingModel:"Đang tải SmolLM2 (~135MB)…",cachedNote:"Lưu cache sau khi tải",precision:"CHÍNH XÁC · NGOẠI TUYẾN · AI",fromLabel:"TỪ",toLabel:"ĐẾN",swipeHint:"← vuốt để xóa",holdC:"giữ C = xóa lịch sử",mathQ:{tagAdd:"Cộng",tagSub:"Trừ",tagMul:"Nhân",tagDiv:"Chia",tagSq:"Bình phương",tagSqrt:"Căn bậc hai",tagPct:"Phần trăm",tagFrac:"Phân số",tagCbrt:"Căn bậc ba",tagPow:"Lũy thừa",tagLog:"Logarit",tagTrig:"Lượng giác",tagQuad:"PT bậc 2",tagSeq:"Dãy số",tagFin:"Tài chính",pctOf:(r,a)=>`${r}% của ${a}`,sumSeq:(a,b,c,n)=>`Tổng: ${a} + ${b} + ${c} + … (${n} số hạng)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} lãi ${r}%/năm ${n} năm\nSố tiền cuối = ?`,tagMissing:"Số bị thiếu",tagDouble:"Bảng nhân",tagRound:"Làm tròn",tagPctChg:"Thay đổi %",tagDecMul:"Số thập phân",tagAlg1:"Đại số",tagAlg2:"PT bậc 2",tagNeg:"Số âm",tagGeo:"Cấp số nhân",tagBinom:"Nhị thức",tagMod:"Số dư",tagSimult:"Hệ PT",tagDet:"Định thức",roundTo:(n,t)=>`Làm tròn ${n} đến ${t}`,pctChange:(a,p,up)=>`${up?"Tăng":"Giảm"} ${a} thêm ${p}%`,geoSeq:(a,ar,n)=>`Tổng CSN: ${a} + ${ar} + … (${n} số hạng)`,simultaneous:(a,b,s,d)=>`${a}x + ${b}y = ${s}, x − y = ${d}, x = ?`}},diffConfig:{Random:{desc:"Tất cả cấp độ"},Easy:{desc:"Số học cơ bản"},Hard:{desc:"Nhiều bước tính"},Nightmare:{desc:"Phân số, căn bậc ba"},Impossible:{desc:"Log, lượng giác, dãy số"}},
   fr:{name:"Français",flag:"🇫🇷",tabs:["Calc","Formule","Conversion","Aléatoire","Graphe","IA"],hist:"Hist.",clearAll:"tout effacer",copy:"copier",copied:"✓ copié",basic:"basique",sci:"scientifique",frac:"½ fraction",last:"↩ dernier",kbHint:"⌨ 0–9 · +-*/ · Entrée · Échap",formulaBack:"← retour",calculate:"Calculer",result:"RÉSULTAT",sentCalc:"Envoyé",unitSubUnits:"⇄ Unités",unitSubOil:"🛢 Pétrole → Monnaie",rollBtn:"Lancer!",flipBtn:"Lancer",pickBtn:"Choisir",diceLabel:"🎲 DÉS",coinLabel:"🪙 PIÈCE",rangeLabel:"🎯 INTERVALLE",mathLabel:"🧮 ENTRAÎNEMENT",startBtn:(d,e)=>`Démarrer — ${d} ${e}`,nextBtn:"Suivant →",skipBtn:"passer",checkBtn:"Vérifier",answerPlaceholder:"Votre réponse…",correct:"✓ Correct !",wrong:(a)=>`✗ Réponse : ${a}`,resetScore:"réinitialiser",hintBtn:"indice",aiPlaceholder:"Posez une question…",clearChat:"effacer",tryAsking:"ESSAYEZ…",offlineEngine:"⚡ hors ligne",localEngine:"🧠 SLM+ancré",cloudEngine:"☁",modelDefault:"Claude (défaut)",thinking:"🧠 EN RÉFLEXION…",saveKey:"Sauvegarder",removeKey:"supprimer",keyActive:"✓ Clé active",orKeyDesc:"Clé gratuite sur openrouter.ai.",wgpuError:"WebGPU indisponible",wgpuDesc:"SLM nécessite WebGPU. Chrome Android.",historyLabel:"HISTORIQUE",noWebGPU:"Chrome Android requis",loadingTokenizer:"Chargement tokenizer…",loadingModel:"Téléchargement LFM2.5…",cachedNote:"Mis en cache",precision:"PRÉCISION · HORS LIGNE · IA",fromLabel:"DE",toLabel:"VERS",swipeHint:"← glisser pour supprimer",holdC:"maintenir C = effacer",mathQ:{tagAdd:"Addition",tagSub:"Soustraction",tagMul:"Multiplication",tagDiv:"Division",tagSq:"Carrés",tagSqrt:"Racine carrée",tagPct:"Pourcentage",tagFrac:"Fractions",tagCbrt:"Racine cubique",tagPow:"Puissances",tagLog:"Logarithme",tagTrig:"Trigonométrie",tagQuad:"Équation 2e degré",tagSeq:"Suite",tagFin:"Finance",pctOf:(r,a)=>`${r}% de ${a}`,sumSeq:(a,b,c,n)=>`Somme: ${a}+${b}+${c}+… (${n} termes)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P}$ à ${r}%/an pour ${n}ans`,tagMissing:"Manquant",tagDouble:"Tables",tagRound:"Arrondi",tagPctChg:"Variation %",tagDecMul:"Décimaux",tagAlg1:"Algèbre",tagAlg2:"Éq. 2e degré",tagNeg:"Négatifs",tagGeo:"Géo. suite",tagBinom:"Binôme",tagMod:"Modulo",tagSimult:"Système",tagDet:"Déterminant",roundTo:(n,t)=>`Arrondir ${n} à ${t}`,pctChange:(a,p,up)=>`${up?"Augmenter":"Diminuer"} ${a} de ${p}%`,geoSeq:(a,ar,n)=>`Somme géo: ${a}+${ar}+… (${n})`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"Tous niveaux"},Easy:{desc:"Arithmétique"},Hard:{desc:"Multi-étapes"},Nightmare:{desc:"Fractions, racines"},Impossible:{desc:"Log, trigonométrie"}},
   es:{name:"Español",flag:"🇪🇸",tabs:["Calc","Fórmula","Conversión","Aleatorio","Gráfica","IA"],hist:"Hist.",clearAll:"borrar todo",copy:"copiar",copied:"✓ copiado",basic:"básico",sci:"científico",frac:"½ fracción",last:"↩ último",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← volver",calculate:"Calcular",result:"RESULTADO",sentCalc:"Enviado",unitSubUnits:"⇄ Unidades",unitSubOil:"🛢 Petróleo → Moneda",rollBtn:"¡Tirar!",flipBtn:"Lanzar",pickBtn:"Elegir",diceLabel:"🎲 DADOS",coinLabel:"🪙 MONEDA",rangeLabel:"🎯 RANGO",mathLabel:"🧮 PRÁCTICA",startBtn:(d,e)=>`Empezar — ${d} ${e}`,nextBtn:"Siguiente →",skipBtn:"saltar",checkBtn:"Verificar",answerPlaceholder:"Tu respuesta…",correct:"✓ ¡Correcto!",wrong:(a)=>`✗ Respuesta: ${a}`,resetScore:"reiniciar",hintBtn:"pista",aiPlaceholder:"Pregunta lo que quieras…",clearChat:"borrar",tryAsking:"INTENTA PREGUNTAR…",offlineEngine:"⚡ sin conexión",localEngine:"🧠 SLM+fundado",cloudEngine:"☁",modelDefault:"Claude (predeterminado)",thinking:"🧠 PENSANDO…",saveKey:"Guardar",removeKey:"eliminar",keyActive:"✓ Clave activa",orKeyDesc:"Clave gratis en openrouter.ai.",wgpuError:"WebGPU no disponible",wgpuDesc:"SLM necesita WebGPU. Chrome Android.",historyLabel:"HISTORIAL",noWebGPU:"requiere Chrome Android",loadingTokenizer:"Cargando…",loadingModel:"Descargando LFM2.5…",cachedNote:"En caché",precision:"PRECISIÓN · SIN CONEXIÓN · IA",fromLabel:"DE",toLabel:"A",swipeHint:"← deslizar para borrar",holdC:"mantener C = borrar",mathQ:{tagAdd:"Suma",tagSub:"Resta",tagMul:"Multiplicación",tagDiv:"División",tagSq:"Cuadrados",tagSqrt:"Raíz cuadrada",tagPct:"Porcentaje",tagFrac:"Fracciones",tagCbrt:"Raíz cúbica",tagPow:"Potencias",tagLog:"Logaritmo",tagTrig:"Trigonometría",tagQuad:"Cuadrática",tagSeq:"Sucesión",tagFin:"Finanzas",pctOf:(r,a)=>`${r}% de ${a}`,sumSeq:(a,b,c,n)=>`Suma: ${a}+${b}+${c}+… (${n})`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} al ${r}%/año ${n}años`,tagMissing:"Faltante",tagDouble:"Tablas",tagRound:"Redondeo",tagPctChg:"Cambio %",tagDecMul:"Decimales",tagAlg1:"Álgebra",tagAlg2:"Ec. cuadrática",tagNeg:"Negativos",tagGeo:"Serie geométrica",tagBinom:"Binomio",tagMod:"Módulo",tagSimult:"Simultáneas",tagDet:"Determinante",roundTo:(n,t)=>`Redondear ${n} a ${t}`,pctChange:(a,p,up)=>`${up?"Aumentar":"Disminuir"} ${a} un ${p}%`,geoSeq:(a,ar,n)=>`Suma geom.: ${a}+${ar}+… (${n})`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"Todos los niveles"},Easy:{desc:"Aritmética básica"},Hard:{desc:"Varios pasos"},Nightmare:{desc:"Fracciones, raíces"},Impossible:{desc:"Log, trigonometría"}},
   zh:{name:"中文",flag:"🇨🇳",tabs:["计算","公式","换算","随机","图形","AI"],hist:"历史",clearAll:"全部清除",copy:"复制",copied:"✓ 已复制",basic:"基础",sci:"科学",frac:"½ 分数",last:"↩ 上次",kbHint:"⌨ 0–9 · +-*/ · Enter · Esc",formulaBack:"← 返回",calculate:"计算",result:"结果",sentCalc:"已发送",unitSubUnits:"⇄ 单位",unitSubOil:"🛢 石油 → 货币",rollBtn:"掷骰!",flipBtn:"抛硬币",pickBtn:"随机选",diceLabel:"🎲 掷骰子",coinLabel:"🪙 硬币",rangeLabel:"🎯 范围",mathLabel:"🧮 数学练习",startBtn:(d,e)=>`开始 — ${d} ${e}`,nextBtn:"下一题 →",skipBtn:"跳过",checkBtn:"检查",answerPlaceholder:"你的答案…",correct:"✓ 正确！",wrong:(a)=>`✗ 答案是：${a}`,resetScore:"重置",hintBtn:"提示",aiPlaceholder:"随便问…",clearChat:"清除对话",tryAsking:"试试问…",offlineEngine:"⚡ 离线",localEngine:"🧠 SLM+接地",cloudEngine:"☁",modelDefault:"Claude (默认)",thinking:"🧠 思考中…",saveKey:"保存",removeKey:"删除",keyActive:"✓ 密钥已激活",orKeyDesc:"在openrouter.ai免费获取。",wgpuError:"WebGPU不可用",wgpuDesc:"SLM需要WebGPU，Chrome Android。",historyLabel:"历史记录",noWebGPU:"需要Chrome Android",loadingTokenizer:"加载分词器…",loadingModel:"下载LFM2.5…",cachedNote:"已缓存",precision:"精准·离线·AI",fromLabel:"从",toLabel:"到",swipeHint:"← 左划删除",holdC:"长按C=清除历史",mathQ:{tagAdd:"加法",tagSub:"减法",tagMul:"乘法",tagDiv:"除法",tagSq:"平方",tagSqrt:"平方根",tagPct:"百分比",tagFrac:"分数",tagCbrt:"立方根",tagPow:"幂次",tagLog:"对数",tagTrig:"三角函数",tagQuad:"二次方程",tagSeq:"数列",tagFin:"金融",pctOf:(r,a)=>`${a}的${r}%`,sumSeq:(a,b,c,n)=>`求和：${a}+${b}+${c}+… (${n}项)`,quadratic:(b,c)=>`x²${b}x${c}=0`,finance:(P,r,n)=>`${P} 年利率${r}% ${n}年`,tagMissing:"填数",tagDouble:"乘法表",tagRound:"四舍五入",tagPctChg:"百分比变化",tagDecMul:"小数",tagAlg1:"代数",tagAlg2:"二次方程",tagNeg:"负数",tagGeo:"等比数列",tagBinom:"二项式",tagMod:"取模",tagSimult:"联立方程",tagDet:"行列式",roundTo:(n,t)=>`将${n}四舍五入到${t}`,pctChange:(a,p,up)=>`将${a}${up?"增加":"减少"}${p}%`,geoSeq:(a,ar,n)=>`等比求和：${a}+${ar}+… (${n}项)`,simultaneous:(a,b,s,d)=>`${a}x+${b}y=${s}, x-y=${d}, x=?`}},diffConfig:{Random:{desc:"所有难度混合"},Easy:{desc:"基础四则运算"},Hard:{desc:"多步骤计算"},Nightmare:{desc:"分数、立方根"},Impossible:{desc:"对数、三角、数列"}},
@@ -1345,7 +1432,7 @@ function SmartCalc(){
       await workerSend("load",{});
       setLocalAiStatus("ready");setLocalAiProgress(100);setLocalAiPhase("");
       try{localStorage.setItem("sc_slm_cached","1");}catch{}
-      showToast("✓ Qwen2.5 sẵn sàng — AI offline trên thiết bị!","success");
+      showToast("✓ SmolLM2 sẵn sàng — AI offline trên thiết bị!","success");
     }catch(err){
       console.error("SLM load error:",err);
       setLocalAiPhase("");setLocalAiStatus("error");
@@ -1359,13 +1446,59 @@ function SmartCalc(){
       const mathFacts=extractMathFacts(text,angleMode);
       const groundedSystem=buildGroundedSLMPrompt(mathFacts);
       const messages=[{role:"system",content:groundedSystem},{role:"user",content:text}];
+
+      // Step 1: SmolLM2 translates natural language → math.js expression
       const result=await workerSend("run",{messages});
       const output=result?.[0]?.generated_text;
       const lastMsg=Array.isArray(output)?output[output.length-1]?.content:output;
       if(!lastMsg) return null;
-      const m=lastMsg.match(/{[\s\S]*}/);
-      if(m){try{return{...JSON.parse(m[0]),engine:"local",mathFacts};}catch{}}
-      return{answer:lastMsg.trim(),steps:[],expression:"",engine:"local",mathFacts};
+
+      // Step 2: Parse JSON from SmolLM2
+      const jsonMatch=lastMsg.match(/{[\s\S]*?}/);
+      if(!jsonMatch) return{answer:lastMsg.trim(),steps:[],expression:"",engine:"local",mathFacts};
+      let parsed;
+      try{parsed=JSON.parse(jsonMatch[0]);}catch{return{answer:lastMsg.trim(),steps:[],expression:"",engine:"local",mathFacts};}
+
+      // Step 3: If SmolLM2 gave a mathExpr → run through math.js for exact result
+      const expr=(parsed.mathExpr||"").trim();
+      if(expr){
+        try{
+          // Evaluate with full math.js engine
+          const rawResult=math.evaluate(expr,mathScope);
+          const num=typeof rawResult==="object"?math.number(rawResult):rawResult;
+          const answer=Array.isArray(rawResult)
+            ?JSON.stringify(rawResult)
+            :typeof rawResult==="object"&&rawResult.isMatrix
+              ?math.format(rawResult,{precision:8})
+              :isFinite(num)?parseFloat(num.toPrecision(12)).toString():String(rawResult);
+          const steps=[
+            `Biểu thức: ${expr}`,
+            ...(parsed.steps||[]),
+            `Kết quả: ${answer}`
+          ];
+          return{
+            answer,
+            steps,
+            expression:expr,
+            note:`🔧 math.js tính toán · SmolLM2 phiên dịch`,
+            engine:"local",
+            mathFacts
+          };
+        }catch(mathErr){
+          // math.js failed → fall back to SmolLM2 explanation only
+          console.warn("math.js eval failed:",mathErr.message,"expr:",expr);
+        }
+      }
+
+      // Step 4: No mathExpr or math.js failed → use SmolLM2 explanation as-is
+      return{
+        answer:parsed.explanation||parsed.answer||lastMsg.trim(),
+        steps:parsed.steps||[],
+        expression:expr||"",
+        note:"🧠 SmolLM2 offline",
+        engine:"local",
+        mathFacts
+      };
     }catch(err){console.error("SLM run error:",err);return null;}
   },[localAiStatus,angleMode,workerSend]);
 
@@ -2053,8 +2186,8 @@ function SmartCalc(){
               {/* SLM loader */}
               {localAiStatus==="idle"&&(
                 <div style={{marginBottom:"11px",background:"linear-gradient(135deg,rgba(140,100,240,.1),rgba(100,70,200,.06))",border:"1px solid rgba(140,100,240,.22)",borderRadius:"14px",padding:"12px 14px"}}>
-                  <div style={{color:"#b0a0e8",fontSize:".73rem",fontWeight:400,marginBottom:"4px"}}>🧠 On-Device AI (Qwen2.5-0.5B)</div>
-                  <div style={{color:"#7878b0",fontSize:".65rem",lineHeight:1.6,marginBottom:"9px"}}>Math-grounded: engine pre-verifies all numbers before passing to AI — eliminating hallucinations. Runs 100% offline after download (~400MB).</div>
+                  <div style={{color:"#b0a0e8",fontSize:".73rem",fontWeight:400,marginBottom:"4px"}}>🧠 On-Device AI (SmolLM2-135M)</div>
+                  <div style={{color:"#7878b0",fontSize:".65rem",lineHeight:1.6,marginBottom:"9px"}}>Math-grounded: engine pre-verifies all numbers before passing to AI — eliminating hallucinations. Runs 100% offline after download (~135MB).</div>
                   <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
                     <button className="sml acc" onClick={initLocalAI} style={{fontSize:".65rem"}}>⬇ Load offline AI</button>
                     <span style={{color:"#5858a0",fontSize:".6rem"}}>{t.cachedNote}</span>
@@ -2064,7 +2197,7 @@ function SmartCalc(){
               {(localAiStatus==="loading")&&(
                 <div style={{marginBottom:"11px",background:"rgba(0,0,0,.2)",borderRadius:"14px",padding:"12px 14px",border:"1px solid rgba(255,255,255,.1)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
-                    <span style={{color:"#a0a0d0",fontSize:".68rem",fontWeight:600}}>🧠 Đang tải Qwen2.5…</span>
+                    <span style={{color:"#a0a0d0",fontSize:".68rem",fontWeight:600}}>🧠 Đang tải SmolLM2-135M…</span>
                     <span style={{color:"#8080c0",fontSize:".68rem"}}>{localAiProgress}%</span>
                   </div>
                   <div style={{height:"5px",background:"rgba(255,255,255,.08)",borderRadius:"3px",overflow:"hidden",marginBottom:"7px"}}>
@@ -2074,7 +2207,7 @@ function SmartCalc(){
                     {localAiPhase||"Đang khởi động…"}
                   </div>
                   <div style={{color:"#454580",fontSize:".57rem",marginTop:"5px"}}>
-                    Lần đầu tải ~400MB • Sau đó cache lại, dùng offline được
+                    Lần đầu tải ~135MB • Sau đó cache lại, dùng offline được
                   </div>
                 </div>
               )}
