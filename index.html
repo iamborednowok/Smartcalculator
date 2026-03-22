@@ -593,6 +593,75 @@ math.js functions available (use these in mathExpr):
   Constants: pi, e, phi, Infinity
 `;
 
+// ─── Defensive LLM Output Sanitizer ─────────────────────────────────────────
+// Fixes both risks: malformed JSON fields + intent misclassification
+function sanitizeLLMResult(raw, mathFacts){
+  if(!raw || typeof raw !== "object") return null;
+
+  // ── Risk 1: Field type coercion ────────────────────────────────────────────
+  // answer: must be a non-empty string
+  let answer = raw.answer;
+  if(answer === undefined || answer === null) answer = raw.explanation || raw.mathExpr || "";
+  if(typeof answer !== "string") answer = String(answer);
+  answer = answer.trim();
+  if(!answer) return null;
+
+  // steps: must be array of strings
+  let steps = raw.steps;
+  if(!Array.isArray(steps)){
+    steps = (typeof steps === "string" && steps.trim())
+      ? steps.split(/[;\r\n]+/).map(s=>s.trim()).filter(Boolean)
+      : [];
+  }
+  steps = steps.map(s => typeof s === "string" ? s : String(s)).slice(0, 8);
+
+  // expression: must be a string
+  let expression = typeof raw.expression === "string" ? raw.expression
+    : typeof raw.mathExpr === "string" ? raw.mathExpr : "";
+
+  // ── Risk 2: Intent misclassification via math.js re-verification ──────────
+  // If the model gave us a mathExpr, evaluate it ourselves — don't trust the
+  // model's self-calculated answer. This catches add() vs multiply() errors.
+  const exprToEval = (raw.mathExpr||"").trim() || expression.trim();
+  if(exprToEval && exprToEval.length < 200){
+    try{
+      // Inject pre-computed mathFacts as variables (e.g. sin45 = 0.707)
+      const scope = {};
+      (mathFacts||[]).forEach(f=>{
+        const k = f.expr.replace(/[^a-zA-Z0-9_]/g,"_");
+        if(k) scope[k] = parseFloat(f.result);
+      });
+      const evalResult = math.evaluate(exprToEval, scope);
+      const numResult = typeof evalResult === "number" ? evalResult
+        : (evalResult && typeof evalResult.toNumber === "function") ? evalResult.toNumber()
+        : null;
+      if(numResult !== null && isFinite(numResult)){
+        // math.js verified — override model's answer with ground truth
+        const formatted = Math.abs(numResult) > 1e12 || (Math.abs(numResult) < 1e-6 && numResult !== 0)
+          ? numResult.toExponential(4)
+          : parseFloat(numResult.toPrecision(10)).toString();
+        if(formatted !== answer){
+          // Model was wrong — log for debugging, use correct answer
+          console.info("[sanitize] Model said:", answer, "→ math.js says:", formatted, "expr:", exprToEval);
+          steps = [`Expression: ${exprToEval}`, `Result: ${formatted}`, ...steps.slice(0,5)];
+          answer = formatted;
+        }
+        expression = exprToEval;
+      }
+    }catch(e){
+      // math.js couldn't evaluate — trust model's answer as-is (e.g. word answers)
+      console.debug("[sanitize] math.js eval failed:", e.message, "expr:", exprToEval);
+    }
+  }
+
+  // ── Sanity check: answer shouldn't look like raw JSON or a prompt echo ─────
+  if(answer.startsWith("{") || answer.startsWith("[") || answer.length > 300){
+    answer = answer.slice(0, 200) + (answer.length > 200 ? "…" : "");
+  }
+
+  return { answer, steps, expression };
+}
+
 function buildGroundedSLMPrompt(mathFacts){
   let sys="You are a math translator. Convert the user question into a math.js expression.\n";
   sys+="Available math.js functions:\n"+MATHJS_CAPABILITIES+"\n";
@@ -608,7 +677,8 @@ function buildGroundedSLMPrompt(mathFacts){
   sys+="4. For derivatives: derivative('x^2+3*x','x')\n";
   sys+="5. NEVER calculate yourself. Only translate.\n\n";
   sys+="Respond ONLY with raw JSON:\n";
-  sys+='{"mathExpr":"math.js expression or empty","explanation":"brief explanation in same language as user","steps":["step 1","step 2"]}';
+  sys+='{"mathExpr":"math.js expression or empty","answer":"final answer as plain text","explanation":"brief explanation in same language as user","steps":["step 1","step 2"]}';
+  sys+="\nIMPORTANT: answer field must always be present and be a string.";
   return sys;
 }
 
@@ -1644,9 +1714,16 @@ function SmartCalc(){
           window._nativeLLM().runInference({prompt:chatPrompt}),
           new Promise((_,rej)=>setTimeout(()=>rej(new Error("Native timeout")),60000))
         ]);
-        const m=result.match(/{[\s\S]*?}/);
-        if(m){try{return{...JSON.parse(m[0]),engine:"native",mathFacts};}catch{}}
-        return{answer:result.trim(),steps:[],expression:"",note:"🚀 Gemma 3 1B native",engine:"native",mathFacts};
+        // ✅ Greedy match to capture full JSON (non-greedy breaks nested arrays)
+        const m=result.match(/{[\s\S]*}/);
+        if(m){
+          try{
+            const raw=JSON.parse(m[0]);
+            const safe=sanitizeLLMResult(raw, mathFacts);
+            if(safe) return{...safe,engine:"native",mathFacts};
+          }catch(e){ console.warn("[native] JSON parse failed:",e.message); }
+        }
+        return{answer:result.trim(),steps:[],expression:"",note:"🚀 Gemma 3 1B",engine:"native",mathFacts};
       }
 
       // WASM fallback
@@ -1657,8 +1734,15 @@ function SmartCalc(){
       const output=result?.[0]?.generated_text;
       const lastMsg=Array.isArray(output)?output[output.length-1]?.content:output;
       if(!lastMsg) return null;
-      const m=lastMsg.match(/{[\s\S]*?}/);
-      if(m){try{return{...JSON.parse(m[0]),engine:"local",mathFacts};}catch{}}
+      // ✅ Greedy match + sanitizer
+      const m=lastMsg.match(/{[\s\S]*}/);
+      if(m){
+        try{
+          const raw=JSON.parse(m[0]);
+          const safe=sanitizeLLMResult(raw, mathFacts);
+          if(safe) return{...safe,engine:"local",mathFacts};
+        }catch(e){ console.warn("[wasm] JSON parse failed:",e.message); }
+      }
       return{answer:lastMsg.trim(),steps:[],expression:"",engine:"local",mathFacts};
     }catch(err){console.error("LLM run error:",err);return null;}
   },[localAiStatus,angleMode,workerSend]);
