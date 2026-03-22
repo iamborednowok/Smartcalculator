@@ -38,20 +38,45 @@ gradle_path = 'android/app/build.gradle'
 with open(gradle_path) as f:
     gradle = f.read()
 
-print('Original build.gradle:')
-print(gradle[:500])
+# BUG FIX: Remove the rootProject-based google-services block that causes
+# "Cannot get property 'rootProject' on null object" error at build.gradle line 8.
+# Capacitor generates a try/catch block that accesses rootProject before it's
+# initialized, crashing the build. We strip it out entirely since this app
+# doesn't use Firebase/Push Notifications.
+google_services_pattern = re.compile(
+    r'try\s*\{[^}]*google-services[^}]*\}[^\n]*\n?'
+    r'(?:[^\n]*\n?)*?'
+    r'[^\n]*google-services[^\n]*\n?',
+    re.DOTALL
+)
+# Simpler targeted removal: remove the specific try/catch block Capacitor adds
+gradle = re.sub(
+    r'try \{[^}]*def servicesJSON.*?google-services plugin not applied[^\n]*\n?\}',
+    '// google-services plugin removed (not needed - no Firebase)',
+    gradle,
+    flags=re.DOTALL
+)
+print('google-services block patched OK')
 
 mediapipe_dep = "    implementation 'com.google.mediapipe:tasks-genai:0.10.22'"
 if 'tasks-genai' not in gradle:
-    gradle = gradle.replace(
-        'dependencies {',
-        'dependencies {\n' + mediapipe_dep
-    )
-    print('MediaPipe dependency added')
+    # BUG FIX: Target the *last* dependencies { block (the app dependencies),
+    # not the first one (which may be a buildscript block), to avoid corrupting
+    # the wrong section of build.gradle.
+    last_dep_pos = gradle.rfind('dependencies {')
+    if last_dep_pos != -1:
+        gradle = gradle[:last_dep_pos + len('dependencies {')] + '\n' + mediapipe_dep + gradle[last_dep_pos + len('dependencies {'):]
+        print('MediaPipe dependency added')
+    else:
+        print('WARNING: Could not find dependencies block!')
 else:
     print('MediaPipe already present')
 
-# Bump versionCode and versionName only (NOT minSdk - handled by sed in workflow)
+# Bump minSdk to 24 (required by MediaPipe tasks-genai)
+gradle = re.sub(r'minSdkVersion\s+\d+', 'minSdkVersion 24', gradle)
+gradle = re.sub(r'minSdk\s*=?\s*\d+', 'minSdk 24', gradle)
+
+# Bump versionCode and versionName
 gradle = re.sub(r'versionCode \d+', f'versionCode {build_number}', gradle)
 gradle = re.sub(r'versionName "[^"]*"', f'versionName "1.{build_number}"', gradle)
 
@@ -71,19 +96,38 @@ with open(main_path) as f:
     main = f.read()
 
 if 'LLMPlugin' not in main:
+    # Add import for LLMPlugin (no ArrayList — it's not used)
     main = main.replace(
         'import com.getcapacitor.BridgeActivity;',
-        'import com.getcapacitor.BridgeActivity;\nimport com.getcapacitor.Plugin;\nimport java.util.ArrayList;'
+        'import com.getcapacitor.BridgeActivity;\nimport com.getcapacitor.Plugin;'
     )
-    main = main.replace(
-        'public class MainActivity extends BridgeActivity {',
-        'public class MainActivity extends BridgeActivity {\n'
-        '  @Override\n'
-        '  public void onCreate(android.os.Bundle savedInstanceState) {\n'
-        '    registerPlugin(LLMPlugin.class);\n'
-        '    super.onCreate(savedInstanceState);\n'
-        '  }'
-    )
+
+    # BUG FIX: Before inserting our onCreate, check whether the template already
+    # has one (Capacitor sometimes pre-generates it). If it does, just insert
+    # registerPlugin() as the first line inside the existing onCreate instead of
+    # creating a duplicate method (which would cause a compile error).
+    if 'void onCreate(' in main:
+        # Insert registerPlugin as first statement inside existing onCreate
+        main = re.sub(
+            r'(void onCreate\([^)]*\)\s*\{)',
+            r'\1\n    registerPlugin(LLMPlugin.class);',
+            main,
+            count=1
+        )
+        print('Inserted registerPlugin into existing onCreate OK')
+    else:
+        # No onCreate yet — inject a full override
+        main = main.replace(
+            'public class MainActivity extends BridgeActivity {',
+            'public class MainActivity extends BridgeActivity {\n'
+            '  @Override\n'
+            '  public void onCreate(android.os.Bundle savedInstanceState) {\n'
+            '    registerPlugin(LLMPlugin.class);\n'
+            '    super.onCreate(savedInstanceState);\n'
+            '  }'
+        )
+        print('MainActivity onCreate injected OK')
+
     with open(main_path, 'w') as f:
         f.write(main)
     print('MainActivity patched OK')

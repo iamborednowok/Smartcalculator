@@ -620,7 +620,7 @@ function offlineParser(text,unitsConfig,convertFn,fmtFn,ctx){
   // ── Giải phương trình bậc nhất: ax + b = c hoặc 2x + 3 = 11 ──
   m=t.match(/(-?\d+(?:\.\d+)?)\s*x\s*([+-]\s*\d+(?:\.\d+)?)\s*=\s*(-?\d+(?:\.\d+)?)/)||t.match(/(-?\d+(?:\.\d+)?)x\s*=\s*(-?\d+(?:\.\d+)?)/);
   if(m&&(t.includes("solve")||t.includes("x=")||t.match(/\d+x/))){
-    if(m[2]===undefined){const a=parseFloat(m[1]),c=parseFloat(m[2]||m[3]),x=c/a;return{answer:`x = ${fmtFn(x)}`,steps:[`${a}x = ${c}`,`x = ${c} ÷ ${a} = ${fmtFn(x)}`],expression:`x=${fmtFn(x)}`,engine:"offline"};}
+    if(m[3]===undefined){const a=parseFloat(m[1]),c=parseFloat(m[2]),x=c/a;return{answer:`x = ${fmtFn(x)}`,steps:[`${a}x = ${c}`,`x = ${c} ÷ ${a} = ${fmtFn(x)}`],expression:`x=${fmtFn(x)}`,engine:"offline"};}
     const a=parseFloat(m[1]),b=parseFloat(m[2].replace(/\s/g,"")),c=parseFloat(m[3]),x=(c-b)/a;
     return{answer:`x = ${fmtFn(x)}`,steps:[`${a}x + ${b} = ${c}`,`${a}x = ${c} - ${b} = ${c-b}`,`x = ${fmtFn(x)}`],expression:`x=${fmtFn(x)}`,engine:"offline"};
   }
