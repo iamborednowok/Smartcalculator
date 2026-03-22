@@ -3,10 +3,17 @@
   "appName": "SmartCalc",
   "webDir": "www",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true
   },
   "android": {
     "allowMixedContent": true,
-    "backgroundColor": "#06060f"
+    "backgroundColor": "#06060f",
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
   }
 }
