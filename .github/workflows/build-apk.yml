@@ -46,24 +46,56 @@ jobs:
 
       - name: Fix rootProject bug in build.gradle
         run: |
-          GRADLE=android/app/build.gradle
           python3 - <<'EOF'
           import re
+
+          def remove_gms_block(content):
+              lines = content.split('\n')
+              result = []
+              i = 0
+              while i < len(lines):
+                  line = lines[i]
+                  if re.match(r'\s*try\s*[\{\(]', line):
+                      block = [line]
+                      depth = line.count('{') - line.count('}')
+                      j = i + 1
+                      while j < len(lines) and depth > 0:
+                          block.append(lines[j])
+                          depth += lines[j].count('{') - lines[j].count('}')
+                          j += 1
+                      while j < len(lines) and re.match(r'\s*catch', lines[j]):
+                          block.append(lines[j])
+                          depth = lines[j].count('{') - lines[j].count('}')
+                          j += 1
+                          while j < len(lines) and depth > 0:
+                              block.append(lines[j])
+                              depth += lines[j].count('{') - lines[j].count('}')
+                              j += 1
+                      block_text = '\n'.join(block)
+                      if 'servicesJSON' in block_text or ('google-services' in block_text and 'apply plugin' in block_text):
+                          result.append('// google-services block removed (no Firebase)')
+                      else:
+                          result.extend(block)
+                      i = j
+                      continue
+                  result.append(line)
+                  i += 1
+              return '\n'.join(result)
+
           path = 'android/app/build.gradle'
           with open(path) as f:
               content = f.read()
-          fixed = re.sub(
-              r'try\s*\{[^{}]*?(?:google-services|servicesJSON)[^{}]*?\}[^\n]*\n?',
-              '// google-services removed (no Firebase used)\n',
-              content,
-              flags=re.DOTALL
-          )
+          fixed = remove_gms_block(content)
           with open(path, 'w') as f:
               f.write(fixed)
           print("build.gradle rootProject fix applied")
+          if 'servicesJSON' in fixed:
+              print("WARNING: servicesJSON still present!")
+          else:
+              print("OK: servicesJSON block removed successfully")
           EOF
-          echo "=== build.gradle lines 1-15 ==="
-          head -15 $GRADLE
+          echo "=== build.gradle lines 1-20 ==="
+          head -20 android/app/build.gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
