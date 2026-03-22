@@ -36,25 +36,62 @@ def fail(msg): print(f"   ❌ {msg}"); sys.exit(1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 1: Copy stable templates (no regex, no parsing, just shutil.copy)
+# Step 1: Write stable templates inline (no external templates/ folder needed)
 # ═══════════════════════════════════════════════════════════════════════════════
-step("Copying templates")
+step("Writing templates")
 
-# 1a. variables.gradle → android/variables.gradle
-# Capacitor's android/build.gradle already contains:
-#   apply from: "../variables.gradle"
-# so dropping our file there is all that's needed.
-shutil.copy("templates/variables.gradle", VARIABLES_DST)
-ok(f"variables.gradle → {VARIABLES_DST}")
+# 1a. variables.gradle — written inline so repo doesn't need a templates/ folder
+# Capacitor's android/build.gradle already has: apply from: "../variables.gradle"
+VARIABLES_CONTENT = """// SmartCalc SDK config — read by Capacitor automatically
+ext {
+    minSdkVersion     = 24   // required by MediaPipe tasks-genai
+    compileSdkVersion = 34
+    targetSdkVersion  = 34
+    androidxActivityVersion          = '1.9.0'
+    androidxAppCompatVersion         = '1.7.0'
+    androidxCoordinatorLayoutVersion = '1.2.0'
+    androidxCoreVersion              = '1.13.1'
+    androidxFragmentVersion          = '1.8.1'
+    coreSplashScreenVersion          = '1.0.1'
+    androidxWebkitVersion            = '1.11.0'
+    junitVersion                     = '4.13.2'
+    androidxJunitVersion             = '1.2.1'
+    androidxEspressoCoreVersion      = '3.6.1'
+    cordovaAndroidVersion            = '10.0.0'
+}
+"""
+with open(VARIABLES_DST, "w") as f:
+    f.write(VARIABLES_CONTENT)
+ok(f"variables.gradle written → {VARIABLES_DST}")
 
-# 1b. mediapipe.gradle → android/mediapipe.gradle
-shutil.copy("templates/mediapipe.gradle", MEDIAPIPE_DST)
-ok(f"mediapipe.gradle → {MEDIAPIPE_DST}")
+# 1b. mediapipe.gradle — applied via `apply from:` instead of dep-block injection
+MEDIAPIPE_CONTENT = """// MediaPipe / LiteRT dependency
+dependencies {
+    implementation 'com.google.mediapipe:tasks-genai:0.10.22'
+}
+"""
+with open(MEDIAPIPE_DST, "w") as f:
+    f.write(MEDIAPIPE_CONTENT)
+ok(f"mediapipe.gradle written → {MEDIAPIPE_DST}")
 
-# 1c. MainActivity.java → copied verbatim, zero regex
+# 1c. MainActivity.java — written verbatim, zero regex on generated files
 os.makedirs(PLUGIN_DIR, exist_ok=True)
-shutil.copy("templates/MainActivity.java", os.path.join(PLUGIN_DIR, "MainActivity.java"))
-ok("MainActivity.java copied (no regex)")
+MAIN_ACTIVITY_CONTENT = f"""package {APP_ID};
+
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {{
+    @Override
+    public void onCreate(Bundle savedInstanceState) {{
+        registerPlugin(LLMPlugin.class);
+        super.onCreate(savedInstanceState);
+    }}
+}}
+"""
+with open(os.path.join(PLUGIN_DIR, "MainActivity.java"), "w") as f:
+    f.write(MAIN_ACTIVITY_CONTENT)
+ok("MainActivity.java written (no regex)")
 
 # 1d. LLMPlugin.java
 shutil.copy("LLMPlugin.java", os.path.join(PLUGIN_DIR, "LLMPlugin.java"))
@@ -202,9 +239,27 @@ else:
     ok("mediapipe.gradle already applied")
 
 
-# ── 3c. versionCode / versionName — set build number ─────────────────────────
-# These patterns match BOTH Capacitor 6 (rootProject.ext.*) and plain numbers.
-# Using re.sub on individual lines is much safer than multi-line regex.
+# ── 3c. Replace ALL rootProject.ext.* SDK references with hardcoded values ───
+# compileSdk/minSdk/targetSdk also use rootProject.ext.* in Capacitor 6.
+# variables.gradle resolves them at Gradle eval time, but our safety check
+# runs before Gradle, so we replace them explicitly here too.
+SDK_SUBS = [
+    (r'(compileSdk(?:Version)?\s+)rootProject\.ext\.compileSdkVersion', r'\g<1>34'),
+    (r'(targetSdk(?:Version)?\s+)rootProject\.ext\.targetSdkVersion',   r'\g<1>34'),
+    (r'(minSdk(?:Version)?\s+)rootProject\.ext\.minSdkVersion',         r'\g<1>24'),
+    (r'(compileSdk\s*=\s*)rootProject\.ext\.compileSdkVersion',         r'\g<1>34'),
+    (r'(targetSdk\s*=\s*)rootProject\.ext\.targetSdkVersion',           r'\g<1>34'),
+    (r'(minSdk\s*=\s*)rootProject\.ext\.minSdkVersion',                 r'\g<1>24'),
+]
+new_lines = []
+for line in lines:
+    for pat, rep in SDK_SUBS:
+        line = re.sub(pat, rep, line)
+    new_lines.append(line)
+lines = new_lines
+ok("compileSdk/minSdk/targetSdk rootProject refs replaced")
+
+# versionCode / versionName — set build number
 new_lines = []
 for line in lines:
     line = re.sub(
