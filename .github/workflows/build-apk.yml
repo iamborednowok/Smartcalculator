@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install dependencies
         run: npm install
@@ -34,6 +34,52 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Patch Android
+        run: python3 patch_android.py ${{ github.run_number }}
+
+      - name: Force minSdk 24 for MediaPipe
+        run: |
+          # Capacitor 6 uses 'minSdk' without 'Version'
+          sed -i 's/minSdk [0-9]*/minSdk 24/g' android/app/build.gradle
+          sed -i 's/minSdkVersion [0-9]*/minSdkVersion 24/g' android/app/build.gradle
+          echo "Current minSdk setting:"
+          grep -i "minsdk" android/app/build.gradle
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartCalc-v${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: v${{ github.run_number }}
+          name: SmartCalc v${{ github.run_number }}
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          generate_release_notes: false
+          body: SmartCalc v${{ github.run_number }} - tai app-debug.apk ve cai tren Android
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Patch Android
         run: python3 patch_android.py ${{ github.run_number }}
 
