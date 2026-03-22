@@ -36,18 +36,24 @@
       }
       d.innerHTML += msg + '\n';
     };
-    window.onerror = function(msg, src, line) {
-      window.__showError('JS Error: ' + msg + '\n  at ' + src + ':' + line);
+    // crossorigin="anonymous" required to get real error messages from CDN scripts
+    window.onerror = function(msg, src, line, col, err) {
+      var detail = err ? err.stack : (msg + ' at ' + src + ':' + line);
+      window.__showError('JS Error: ' + detail);
+      return false;
     };
+    window.addEventListener('unhandledrejection', function(e) {
+      window.__showError('Promise Error: ' + (e.reason && e.reason.stack || e.reason));
+    });
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js"
-    onerror="window.__showError('FAILED: math.min.js - no internet or CDN blocked')"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"
-    onerror="window.__showError('FAILED: react.production.min.js')"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"
-    onerror="window.__showError('FAILED: react-dom.production.min.js')"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"
-    onerror="window.__showError('FAILED: babel-standalone - this is the main cause of blank screen')"></script>
+  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js"
+    onerror="window.__showError('FAILED to load: math.min.js')"></script>
+  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"
+    onerror="window.__showError('FAILED to load: react.production.min.js')"></script>
+  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"
+    onerror="window.__showError('FAILED to load: react-dom.production.min.js')"></script>
+  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"
+    onerror="window.__showError('FAILED to load: babel-standalone')"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
