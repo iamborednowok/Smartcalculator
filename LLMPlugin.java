@@ -109,8 +109,6 @@ public class LLMPlugin extends Plugin {
                 LlmInference.LlmInferenceOptions opts = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(path)
                     .setMaxTokens(512)
-                    .setTemperature(0.1f)
-                    .setTopK(1)
                     .build();
                 llmInference = LlmInference.createFromOptions(getContext(), opts);
                 call.resolve();
