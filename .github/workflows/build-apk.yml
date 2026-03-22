@@ -112,4 +112,4 @@ XMLEOF
             > Cần bật: Cài đặt → Bảo mật → Cho phép cài từ nguồn không xác định
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+      name
