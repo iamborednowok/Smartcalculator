@@ -34,6 +34,28 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Allow external network requests
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/network_security_config.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+            <base-config cleartextTrafficPermitted="true">
+              <trust-anchors>
+                <certificates src="system"/>
+              </trust-anchors>
+            </base-config>
+            <domain-config cleartextTrafficPermitted="true">
+              <domain includeSubdomains="true">api.anthropic.com</domain>
+              <domain includeSubdomains="true">openrouter.ai</domain>
+              <domain includeSubdomains="true">cdn.jsdelivr.net</domain>
+              <domain includeSubdomains="true">huggingface.co</domain>
+            </domain-config>
+          </network-security-config>
+          XMLEOF
+          # Patch AndroidManifest.xml to use network security config
+          sed -i 's/<application/<application android:networkSecurityConfig="@xml\/network_security_config"/' android/app/src/main/AndroidManifest.xml
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
