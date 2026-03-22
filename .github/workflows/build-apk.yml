@@ -3,7 +3,7 @@ name: Build APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # cho phép bấm Run thủ công trên GitHub
+  workflow_dispatch:
 
 jobs:
   build:
@@ -34,27 +34,42 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Allow external network requests
+      - name: Fix network & permissions
         run: |
+          # 1. Thêm INTERNET permission và network security config vào AndroidManifest
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          # Thêm INTERNET permission nếu chưa có
+          if ! grep -q "INTERNET" "$MANIFEST"; then
+            sed -i 's/<manifest/<manifest\n    xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/' "$MANIFEST" || true
+            sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>\n    <application/' "$MANIFEST"
+          fi
+
+          # Gắn networkSecurityConfig vào <application tag (chỉ nếu chưa có)
+          if ! grep -q "networkSecurityConfig" "$MANIFEST"; then
+            sed -i 's/<application/<application android:networkSecurityConfig="@xml\/network_security_config"/' "$MANIFEST"
+          fi
+
+          # 2. Tạo network_security_config.xml
           mkdir -p android/app/src/main/res/xml
           cat > android/app/src/main/res/xml/network_security_config.xml << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <network-security-config>
-            <base-config cleartextTrafficPermitted="true">
-              <trust-anchors>
-                <certificates src="system"/>
-              </trust-anchors>
-            </base-config>
-            <domain-config cleartextTrafficPermitted="true">
-              <domain includeSubdomains="true">api.anthropic.com</domain>
-              <domain includeSubdomains="true">openrouter.ai</domain>
-              <domain includeSubdomains="true">cdn.jsdelivr.net</domain>
-              <domain includeSubdomains="true">huggingface.co</domain>
-            </domain-config>
-          </network-security-config>
-          XMLEOF
-          # Patch AndroidManifest.xml to use network security config
-          sed -i 's/<application/<application android:networkSecurityConfig="@xml\/network_security_config"/' android/app/src/main/AndroidManifest.xml
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system"/>
+    </trust-anchors>
+  </base-config>
+</network-security-config>
+XMLEOF
+
+      - name: Bump versionCode to avoid install conflict
+        run: |
+          # Tự động tăng versionCode mỗi lần build → tránh xung đột khi cài đè
+          BUILD_GRADLE="android/app/build.gradle"
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/" "$BUILD_GRADLE"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"1.${{ github.run_number }}\"/" "$BUILD_GRADLE"
+          echo "Version: 1.${{ github.run_number }} (code: ${{ github.run_number }})"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -73,10 +88,10 @@ jobs:
           cd android
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartCalc-APK
+          name: SmartCalc-v${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
@@ -89,10 +104,12 @@ jobs:
           files: android/app/build/outputs/apk/debug/app-debug.apk
           generate_release_notes: false
           body: |
-            📱 **SmartCalc APK**
-            
+            📱 **SmartCalc v${{ github.run_number }}**
+
             Tải file `app-debug.apk` về → cài trên Android.
-            
+
+            > ℹ️ Nếu báo xung đột khi cài: **gỡ cài đặt app cũ trước** rồi cài lại.
             > Cần bật: Cài đặt → Bảo mật → Cho phép cài từ nguồn không xác định
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
