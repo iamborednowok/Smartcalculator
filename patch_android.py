@@ -77,8 +77,10 @@ gradle = re.sub(r'minSdkVersion\s+\d+', 'minSdkVersion 24', gradle)
 gradle = re.sub(r'minSdk\s*=?\s*\d+', 'minSdk 24', gradle)
 
 # Bump versionCode and versionName
-gradle = re.sub(r'versionCode \d+', f'versionCode {build_number}', gradle)
-gradle = re.sub(r'versionName "[^"]*"', f'versionName "1.{build_number}"', gradle)
+# Capacitor 6 generates rootProject.ext.versionCode (not a plain number!)
+# so we match BOTH forms to avoid "rootProject on null object" crash at line 8.
+gradle = re.sub(r'versionCode\s+(?:rootProject\.ext\.versionCode|\d+)', f'versionCode {build_number}', gradle)
+gradle = re.sub(r'versionName\s+(?:rootProject\.ext\.versionName|"[^"]*")', f'versionName "1.{build_number}"', gradle)
 
 with open(gradle_path, 'w') as f:
     f.write(gradle)
