@@ -33,93 +33,79 @@ jobs:
         run: |
           mkdir -p www
           cp index.html www/index.html
-          echo "www contents:"
-          ls -la www/
 
       - name: Add Android platform
         run: npx cap add android
 
       - name: Sync Capacitor
-        run: |
-          ls -la www/
-          npx cap sync android
+        run: npx cap sync android
 
-      - name: Print build.gradle (debug)
+      - name: Fix build.gradle (rootProject bug)
         run: |
-          echo "=== FULL android/app/build.gradle ==="
-          cat android/app/build.gradle
-          echo "=== END ==="
+          GRADLE=android/app/build.gradle
+          echo "=== BEFORE FIX (lines 1-20) ==="
+          head -20 $GRADLE
 
-      - name: Fix rootProject bug in build.gradle
-        run: |
-          python3 - <<'EOF'
+          # Fix 1: Replace rootProject.ext.versionCode/versionName with real values
+          # Capacitor 6 generates these references which crash Gradle at startup
+          sed -i "s/versionCode\s*rootProject\.ext\.versionCode/versionCode ${{ github.run_number }}/g" $GRADLE
+          sed -i "s/versionName\s*rootProject\.ext\.versionName/versionName \"1.${{ github.run_number }}\"/g" $GRADLE
+
+          # Fix 2: Remove the google-services try/catch block (no Firebase used)
+          # This block also uses rootProject and causes the same crash
+          python3 - << 'EOF'
           import re
-
           path = 'android/app/build.gradle'
           with open(path) as f:
-              content = f.read()
+              lines = f.readlines()
 
-          # Most robust approach: regex that handles one level of nested braces
-          # Matches: try { ... servicesJSON ... { ... } ... } catch(...) { ... }
-          fixed = re.sub(
-              r'try\s*\{(?:[^{}]|\{[^{}]*\})*servicesJSON(?:[^{}]|\{[^{}]*\})*\}'
-              r'\s*catch\s*\([^)]*\)\s*\{[^}]*\}',
-              '// google-services removed (no Firebase)',
-              content,
-              flags=re.DOTALL
-          )
-
-          if fixed == content:
-              # Fallback: line-by-line brace counter
-              print("Regex did not match — trying line-by-line parser")
-              lines = content.split('\n')
-              result = []
-              i = 0
-              while i < len(lines):
-                  line = lines[i]
-                  if re.match(r'\s*try\s*\{', line):
-                      block = [line]
-                      depth = line.count('{') - line.count('}')
-                      j = i + 1
+          result = []
+          i = 0
+          while i < len(lines):
+              line = lines[i]
+              if re.match(r'\s*try\s*\{', line):
+                  block = [line]
+                  depth = line.count('{') - line.count('}')
+                  j = i + 1
+                  while j < len(lines) and depth > 0:
+                      block.append(lines[j])
+                      depth += lines[j].count('{') - lines[j].count('}')
+                      j += 1
+                  while j < len(lines) and re.match(r'\s*catch', lines[j]):
+                      block.append(lines[j])
+                      depth = lines[j].count('{') - lines[j].count('}')
+                      j += 1
                       while j < len(lines) and depth > 0:
                           block.append(lines[j])
                           depth += lines[j].count('{') - lines[j].count('}')
                           j += 1
-                      while j < len(lines) and re.match(r'\s*catch', lines[j]):
-                          block.append(lines[j])
-                          depth = lines[j].count('{') - lines[j].count('}')
-                          j += 1
-                          while j < len(lines) and depth > 0:
-                              block.append(lines[j])
-                              depth += lines[j].count('{') - lines[j].count('}')
-                              j += 1
-                      block_text = '\n'.join(block)
-                      if 'servicesJSON' in block_text:
-                          result.append('// google-services removed (no Firebase)')
-                      else:
-                          result.extend(block)
-                      i = j
-                      continue
-                  result.append(line)
-                  i += 1
-              fixed = '\n'.join(result)
+                  block_text = ''.join(block)
+                  if 'servicesJSON' in block_text or 'google-services' in block_text:
+                      result.append('// google-services block removed\n')
+                      print(f"Removed google-services block ({len(block)} lines)")
+                  else:
+                      result.extend(block)
+                  i = j
+                  continue
+              result.append(line)
+              i += 1
 
           with open(path, 'w') as f:
-              f.write(fixed)
+              f.writelines(result)
 
-          if 'servicesJSON' in fixed:
-              print("ERROR: servicesJSON block still present — fix failed!")
-              print("Lines containing servicesJSON:")
-              for i, l in enumerate(fixed.split('\n'), 1):
-                  if 'servicesJSON' in l:
-                      print(f"  line {i}: {l}")
+          # Verify no rootProject references remain
+          content = open(path).read()
+          remaining = [l for l in content.split('\n') if 'rootProject' in l]
+          if remaining:
+              print("ERROR: rootProject still present:")
+              for l in remaining:
+                  print(f"  {l}")
               exit(1)
-          else:
-              print("OK: google-services block removed successfully")
-
+          print("OK: No rootProject references remain")
           EOF
-          echo "=== build.gradle after fix ==="
-          head -20 android/app/build.gradle
+
+          echo "=== AFTER FIX (lines 1-20) ==="
+          head -20 $GRADLE
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -131,7 +117,7 @@ jobs:
         run: |
           sed -i 's/minSdk [0-9]*/minSdk 24/g' android/app/build.gradle
           sed -i 's/minSdkVersion [0-9]*/minSdkVersion 24/g' android/app/build.gradle
-          echo "Current minSdk setting:"
+          echo "minSdk setting:"
           grep -i "minsdk" android/app/build.gradle
 
       - name: Make gradlew executable
@@ -157,9 +143,7 @@ jobs:
             SIZE=$(du -sh "$APK" | cut -f1)
             echo "✅ APK found! Size: $SIZE"
           else
-            echo "❌ APK not found at $APK"
-            echo "=== Last 50 lines of build log ==="
-            tail -50 android/build.log || echo "(no log)"
+            echo "❌ APK not found"
             exit 1
           fi
 
