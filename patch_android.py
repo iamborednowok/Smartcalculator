@@ -219,7 +219,7 @@ lines = remove_google_services_block(lines)
 # ── 3b. Inject `apply from: '../../mediapipe.gradle'` once ───────────────────
 # Find the last `apply plugin:` line and insert after it — much safer than
 # injecting into a dependencies{} block via string search.
-mediapipe_apply = "apply from: '../../mediapipe.gradle'\n"
+mediapipe_apply = "apply from: '../mediapipe.gradle'\n"
 full_text = ''.join(lines)
 
 if mediapipe_apply.strip() not in full_text:
