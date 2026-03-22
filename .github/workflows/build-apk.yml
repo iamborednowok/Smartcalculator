@@ -60,7 +60,9 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace 2>&1 | tail -100
+          ./gradlew assembleDebug
+          echo "=== APK files found ==="
+          find . -name "*.apk" 2>/dev/null
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
