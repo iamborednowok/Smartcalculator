@@ -927,36 +927,296 @@ const DICE_TYPES=[4,6,8,10,12,20,100];
 const rn=(range,min=1)=>Math.floor(Math.random()*range)+min;
 const ri=(n)=>Math.floor(Math.random()*n);
 const fix=(n,d=4)=>parseFloat(n.toFixed(d));
+
+// ── Smart Answer Parser + Checker ────────────────────────────────────────────
+// Pipeline:
+//  1. Normalize text (unicode fractions, words, Vietnamese, commas)
+//  2. Try math.js evaluate (handles expressions, fractions, powers)
+//  3. Fallback to text-word parsing (one half, âm ba, etc.)
+//  4. Compare with adaptive tolerance
+
+const WORD_MAP = {
+  // English
+  "zero":0,"one":1,"two":2,"three":3,"four":4,"five":5,"six":6,"seven":7,
+  "eight":8,"nine":9,"ten":10,"eleven":11,"twelve":12,"thirteen":13,
+  "fourteen":14,"fifteen":15,"sixteen":16,"seventeen":17,"eighteen":18,
+  "nineteen":19,"twenty":20,"thirty":30,"forty":40,"fifty":50,"sixty":60,
+  "seventy":70,"eighty":80,"ninety":90,"hundred":100,"thousand":1000,
+  "half":0.5,"quarter":0.25,"third":1/3,
+  "positive":1,"negative":-1,"minus":-1,"plus":1,
+  // Vietnamese
+  "không":0,"một":1,"hai":2,"ba":3,"bốn":4,"năm":5,"sáu":6,"bảy":7,
+  "tám":8,"chín":9,"mười":10,"mười một":11,"mười hai":12,"mười ba":13,
+  "mười bốn":14,"mười lăm":15,"hai mươi":20,"ba mươi":30,"bốn mươi":40,
+  "năm mươi":50,"sáu mươi":60,"bảy mươi":70,"tám mươi":80,"chín mươi":90,
+  "trăm":100,"nghìn":1000,"âm":-1,"dương":1,"nửa":0.5,"một phần hai":0.5,
+  "một phần ba":1/3,"một phần tư":0.25,"ba phần tư":0.75,
+  "hai phần ba":2/3,"ba phần năm":3/5,
+  // Words for ops
+  "squared":2,"cubed":3,"mũ":null,"lũy thừa":null,
+};
+
+function normalizeInput(raw) {
+  let s = String(raw).trim();
+  // Unicode fractions → decimal
+  s = s.replace(/½/g,"0.5").replace(/⅓/g,"0.3333").replace(/⅔/g,"0.6667")
+       .replace(/¼/g,"0.25").replace(/¾/g,"0.75").replace(/⅕/g,"0.2")
+       .replace(/⅖/g,"0.4").replace(/⅗/g,"0.6").replace(/⅘/g,"0.8")
+       .replace(/⅙/g,"0.1667").replace(/⅛/g,"0.125").replace(/⅜/g,"0.375")
+       .replace(/⅝/g,"0.625").replace(/⅞/g,"0.875");
+  // Superscript numbers
+  s = s.replace(/²/g,"^2").replace(/³/g,"^3").replace(/⁴/g,"^4")
+       .replace(/⁵/g,"^5").replace(/⁶/g,"^6").replace(/⁷/g,"^7")
+       .replace(/⁸/g,"^8").replace(/⁹/g,"^9");
+  // Vietnamese/common math words
+  s = s.replace(/căn bậc hai|sqrt của|square root of/gi,"sqrt(").replace(/⟩/g,")");
+  s = s.replace(/căn của\s+(\.+)/gi,"sqrt($1)");
+  s = s.replace(/log cơ số\s+(\d+)\s+của\s+(\d+)/gi,"log($2,$1)");
+  s = s.replace(/bình phương/gi,"^2").replace(/lập phương/gi,"^3");
+  s = s.replace(/mũ\s+(\d+)/gi,"^$1");
+  s = s.replace(/nhân/gi,"*").replace(/chia/gi,"/").replace(/cộng/gi,"+").replace(/trừ/gi,"-");
+  s = s.replace(/times|multiplied by/gi,"*").replace(/divided by/gi,"/")
+       .replace(/plus/gi,"+").replace(/minus|subtract/gi,"-");
+  // Comma as thousands separator (1,234) vs decimal (1,5)
+  if(/\d,\d{3}/.test(s)) s = s.replace(/,(\d{3})/g,"$1"); // 1,234 → 1234
+  else s = s.replace(/,/g,".");  // 1,5 → 1.5 (European decimal)
+  // ×÷−
+  s = s.replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-").replace(/–/g,"-");
+  return s.trim();
+}
+
+function tryWordParse(s) {
+  const low = s.toLowerCase().trim();
+  // Direct word lookup (multi-word first)
+  const multiWords = Object.keys(WORD_MAP).filter(k=>k.includes(" ")).sort((a,b)=>b.length-a.length);
+  for(const w of multiWords) {
+    if(low===w) return WORD_MAP[w];
+  }
+  // Single words
+  if(WORD_MAP[low]!==undefined&&WORD_MAP[low]!==null) return WORD_MAP[low];
+  // "negative five" / "âm ba"
+  const negMatch = low.match(/^(?:negative|minus|âm)\s+(.+)$/);
+  if(negMatch) {
+    const v = tryWordParse(negMatch[1]);
+    if(!isNaN(v)) return -v;
+  }
+  // "twenty five" → 25
+  const parts = low.split(/\s+/);
+  if(parts.length===2&&WORD_MAP[parts[0]]!==undefined&&WORD_MAP[parts[1]]!==undefined) {
+    const a=WORD_MAP[parts[0]],b=WORD_MAP[parts[1]];
+    if(a!==null&&b!==null) return a+b;
+  }
+  return NaN;
+}
+
+function parseAnswer(raw) {
+  if(raw===null||raw===undefined) return NaN;
+  const normalized = normalizeInput(String(raw));
+  if(!normalized) return NaN;
+
+  // 1. Try math.js — handles: 3/4, 2^8, sqrt(16), (3+4)*2, sin(30*pi/180)
+  try {
+    const scope = Object.create(mathScope);
+    const r = math.evaluate(normalized, scope);
+    const n = typeof r==="object"?math.number(r):Number(r);
+    if(isFinite(n)) return n;
+  } catch{}
+
+  // 2. Mixed number "1 3/4"
+  const mixed = normalized.match(/^(-?\d+)\s+(\d+)\/(\d+)$/);
+  if(mixed) return parseInt(mixed[1]) + parseInt(mixed[2])/parseInt(mixed[3]);
+
+  // 3. Plain float
+  const plain = parseFloat(normalized);
+  if(!isNaN(plain)) return plain;
+
+  // 4. Word parse (original raw, before normalization)
+  const wordVal = tryWordParse(String(raw).trim());
+  if(!isNaN(wordVal)) return wordVal;
+
+  return NaN;
+}
+
+function checkMathAnswer(userRaw, correct) {
+  const user = parseAnswer(userRaw);
+  if(isNaN(user)) {
+    // Last resort: string compare (for "no", "yes", etc.)
+    return String(userRaw).trim().toLowerCase()===String(correct).trim().toLowerCase();
+  }
+  const c = parseAnswer(correct);
+  if(isNaN(c)) return false;
+  // Adaptive tolerance: tighter for small numbers, looser for large
+  const mag = Math.abs(c);
+  const tol = mag < 1 ? 0.0001 : mag < 100 ? 0.001 : mag < 10000 ? 0.01 : mag * 0.00001;
+  return Math.abs(user - c) <= tol;
+}
+
 function getMathProblems(mq){
+  const gcd=(a,b)=>b===0?a:gcd(b,a%b);
+  const simplify=(n,d)=>{const g=gcd(Math.abs(n),Math.abs(d));return[n/g,d/g];};
+  const fmtFrac=(n,d)=>{const[sn,sd]=simplify(n,d);return sd===1?`${sn}`:`${sn}/${sd}`;};
+  // Pick from array randomly
+  const pick=arr=>arr[ri(arr.length)];
+  // Random prime from small list
+  const primes=[2,3,5,7,11,13,17,19,23,29,31,37,41,43,47];
+
   return [
-    {tag:mq.tagAdd,level:"Easy",gen:()=>{const a=rn(50),b=rn(50);return{q:`${a} + ${b}`,a:a+b};}},
-    {tag:mq.tagSub,level:"Easy",gen:()=>{const a=rn(50,10),b=rn(a-1,1);return{q:`${a} − ${b}`,a:a-b};}},
+    // ── EASY ────────────────────────────────────────────────────────────────
+    {tag:mq.tagAdd,level:"Easy",gen:()=>{const a=rn(99,1),b=rn(99,1);return{q:`${a} + ${b}`,a:a+b};}},
+    {tag:mq.tagAdd,level:"Easy",gen:()=>{const a=rn(999,10),b=rn(999,10);return{q:`${a} + ${b}`,a:a+b};}},
+    {tag:mq.tagSub,level:"Easy",gen:()=>{const b=rn(90,5),a=b+rn(90,5);return{q:`${a} − ${b}`,a:a-b};}},
+    {tag:mq.tagSub,level:"Easy",gen:()=>{const b=rn(500,10),a=b+rn(500,10);return{q:`${a} − ${b}`,a:a-b};}},
     {tag:mq.tagMul,level:"Easy",gen:()=>{const a=rn(12,2),b=rn(12,2);return{q:`${a} × ${b}`,a:a*b};}},
-    {tag:mq.tagDiv,level:"Easy",gen:()=>{const b=rn(9,2),a=b*rn(9,1);return{q:`${a} ÷ ${b}`,a:a/b};}},
-    {tag:mq.tagSq,level:"Easy",gen:()=>{const n=rn(12,2);return{q:`${n}²`,a:n*n};}},
-    {tag:mq.tagSqrt,level:"Easy",gen:()=>{const n=[1,4,9,16,25,36,49,64,81,100,121,144,169,196,225][ri(15)];return{q:`√${n}`,a:Math.sqrt(n)};}},
-    {tag:mq.tagPct,level:"Easy",gen:()=>{const a=rn(80,10),r=[5,10,15,20,25,50][ri(6)];return{q:mq.pctOf(r,a),a:a*r/100};}},
-    {tag:mq.tagAdd,level:"Hard",gen:()=>{const a=rn(9000,1000),b=rn(9000,1000);return{q:`${a} + ${b}`,a:a+b};}},
-    {tag:mq.tagMul,level:"Hard",gen:()=>{const a=rn(50,10),b=rn(20,5);return{q:`${a} × ${b}`,a:a*b};}},
+    {tag:mq.tagMul,level:"Easy",gen:()=>{const a=pick([11,12,15,20,25]),b=rn(9,2);return{q:`${a} × ${b}`,a:a*b};}},
+    {tag:mq.tagDiv,level:"Easy",gen:()=>{const b=rn(9,2),q=rn(12,1);return{q:`${b*q} ÷ ${b}`,a:q};}},
+    {tag:mq.tagSq,level:"Easy",gen:()=>{const n=rn(15,2);return{q:`${n}²`,a:n*n};}},
+    {tag:mq.tagSqrt,level:"Easy",gen:()=>{const n=rn(15,1),sq=n*n;return{q:`√${sq}`,a:n};}},
+    {tag:mq.tagPct,level:"Easy",gen:()=>{const a=pick([20,40,50,60,80,100,120,200]),r=pick([5,10,20,25,50]);return{q:mq.pctOf(r,a),a:a*r/100};}},
+    {tag:mq.tagPct,level:"Easy",gen:()=>{const a=rn(200,10),r=pick([10,20,50]);return{q:mq.pctOf(r,a),a:a*r/100};}},
+    {tag:mq.tagNeg||"Negatives",level:"Easy",gen:()=>{const a=rn(20,1),b=rn(30,1);return{q:`${a} − ${a+b}`,a:-b};}},
+    {tag:mq.tagNeg||"Negatives",level:"Easy",gen:()=>{const a=-rn(15,1),b=rn(20,1);return{q:`${a} + ${b}`,a:a+b};}},
+    {tag:mq.tagRound||"Rounding",level:"Easy",gen:()=>{
+      const t=pick([10,100,1000]),n=rn(t*9,Math.floor(t/2));
+      return{q:mq.roundTo?mq.roundTo(n,t):`Round ${n} to nearest ${t}`,a:Math.round(n/t)*t};
+    }},
+    {tag:mq.tagDecMul||"Decimals",level:"Easy",gen:()=>{
+      const a=rn(9,1),bd=pick([0.1,0.2,0.5]);
+      return{q:`${a} × ${bd}`,a:fix(a*bd,2)};
+    }},
+    {tag:mq.tagMissing||"Missing",level:"Easy",gen:()=>{
+      const a=rn(9,1),b=rn(9,1),ops=["+","-","×"];
+      const op=pick(ops);
+      const ans=op==="+"?a+b:op==="-"?a-b:a*b;
+      const hide=ri(2);
+      if(hide===0) return{q:`? ${op} ${b} = ${ans}`,a:a};
+      return{q:`${a} ${op} ? = ${ans}`,a:b};
+    }},
+
+    // ── HARD ────────────────────────────────────────────────────────────────
+    {tag:mq.tagAdd,level:"Hard",gen:()=>{const a=rn(9999,1000),b=rn(9999,1000);return{q:`${a} + ${b}`,a:a+b};}},
+    {tag:mq.tagSub,level:"Hard",gen:()=>{const b=rn(9000,1000),a=b+rn(9000,1000);return{q:`${a} − ${b}`,a:a-b};}},
+    {tag:mq.tagMul,level:"Hard",gen:()=>{const a=rn(90,10),b=rn(25,5);return{q:`${a} × ${b}`,a:a*b};}},
+    {tag:mq.tagMul,level:"Hard",gen:()=>{const a=rn(999,100),b=rn(9,2);return{q:`${a} × ${b}`,a:a*b};}},
     {tag:"BODMAS",level:"Hard",gen:()=>{const[a,b,c,d]=[rn(10,2),rn(8,2),rn(6,2),rn(4,1)];return{q:`${a} × ${b} + ${c} × ${d}`,a:a*b+c*d};}},
-    {tag:mq.tagSq,level:"Hard",gen:()=>{const n=rn(25,10);return{q:`${n}²`,a:n*n};}},
-    {tag:mq.tagAlg1||"Algebra",level:"Hard",gen:()=>{const x=rn(15,1),m=rn(5,2),c=rn(10,0);return{q:`${m}x + ${c} = ${m*x+c}  →  x = ?`,a:x,hint:`(${m*x+c} − ${c}) ÷ ${m}`};}},
+    {tag:"BODMAS",level:"Hard",gen:()=>{const a=rn(10,2),b=rn(8,2),c=rn(15,5);return{q:`(${a} + ${b}) × ${c}`,a:(a+b)*c};}},
+    {tag:mq.tagSq,level:"Hard",gen:()=>{const n=rn(30,13);return{q:`${n}²`,a:n*n};}},
+    {tag:mq.tagAlg1||"Algebra",level:"Hard",gen:()=>{
+      const x=rn(20,1),m=rn(8,2),c=rn(20,0);
+      return{q:`${m}x + ${c} = ${m*x+c}  →  x = ?`,a:x,hint:`(${m*x+c} − ${c}) ÷ ${m}`};
+    }},
+    {tag:mq.tagAlg1||"Algebra",level:"Hard",gen:()=>{
+      const x=rn(10,1),m=rn(5,2),c=rn(10,1);
+      return{q:`${m}x − ${c} = ${m*x-c}  →  x = ?`,a:x,hint:`(${m*x-c} + ${c}) ÷ ${m}`};
+    }},
+    {tag:mq.tagPctChg||"% Change",level:"Hard",gen:()=>{
+      const a=rn(200,50),p=pick([10,15,20,25,30,50]),up=ri(2)===0;
+      const res=fix(a*(1+(up?p:-p)/100),2);
+      return{q:mq.pctChange?mq.pctChange(a,p,up):`${up?"Increase":"Decrease"} ${a} by ${p}%`,a:res};
+    }},
+    {tag:mq.tagFrac||"Fractions",level:"Hard",gen:()=>{
+      const b=rn(9,2),d=rn(9,2),a=rn(b-1,1),c=rn(d-1,1);
+      const num=a*d+b*c,den=b*d;
+      return{q:`${a}/${b} + ${c}/${d}`,a:fix(num/den),hint:fmtFrac(num,den)};
+    }},
+    {tag:mq.tagFrac||"Fractions",level:"Hard",gen:()=>{
+      const b=rn(9,2),d=rn(9,2),a=rn(b,1),c=rn(d,1);
+      const num=a*d-b*c,den=b*d;
+      return{q:`${a}/${b} − ${c}/${d}`,a:fix(num/den),hint:fmtFrac(num,den)};
+    }},
+    {tag:mq.tagNeg||"Negatives",level:"Hard",gen:()=>{
+      const a=-rn(50,5),b=-rn(50,5);return{q:`${a} × ${b}`,a:a*b};
+    }},
+    {tag:mq.tagDecMul||"Decimals",level:"Hard",gen:()=>{
+      const a=rn(9,1)+pick([0.1,0.2,0.5,0.25]),b=rn(9,2);
+      return{q:`${fix(a,2)} × ${b}`,a:fix(a*b,2)};
+    }},
+    {tag:mq.tagMod||"Modular",level:"Hard",gen:()=>{
+      const a=rn(99,10),b=rn(9,2);return{q:`${a} mod ${b}`,a:a%b,hint:`${a} = ${Math.floor(a/b)} × ${b} + ?`};
+    }},
+
+    // ── NIGHTMARE ────────────────────────────────────────────────────────────
     {tag:mq.tagMul,level:"Nightmare",gen:()=>{const a=rn(900,100),b=rn(90,10);return{q:`${a} × ${b}`,a:a*b};}},
     {tag:"BODMAS",level:"Nightmare",gen:()=>{const[a,b,c,d]=[rn(20,5),rn(15,3),rn(10,2),rn(8,2)];return{q:`(${a} + ${b}) × (${c} − ${d})`,a:(a+b)*(c-d)};}},
-    {tag:mq.tagFrac||"Fractions",level:"Nightmare",gen:()=>{const[a,b,c,d]=[rn(8,2),rn(8,2),rn(8,2),rn(8,2)];return{q:`${a}/${b} + ${c}/${d}`,a:fix((a*d+b*c)/(b*d))};}},
-    {tag:mq.tagCbrt||"Cube Root",level:"Nightmare",gen:()=>{const n=[2,3,4,5,6,7,8,9,10][ri(9)],c=n*n*n;return{q:`∛${c}`,a:n};}},
-    {tag:mq.tagPow||"Powers",level:"Impossible",gen:()=>{const b=[2,3,4,5,6][ri(5)],e=[6,7,8,9,10,11,12][ri(7)];return{q:`${b}^${e}`,a:Math.pow(b,e)};}},
-    {tag:mq.tagLog||"Logarithm",level:"Impossible",gen:()=>{const bases=[2,3,4,5,8,10],b=bases[ri(6)],e=rn(6,2),n=Math.pow(b,e);return{q:`log₍${b}₎(${n})`,a:e};}},
-    {tag:mq.tagTrig||"Trig",level:"Impossible",gen:()=>{
-      const fn=["sin","cos","tan"][ri(3)];
-      const sinP=[[0,0],[30,.5],[45,fix(Math.SQRT2/2)],[60,fix(Math.sqrt(3)/2)],[90,1]];
-      const cosP=[[0,1],[30,fix(Math.sqrt(3)/2)],[45,fix(Math.SQRT2/2)],[60,.5],[90,0]];
-      const tanP=[[0,0],[30,fix(1/Math.sqrt(3))],[45,1],[60,fix(Math.sqrt(3))]];
-      if(fn==="sin"){const[d,v]=sinP[ri(5)];return{q:`sin(${d}°)`,a:v};}
-      if(fn==="cos"){const[d,v]=cosP[ri(5)];return{q:`cos(${d}°)`,a:v};}
-      const[d,v]=tanP[ri(4)];return{q:`tan(${d}°)`,a:v};
+    {tag:"BODMAS",level:"Nightmare",gen:()=>{
+      const a=rn(10,2),b=rn(8,2),c=rn(6,2),d=rn(5,2);
+      return{q:`${a}² + ${b} × ${c} − ${d}`,a:a*a+b*c-d};
     }},
-    {tag:mq.tagSeq||"Sequence",level:"Impossible",gen:()=>{const a=rn(15,1),d=rn(10,2),n=rn(5,4);const s=n*(2*a+(n-1)*d)/2;return{q:mq.sumSeq(a,a+d,a+2*d,n),a:s};}},
+    {tag:mq.tagFrac||"Fractions",level:"Nightmare",gen:()=>{
+      const b=rn(9,2),d=rn(9,2),a=rn(b-1,1),c=rn(d-1,1);
+      const num=a*c,den=b*d;
+      return{q:`${a}/${b} × ${c}/${d}`,a:fix(num/den),hint:fmtFrac(num,den)};
+    }},
+    {tag:mq.tagFrac||"Fractions",level:"Nightmare",gen:()=>{
+      const b=rn(8,2),d=rn(8,2),a=rn(b-1,1),c=rn(d-1,1);
+      const num=a*d,den=b*c;
+      return{q:`${a}/${b} ÷ ${c}/${d}`,a:fix(num/den),hint:fmtFrac(num,den)};
+    }},
+    {tag:mq.tagCbrt||"Cube Root",level:"Nightmare",gen:()=>{const n=rn(8,2),c=n*n*n;return{q:`∛${c}`,a:n};}},
+    {tag:mq.tagAlg2||"Quadratic",level:"Nightmare",gen:()=>{
+      const r1=rn(8,1),r2=rn(8,1),b=-(r1+r2),cv=r1*r2;
+      const bs=b>=0?`+${b}`:String(b),cs=cv>=0?`+${cv}`:String(cv);
+      return{q:`x²${bs}x${cs}=0, larger root?`,a:Math.max(r1,r2),hint:`roots: ${r1}, ${r2}`};
+    }},
+    {tag:mq.tagSimult||"Simultaneous",level:"Nightmare",gen:()=>{
+      const x=rn(8,1),y=rn(8,1),a=rn(4,1),b=rn(4,1);
+      const s=a*x+b*y,d=x-y;
+      return{q:mq.simultaneous?mq.simultaneous(a,b,s,d):`${a}x+${b}y=${s}, x−y=${d}, x=?`,a:x,hint:`solve system`};
+    }},
+    {tag:mq.tagBinom||"Binomial",level:"Nightmare",gen:()=>{
+      const a=rn(6,2),b=rn(6,1),n=pick([2,3]);
+      // (a+b)^2 = a²+2ab+b² or (a+b)^3
+      const res=n===2?a*a+2*a*b+b*b:a*a*a+3*a*a*b+3*a*b*b+b*b*b;
+      return{q:`(${a}+${b})^${n}`,a:res,hint:n===2?`a²+2ab+b²`:`a³+3a²b+3ab²+b³`};
+    }},
+    {tag:mq.tagDet||"Determinant",level:"Nightmare",gen:()=>{
+      const[a,b,c,d]=[rn(8,1),rn(8,1),rn(8,1),rn(8,1)];
+      return{q:`det([[${a},${b}],[${c},${d}]])`,a:a*d-b*c,hint:`${a}×${d} − ${b}×${c}`};
+    }},
+
+    // ── IMPOSSIBLE ───────────────────────────────────────────────────────────
+    {tag:mq.tagPow||"Powers",level:"Impossible",gen:()=>{
+      const b=pick([2,3,4,5,6,7]),e=rn(8,5);return{q:`${b}^${e}`,a:Math.pow(b,e)};
+    }},
+    {tag:mq.tagLog||"Logarithm",level:"Impossible",gen:()=>{
+      const b=pick([2,3,5,8,10]),e=rn(5,2),n=Math.pow(b,e);
+      return{q:`log₍${b}₎(${n})`,a:e,hint:`${b}^? = ${n}`};
+    }},
+    {tag:mq.tagLog||"Logarithm",level:"Impossible",gen:()=>{
+      const n=pick([10,100,1000,10000,100000]);
+      return{q:`log₁₀(${n})`,a:Math.log10(n)};
+    }},
+    {tag:mq.tagTrig||"Trig",level:"Impossible",gen:()=>{
+      const fn=pick(["sin","cos","tan"]);
+      const sinP=[[0,0],[30,.5],[45,fix(Math.SQRT2/2)],[60,fix(Math.sqrt(3)/2)],[90,1],[120,fix(Math.sqrt(3)/2)],[150,.5],[180,0]];
+      const cosP=[[0,1],[30,fix(Math.sqrt(3)/2)],[45,fix(Math.SQRT2/2)],[60,.5],[90,0],[120,-.5],[150,-fix(Math.sqrt(3)/2)],[180,-1]];
+      const tanP=[[0,0],[30,fix(1/Math.sqrt(3))],[45,1],[60,fix(Math.sqrt(3))],[120,-fix(Math.sqrt(3))],[135,-1],[150,-fix(1/Math.sqrt(3))]];
+      if(fn==="sin"){const[d,v]=pick(sinP);return{q:`sin(${d}°)`,a:v};}
+      if(fn==="cos"){const[d,v]=pick(cosP);return{q:`cos(${d}°)`,a:v};}
+      const[d,v]=pick(tanP);return{q:`tan(${d}°)`,a:v};
+    }},
+    {tag:mq.tagSeq||"Sequence",level:"Impossible",gen:()=>{
+      const a=rn(20,1),d=rn(15,2),n=rn(6,4);
+      const s=n*(2*a+(n-1)*d)/2;
+      return{q:mq.sumSeq?mq.sumSeq(a,a+d,a+2*d,n):`Sum: ${a}+${a+d}+${a+2*d}+… (${n} terms)`,a:s,hint:`n(2a+(n-1)d)/2`};
+    }},
+    {tag:mq.tagGeo||"Geo Series",level:"Impossible",gen:()=>{
+      const a=pick([1,2,3]),r=pick([2,3]),n=rn(5,3);
+      const s=a*(Math.pow(r,n)-1)/(r-1);
+      return{q:mq.geoSeq?mq.geoSeq(a,a*r,n):`Geo sum: ${a}+${a*r}+…(${n} terms)`,a:s,hint:`a(rⁿ−1)/(r−1)`};
+    }},
+    {tag:mq.tagFin||"Finance",level:"Impossible",gen:()=>{
+      const P=pick([1000,2000,5000]),r=pick([4,5,6,8,10])/100,n=pick([2,3,4,5]);
+      const A=fix(P*Math.pow(1+r,n),2);
+      return{q:mq.finance?mq.finance(P,r*100,n):`${P} at ${r*100}%/yr for ${n}yr`,a:A,hint:`P×(1+r)^n`};
+    }},
+    {tag:mq.tagPow||"Powers",level:"Impossible",gen:()=>{
+      const p=pick(primes.slice(0,8)),n=pick([2,3]);
+      return{q:`Is ${p}^${n} prime?`,a:0,hint:`No — it has factor ${p}`,altAccept:[0,"no","false","não","nein","не"]};
+    }},
+    {tag:mq.tagMod||"Modular",level:"Impossible",gen:()=>{
+      const a=rn(999,100),b=pick([7,11,13,17,19,23]);
+      return{q:`${a} mod ${b}`,a:a%b,hint:`${a} = ${Math.floor(a/b)} × ${b} + ?`};
+    }},
   ];
 }
 const DIFF_BASE={
@@ -1631,6 +1891,7 @@ function SmartCalc(){
   const [randHistory,setRandHistory]=useState([]);
   const [mathProb,setMathProb]=useState(null);const [mathAns,setMathAns]=useState("");
   const [mathScore,setMathScore]=useState({right:0,wrong:0});const [mathChecked,setMathChecked]=useState(null);
+  const [mathExplain,setMathExplain]=useState(null);const [mathExplaining,setMathExplaining]=useState(false);
   const [mathDiff,setMathDiff]=useState("Random");const [mathStreak,setMathStreak]=useState(0);
   const [mathTag,setMathTag]=useState(null);
   const [mathBestStreak,setMathBestStreak]=useState(0);
@@ -1983,6 +2244,90 @@ function SmartCalc(){
     }catch(err){console.error("LLM run error:",err);return null;}
   },[localAiStatus,angleMode,workerSend]);
 
+  // ── Tier 5 parser: AI extracts number from natural language when all else fails
+  const aiExtractNumber=useCallback(async(raw)=>{
+    if(localAiStatus!=="ready"&&!orKey) return NaN;
+    const prompt=`Extract ONLY the numeric value from this text. Reply with just the number, nothing else.
+Text: "${String(raw).slice(0,80)}"
+Number:`;
+    try{
+      let result="";
+      if(window._isCapacitor&&window._nativeLLM()){
+        const chatPrompt=`<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`;
+        const {result:r}=await Promise.race([
+          window._nativeLLM().runInference({prompt:chatPrompt}),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),15000))
+        ]);
+        result=r;
+      }else if(localAiStatus==="ready"){
+        const out=await workerSend("run",{messages:[
+          {role:"system",content:"You extract numbers from text. Reply with ONLY the number."},
+          {role:"user",content:prompt}
+        ]});
+        const txt=out?.[0]?.generated_text;
+        result=Array.isArray(txt)?txt[txt.length-1]?.content||"":txt||"";
+      }
+      // parse the AI's plain number response
+      const n=parseFloat(result.trim().replace(/[^0-9.\-]/g,""));
+      return isFinite(n)?n:NaN;
+    }catch(e){return NaN;}
+  },[localAiStatus,workerSend,orKey]);
+
+  // ── AI explain wrong answer ────────────────────────────────────────────────
+  const explainMathAnswer=useCallback(async(prob)=>{
+    if(mathExplaining) return;
+    setMathExplaining(true);setMathExplain(null);
+    const prompt=`Explain step by step how to solve: ${prob.q}
+Correct answer: ${prob.a}${prob.hint?` (hint: ${prob.hint})`:""}
+Be concise, max 3 steps. Use the same language as the question.`;
+    try{
+      let result="";
+      // Try local AI first (offline), then cloud
+      if(window._isCapacitor&&window._nativeLLM()&&localAiStatus==="ready"){
+        const chatPrompt=`<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`;
+        const {result:r}=await Promise.race([
+          window._nativeLLM().runInference({prompt:chatPrompt}),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),30000))
+        ]);
+        result=r;
+      }else if(localAiStatus==="ready"){
+        const out=await workerSend("run",{messages:[
+          {role:"system",content:"You are a concise math tutor. Give step-by-step solutions in 2-3 lines."},
+          {role:"user",content:prompt}
+        ]});
+        const txt=out?.[0]?.generated_text;
+        result=Array.isArray(txt)?txt[txt.length-1]?.content||"":txt||"";
+      }else if(orKey){
+        // Cloud fallback
+        const res=await window.apiFetch("https://openrouter.ai/api/v1/chat/completions",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","Authorization":`Bearer ${orKey}`,"HTTP-Referer":"https://smartcalc.app"},
+          body:JSON.stringify({model,max_tokens:200,messages:[
+            {role:"system",content:"Concise math tutor. 2-3 steps max."},
+            {role:"user",content:prompt}
+          ]})
+        });
+        const d=await res.json();
+        result=d.choices?.[0]?.message?.content||"";
+      }else{
+        // Default Claude
+        const res=await window.apiFetch("https://api.anthropic.com/v1/messages",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:200,
+            system:"Concise math tutor. 2-3 steps max.",
+            messages:[{role:"user",content:prompt}]})
+        });
+        const d=await res.json();
+        result=d.content?.map(b=>b.text||"").join("")||"";
+      }
+      setMathExplain(result.trim()||"Could not generate explanation.");
+    }catch(e){
+      setMathExplain("Error: "+((e?.message||"unknown").slice(0,60)));
+    }
+    setMathExplaining(false);
+  },[localAiStatus,workerSend,orKey,model]);
+
   const saveHfToken=()=>{
     const k=hfTokenDraft.trim();setHfToken(k);
     hfTokenRef.current=k; // ✅ Update ref ngay lập tức, không chờ re-render
@@ -2154,7 +2499,7 @@ function SmartCalc(){
     const prob=bucket[Math.floor(Math.random()*bucket.length)];
     const generated=prob.gen();
     setMathProb({...generated,tag:prob.tag,level:prob.level});
-    setMathAns("");setMathChecked(null);setMathHintShown(false);
+    setMathAns("");setMathChecked(null);setMathHintShown(false);setMathExplain(null);setMathExplaining(false);
     setTimeout(()=>mathInputRef.current?.focus(),80);
   },[mathProblems,mathDiff,mathTag]);
 
@@ -2662,19 +3007,44 @@ function SmartCalc(){
                           <input ref={mathInputRef} className="inp" type="number" inputMode="decimal" placeholder={t.answerPlaceholder}
                             value={mathAns} onChange={e=>setMathAns(e.target.value)}
                             onKeyDown={e=>{if(e.key==="Enter"&&mathAns.trim()){
-                              const correct=Math.abs(parseFloat(mathAns)-mathProb.a)<0.01;
-                              setMathChecked(correct);haptic(correct?[10,50,10]:30);
-                              setMathScore(s=>correct?{...s,right:s.right+1}:{...s,wrong:s.wrong+1});
-                              setMathStreak(s=>{const ns=correct?s+1:0;setMathBestStreak(b=>Math.max(b,ns));return ns;});
-                              setMathSession(s=>s+1);
+                              // Use precise parser: handles fractions "3/4", mixed "1 1/2", expressions
+              // Try sync parse first; if NaN, attempt AI extraction
+                              const runCheck=async()=>{
+                                let ans=mathAns;
+                                if(isNaN(parseAnswer(mathAns))&&!mathProb.altAccept){
+                                  const aiNum=await aiExtractNumber(mathAns);
+                                  if(isFinite(aiNum)) ans=String(aiNum);
+                                }
+                                const correct=mathProb.altAccept
+                                  ?[...mathProb.altAccept,mathProb.a].some(v=>String(v).toLowerCase()===ans.trim().toLowerCase()||checkMathAnswer(ans,v))
+                                  :checkMathAnswer(ans,mathProb.a);
+                                setMathExplain(null);setMathExplaining(false);
+                                setMathChecked(correct);haptic(correct?[10,50,10]:30);
+                                setMathScore(s=>correct?{...s,right:s.right+1}:{...s,wrong:s.wrong+1});
+                                setMathStreak(s=>{const ns=correct?s+1:0;setMathBestStreak(b=>Math.max(b,ns));return ns;});
+                                setMathSession(s=>s+1);
+                              };
+                              runCheck();
                             }}}/>
                           <button className="sml acc" style={{padding:"10px 13px"}} onClick={()=>{
                             if(!mathAns.trim()) return;
-                            const correct=Math.abs(parseFloat(mathAns)-mathProb.a)<0.01;
-                            setMathChecked(correct);haptic(correct?[10,50,10]:30);
+                            // Use precise parser: handles fractions "3/4", mixed "1 1/2", expressions
+              const runCheck2=async()=>{
+                                let ans=mathAns;
+                                if(isNaN(parseAnswer(mathAns))&&!mathProb.altAccept){
+                                  const aiNum=await aiExtractNumber(mathAns);
+                                  if(isFinite(aiNum)) ans=String(aiNum);
+                                }
+                                const correct=mathProb.altAccept
+                                  ?[...mathProb.altAccept,mathProb.a].some(v=>String(v).toLowerCase()===ans.trim().toLowerCase()||checkMathAnswer(ans,v))
+                                  :checkMathAnswer(ans,mathProb.a);
+                                setMathExplain(null);setMathExplaining(false);
+                                setMathChecked(correct);haptic(correct?[10,50,10]:30);
                             setMathScore(s=>correct?{...s,right:s.right+1}:{...s,wrong:s.wrong+1});
-                            setMathStreak(s=>{const ns=correct?s+1:0;setMathBestStreak(b=>Math.max(b,ns));return ns;});
-                            setMathSession(s=>s+1);
+                                setMathStreak(s=>{const ns=correct?s+1:0;setMathBestStreak(b=>Math.max(b,ns));return ns;});
+                                setMathSession(s=>s+1);
+                              };
+                              runCheck2();
                           }}>{t.checkBtn}</button>
                         </div>
                       )}
@@ -2690,9 +3060,31 @@ function SmartCalc(){
                             {mathChecked?t.correct:t.wrong(mathProb.a)}
                             {mathChecked&&mathStreak>=3&&<span style={{marginLeft:"8px",animation:"streakPop .4s ease",display:"inline-block"}}>🔥{mathStreak}</span>}
                           </div>
+                          {/* Explain button — only when wrong */}
+                          {!mathChecked&&(
+                            <div style={{marginBottom:"9px"}}>
+                              {!mathExplain&&!mathExplaining&&(
+                                <button className="sml" style={{fontSize:".62rem",borderColor:"rgba(160,140,240,.35)",color:"#b0a0e8",width:"100%"}}
+                                  onClick={()=>explainMathAnswer(mathProb)}>
+                                  🧠 Explain step by step {(localAiStatus==="ready"?"(offline)":"(cloud)")}
+                                </button>
+                              )}
+                              {mathExplaining&&(
+                                <div style={{color:"#7070b0",fontSize:".65rem",padding:"8px 10px",background:"rgba(104,85,240,.08)",borderRadius:"8px",display:"flex",gap:"7px",alignItems:"center"}}>
+                                  <div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#7070d0",animation:"blink 1s infinite"}}/>
+                                  AI đang giải thích…
+                                </div>
+                              )}
+                              {mathExplain&&(
+                                <div style={{color:"#c0b8f0",fontSize:".7rem",lineHeight:1.7,padding:"10px 12px",background:"rgba(104,85,240,.1)",border:"1px solid rgba(104,85,240,.2)",borderRadius:"10px",whiteSpace:"pre-wrap"}}>
+                                  💡 {mathExplain}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div style={{display:"flex",gap:"8px"}}>
                             <button className="sml acc" onClick={newMathProb} style={{flex:1,justifyContent:"center",display:"flex"}}>{t.nextBtn}</button>
-                            <button className="sml" style={{fontSize:".6rem"}} onClick={()=>{setMathProb(null);setMathScore({right:0,wrong:0});setMathStreak(0);setMathBestStreak(0);setMathSession(0);setMathTag(null);}}>↺ reset</button>
+                            <button className="sml" style={{fontSize:".6rem"}} onClick={()=>{setMathProb(null);setMathScore({right:0,wrong:0});setMathStreak(0);setMathBestStreak(0);setMathSession(0);setMathTag(null);setMathExplain(null);}}>↺ reset</button>
                           </div>
                         </div>
                       )}
