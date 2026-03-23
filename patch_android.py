@@ -68,6 +68,8 @@ ok(f"variables.gradle written → {VARIABLES_DST}")
 MEDIAPIPE_CONTENT = """// MediaPipe / LiteRT dependency
 dependencies {
     implementation 'com.google.mediapipe:tasks-genai:0.10.22'
+    // OkHttp for reliable HuggingFace download (handles redirects + keeps Auth header)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
 """
 with open(MEDIAPIPE_DST, "w") as f:
