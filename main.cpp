@@ -1,6 +1,5 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
-#include <QQmlContext>
 #include "backend/MathEngine.h"
 #include "backend/AppSettings.h"
 #include "backend/ApiClient.h"
@@ -12,10 +11,9 @@ int main(int argc, char *argv[])
     app.setApplicationName("SmartCalc");
     app.setApplicationVersion("1.0");
 
-    // Register C++ types accessible from QML
-    qmlRegisterType<MathEngine>("SmartCalc.Backend", 1, 0, "MathEngine");
-    qmlRegisterType<AppSettings>("SmartCalc.Backend", 1, 0, "AppSettings");
-    qmlRegisterType<ApiClient>("SmartCalc.Backend", 1, 0, "ApiClient");
+    // Types are auto-registered via QML_ELEMENT + qt_add_qml_module (URI SmartCalc.Backend).
+    // Do NOT also call qmlRegisterType() here — double-registration causes warnings and
+    // can silently shadow the CMake-generated plugin, breaking import path resolution.
 
     QQmlApplicationEngine engine;
 

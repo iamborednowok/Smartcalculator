@@ -33,12 +33,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Qt metadata -->
+            <!-- Qt 6 metadata: only lib_name and extract_android_style are needed.     -->
+            <!-- qt_sources_resource_id / qt_libs_resource_id / bundled_libs_resource_id -->
+            <!-- are Qt 5 legacy entries — Qt 6 androiddeployqt does NOT generate       -->
+            <!-- those @array/ resources, so keeping them causes resource link failure.  -->
             <meta-data android:name="android.app.lib_name" android:value="SmartCalc" />
-            <meta-data android:name="android.app.qt_sources_resource_id" android:resource="@array/qt_sources" />
-            <meta-data android:name="android.app.repository" android:value="default" />
-            <meta-data android:name="android.app.qt_libs_resource_id" android:resource="@array/qt_libs" />
-            <meta-data android:name="android.app.bundled_libs_resource_id" android:resource="@array/bundled_libs" />
             <meta-data android:name="android.app.extract_android_style" android:value="minimal" />
         </activity>
     </application>

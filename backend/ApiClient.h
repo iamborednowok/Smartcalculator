@@ -3,9 +3,11 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QTimer>
+#include <QtQml/qqmlregistration.h>
 
 class ApiClient : public QObject {
     Q_OBJECT
+    QML_ELEMENT
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
 public:
     explicit ApiClient(QObject *parent = nullptr);

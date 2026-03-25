@@ -18,7 +18,7 @@ qt_add_executable(SmartCalc
 )
 
 qt_add_qml_module(SmartCalc
-    URI SmartCalc
+    URI SmartCalc.Backend
     VERSION 1.0
     QML_FILES
         qml/main.qml
