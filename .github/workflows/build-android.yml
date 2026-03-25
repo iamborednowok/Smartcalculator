@@ -110,9 +110,9 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: apk-v${{ github.run_number }}   # 👈 changed from v{{run_number}}
+          tag_name: apk-v${{ github.run_number }}
           name: SmartCalc APK v${{ github.run_number }}
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: build-android/android-build/build/outputs/apk/release/*.apk  # 👈 fixed
           generate_release_notes: false
           body: |
             SmartCalc v${{ github.run_number }}
