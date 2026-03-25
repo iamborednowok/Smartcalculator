@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QSettings>
+#include <QtQml/qqmlregistration.h>
 
 class AppSettings : public QObject
 {

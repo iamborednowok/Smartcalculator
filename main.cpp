@@ -1,7 +1,6 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
-#include <QQuickStyle>
 #include "backend/MathEngine.h"
 #include "backend/AppSettings.h"
 #include "backend/ApiClient.h"

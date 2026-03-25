@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QJSEngine>
 #include <QString>
+#include <QtQml/qqmlregistration.h>
 
 class MathEngine : public QObject
 {
