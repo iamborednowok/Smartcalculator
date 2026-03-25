@@ -1,22 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Bug #5 Fix: removed deprecated android:versionCode and android:versionName
-  from <manifest> — these are now managed by Qt/Gradle via CMakeLists.txt PROJECT_VERSION.
--->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.smartcalc.app">
+    package="com.smartcalc.app"
+    android:versionCode="1"
+    android:versionName="1.0">
 
-    <!-- Internet access (used by ApiClient) -->
+    <!-- Quyền truy cập internet (dùng cho ApiClient) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!--
-      Bug #1/#2 Fix: targetSdkVersion pinned to 33 — must match
-      ANDROID_COMPILE_SDK / ANDROID_TARGET_SDK in build-android.yml
-    -->
     <uses-sdk
         android:minSdkVersion="24"
-        android:targetSdkVersion="33" />
+        android:targetSdkVersion="34" />
 
     <application
         android:name="org.qtproject.qt.android.bindings.QtApplication"
