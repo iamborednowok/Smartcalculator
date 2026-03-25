@@ -22,12 +22,12 @@ Rectangle {
     }
 
     // ── Gradient for equals ───────────────────────────────────────────
-    gradient: btnType === "eq" ? Gradient {
+    gradient: Gradient {
         orientation: Gradient.Horizontal
-        GradientStop { position: 0.0; color: "#5B21B6" }
-        GradientStop { position: 0.45; color: "#7C3AED" }
-        GradientStop { position: 1.0;  color: "#9061FF" }
-    } : null
+        GradientStop { position: 0.0;  color: btnType === "eq" ? "#5B21B6" : "transparent" }
+        GradientStop { position: 0.45; color: btnType === "eq" ? "#7C3AED" : "transparent" }
+        GradientStop { position: 1.0;  color: btnType === "eq" ? "#9061FF" : "transparent" }
+    }
 
     // ── Border ────────────────────────────────────────────────────────
     border.color: {

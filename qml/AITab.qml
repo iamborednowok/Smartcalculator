@@ -524,12 +524,11 @@ Item {
                 opacity: enabled ? 1.0 : 0.35
                 Behavior on opacity { NumberAnimation { duration: 120 } }
 
-                gradient: enabled ? Gradient {
+                gradient: Gradient {
                     orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: "#5B21B6" }
-                    GradientStop { position: 1.0; color: "#06B6D4" }
-                } : null
-                color: enabled ? "transparent" : Qt.rgba(1,1,1,0.06)
+                    GradientStop { position: 0.0; color: enabled ? "#5B21B6" : Qt.rgba(1,1,1,0.06) }
+                    GradientStop { position: 1.0; color: enabled ? "#06B6D4" : Qt.rgba(1,1,1,0.06) }
+                }
                 border.color: enabled ? "transparent" : Qt.rgba(1,1,1,0.12); border.width: 1
 
                 Text { anchors.centerIn: parent; text: "↑"; color: "#fff"; font.pixelSize: 20; font.weight: Font.Bold }
