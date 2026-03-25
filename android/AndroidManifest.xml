@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.smartcalc.app"
+    android:versionCode="1"
+    android:versionName="1.0">
+
+    <!-- Quyền truy cập internet (dùng cho ApiClient) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <uses-sdk
+        android:minSdkVersion="24"
+        android:targetSdkVersion="33" />
+
+    <application
+        android:name="org.qtproject.qt.android.bindings.QtApplication"
+        android:label="SmartCalc"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/AppTheme"
+        android:hardwareAccelerated="true">
+
+        <activity
+            android:name="org.qtproject.qt.android.bindings.QtActivity"
+            android:exported="true"
+            android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:label="SmartCalc">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Qt metadata -->
+            <meta-data android:name="android.app.lib_name" android:value="SmartCalc" />
+            <meta-data android:name="android.app.qt_sources_resource_id" android:resource="@array/qt_sources" />
+            <meta-data android:name="android.app.repository" android:value="default" />
+            <meta-data android:name="android.app.qt_libs_resource_id" android:resource="@array/qt_libs" />
+            <meta-data android:name="android.app.bundled_libs_resource_id" android:resource="@array/bundled_libs" />
+            <meta-data android:name="android.app.extract_android_style" android:value="minimal" />
+        </activity>
+    </application>
+</manifest>
