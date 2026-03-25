@@ -54,9 +54,14 @@ jobs:
         run: |
           aqt install-qt linux android ${{ env.QT_VERSION }} android_arm64_v8a \
             --outputdir ${{ env.QT_INSTALL_DIR }} \
-            --modules qtcharts qtnetworkauth \
-            --archives icu qtbase qtdeclarative qtnetwork qttools
+            --modules qtcharts qtnetworkauth
           echo "QT_ANDROID=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a" >> $GITHUB_ENV
+
+      # ── 6b. Verify Qt components are present ──────────────────────
+      - name: Verify Qt Android install
+        run: |
+          echo "Checking Qt Android cmake modules:"
+          ls $QT_ANDROID/lib/cmake/ | grep -E "Qt6(Quick|Qml|Network|Core)" || true
 
       # ── 7. Configure CMake ─────────────────────────────────────────
       - name: Configure CMake for Android
