@@ -76,6 +76,7 @@ jobs:
             -DQt6_DIR=$QT_ANDROID/lib/cmake/Qt6 \
             -DQt6Quick_DIR=$QT_ANDROID/lib/cmake/Qt6Quick \
             -DQt6Qml_DIR=$QT_ANDROID/lib/cmake/Qt6Qml \
+            -DQt6QuickControls2_DIR=$QT_ANDROID/lib/cmake/Qt6QuickControls2 \
             -DQt6Network_DIR=$QT_ANDROID/lib/cmake/Qt6Network \
             -DQT_HOST_PATH=$QT_HOST_PATH \
             -DQT_HOST_PATH_CMAKE_DIR=$QT_HOST_PATH/lib/cmake \
