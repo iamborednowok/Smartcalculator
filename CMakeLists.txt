@@ -45,6 +45,10 @@ set_target_properties(SmartCalc PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+target_include_directories(SmartCalc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/backend
+)
+
 target_link_libraries(SmartCalc PRIVATE
     Qt6::Quick
     Qt6::Network
