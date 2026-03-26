@@ -33,7 +33,6 @@ qt_add_qml_module(SmartCalc
         qml/components/StyledInput.qml
         qml/components/UnitPill.qml
         qml/components/ToastMessage.qml
-    RESOURCES
         qml/Theme.qml
 )
 
