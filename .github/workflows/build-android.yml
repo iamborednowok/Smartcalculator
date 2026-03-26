@@ -43,41 +43,66 @@ jobs:
           ls $ANDROID_SDK_ROOT/platforms/
 
       - name: Install aqtinstall
-        run: pip install aqtinstall
+        # Pin to a known-good release. Latest aqtinstall can have breaking
+        # changes in how it resolves Qt 6.8+ linux_gcc_64 desktop packages.
+        run: pip install "aqtinstall==3.2.1"
 
-      # Qt 6.8+: desktop host Qt — needed so qt-cmake can find moc, rcc, and Qt6HostInfoConfig.cmake
-      - name: Install Qt6 Linux host
+      # Install Android Qt + matching host Qt in a single step.
+      # --autodesktop is the officially supported Qt 6.5+ way to get host tools
+      # (moc, rcc, Qt6HostInfo cmake package) for cross-compilation. Using two
+      # separate installs with "aqt install-qt linux desktop ... linux_gcc_64"
+      # silently produces an empty installation on Qt 6.8+ with newer aqtinstall.
+      - name: Install Qt6 Android arm64 + host Qt
         run: |
-          aqt install-qt linux desktop ${{ env.QT_VERSION }} linux_gcc_64 \
-            --outputdir ${{ env.QT_INSTALL_DIR }}
-          echo "QT_HOST_PATH=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/linux_gcc_64" >> $GITHUB_ENV
-
-      # Qt 6.8+: android must use "all_os" host and "android" target
-      - name: Install Qt6 Android arm64
-        run: |
-          aqt install-qt all_os android ${{ env.QT_VERSION }} android_arm64_v8a \
-            --outputdir ${{ env.QT_INSTALL_DIR }} \
+          aqt install-qt linux android ${{ env.QT_VERSION }} android_arm64_v8a \
+            --outputdir "${{ env.QT_INSTALL_DIR }}" \
+            --autodesktop \
             --modules qtcharts qtnetworkauth
+
+          # aqt --autodesktop installs the host Qt as either gcc_64 or linux_gcc_64
+          # depending on the aqtinstall version — discover the actual path at runtime.
+          HOST_QT=$(find "${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}" \
+            -maxdepth 1 -type d \( -name "gcc_64" -o -name "linux_gcc_64" \) | head -1)
+
+          if [ -z "$HOST_QT" ]; then
+            echo "ERROR: --autodesktop did not create a host Qt directory."
+            echo "Contents of ${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/:"
+            ls "${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/" 2>/dev/null || echo "(missing)"
+            exit 1
+          fi
+
+          if [ ! -f "${HOST_QT}/lib/cmake/Qt6HostInfo/Qt6HostInfoConfig.cmake" ]; then
+            echo "ERROR: Qt6HostInfoConfig.cmake missing from host Qt at ${HOST_QT}"
+            echo "Contents of ${HOST_QT}/lib/cmake/:"
+            ls "${HOST_QT}/lib/cmake/" 2>/dev/null || echo "(missing)"
+            exit 1
+          fi
+
+          echo "Host Qt   : $HOST_QT"
+          echo "Android Qt: ${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a"
+          echo "QT_HOST_PATH=${HOST_QT}" >> $GITHUB_ENV
           echo "QT_ANDROID=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a" >> $GITHUB_ENV
 
       - name: Debug Qt install structure
         run: |
-          QT_HOST="${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/linux_gcc_64"
-          QT_AND="${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a"
+          QT_HOST="${QT_HOST_PATH}"
+          QT_AND="${QT_ANDROID}"
           echo "=== Host Qt cmake dir ==="
           ls "${QT_HOST}/lib/cmake/Qt6/" | grep -E "Host|Info|Config" || echo "NOT FOUND"
           echo "=== Android Qt cmake dir ==="
           ls "${QT_AND}/lib/cmake/Qt6/" | grep -E "Host|Info|Config" || echo "NOT FOUND"
-          echo "=== Full linux_gcc_64 tree (2 levels) ==="
+          echo "=== Qt install tree ==="
           ls "${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/"
           echo "=== Qt6HostInfo search ==="
           find "${{ env.QT_INSTALL_DIR }}" -name "Qt6HostInfoConfig.cmake" 2>/dev/null || echo "Qt6HostInfoConfig.cmake not found anywhere"
-          ls "${QT_HOST}/lib/cmake/Qt6HostInfo/" 2>/dev/null || echo "Qt6HostInfo cmake dir missing from host Qt"
 
       - name: Configure CMake for Android
         run: |
-          QT_HOST="${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/linux_gcc_64"
-          QT_AND="${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a"
+          # Use paths discovered at install time — the host arch dir is gcc_64 or
+          # linux_gcc_64 depending on the aqtinstall version, so we rely on the env
+          # var set dynamically by the install step rather than hard-coding the name.
+          QT_HOST="${QT_HOST_PATH}"
+          QT_AND="${QT_ANDROID}"
           NDK_HOME="${ANDROID_SDK_ROOT}/ndk/${{ env.ANDROID_NDK_VERSION }}"
 
           echo "QT_HOST_PATH = $QT_HOST"
