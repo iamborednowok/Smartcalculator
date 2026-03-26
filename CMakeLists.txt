@@ -57,6 +57,8 @@ target_link_libraries(SmartCalc PRIVATE
 
 # Android config
 if(ANDROID)
+    set(QT_ANDROID_MIN_SDK_VERSION 28)
+    set(QT_ANDROID_TARGET_SDK_VERSION 35)
     set_property(TARGET SmartCalc APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
                  ${CMAKE_CURRENT_SOURCE_DIR}/android)
 endif()
