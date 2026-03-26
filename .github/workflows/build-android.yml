@@ -98,16 +98,22 @@ jobs:
       - name: Build APK
         run: cmake --build build-android --target apk -- -j$(nproc)
 
-      # ── 9. (Debug) Show what APKs were actually produced ──────────
-      - name: List produced APKs
-        run: find build-android -name "*.apk" | sort
+      # ── 9. Find APK and stage it to a known location ─────────────
+      - name: Stage APK for release
+        run: |
+          mkdir -p apk-out
+          # Find every .apk produced anywhere in the build tree and copy to apk-out/
+          find build-android -name "*.apk" | sort
+          find build-android -name "*.apk" -exec cp {} apk-out/ \;
+          echo "Staged APKs:"
+          ls -lh apk-out/
 
       # ── 10. Upload APK as workflow artifact ────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: SmartCalc-APK
-          path: build-android/**/*.apk
+          path: apk-out/*.apk
           if-no-files-found: error
 
       # ── 11. Create GitHub Release (push to main only) ──────────────
@@ -117,8 +123,7 @@ jobs:
         with:
           tag_name: apk-v${{ github.run_number }}
           name: SmartCalc APK v${{ github.run_number }}
-          # ✅ FIX 2: `--target apk` produces a DEBUG apk — path is apk/debug/, not apk/release/
-          files: build-android/android-build/build/outputs/apk/debug/*.apk
+          files: apk-out/*.apk
           generate_release_notes: false
           body: |
             SmartCalc v${{ github.run_number }}
