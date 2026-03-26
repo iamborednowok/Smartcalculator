@@ -45,7 +45,7 @@ jobs:
       - name: Install aqtinstall
         run: pip install aqtinstall
 
-      # Qt 6.8+: host uses 'linux desktop'. The real fix is QT_HOST_PATH_CMAKE_DIR below (no trailing /Qt6)
+      # Qt 6.8+: desktop host Qt — needed so qt-cmake can find moc, rcc, and Qt6HostInfoConfig.cmake
       - name: Install Qt6 Linux host
         run: |
           aqt install-qt linux desktop ${{ env.QT_VERSION }} linux_gcc_64 \
@@ -71,33 +71,32 @@ jobs:
           echo "=== Full linux_gcc_64 tree (2 levels) ==="
           ls "${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/"
           echo "=== Qt6HostInfo search ==="
-          find "${{ env.QT_INSTALL_DIR }}" -name "Qt6HostInfo.cmake" 2>/dev/null || echo "Qt6HostInfo.cmake not found anywhere"
+          find "${{ env.QT_INSTALL_DIR }}" -name "Qt6HostInfoConfig.cmake" 2>/dev/null || echo "Qt6HostInfoConfig.cmake not found anywhere"
+          ls "${QT_HOST}/lib/cmake/Qt6HostInfo/" 2>/dev/null || echo "Qt6HostInfo cmake dir missing from host Qt"
 
       - name: Configure CMake for Android
         run: |
-          # Resolve all paths explicitly so CMake never sees empty variables
           QT_HOST="${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/linux_gcc_64"
           QT_AND="${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a"
           NDK_HOME="${ANDROID_SDK_ROOT}/ndk/${{ env.ANDROID_NDK_VERSION }}"
 
           echo "QT_HOST_PATH = $QT_HOST"
           echo "QT_ANDROID   = $QT_AND"
-          echo "NDK_HOME     = $NDK_HOME"
 
-          cmake -B build-android \
-            -DCMAKE_TOOLCHAIN_FILE="${NDK_HOME}/build/cmake/android.toolchain.cmake" \
+          # Use qt-cmake (Qt's own Android wrapper) instead of plain cmake.
+          # Plain cmake + NDK toolchain sets CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY,
+          # which prevents find_package(Qt6HostInfo) from seeing the host Qt dir
+          # even when QT_HOST_PATH is explicitly set. qt-cmake sets up the Qt
+          # toolchain file (qt.toolchain.cmake) which handles host-package discovery
+          # correctly before any FIND_ROOT_PATH restrictions are applied.
+          "${QT_AND}/bin/qt-cmake" \
+            -B build-android \
+            -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" \
+            -DANDROID_NDK="${NDK_HOME}" \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-35 \
-            -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" \
-            -DCMAKE_FIND_ROOT_PATH="${QT_AND}" \
-            -DCMAKE_PREFIX_PATH="${QT_AND}" \
-            -DQt6_DIR="${QT_AND}/lib/cmake/Qt6" \
-            -DQt6Quick_DIR="${QT_AND}/lib/cmake/Qt6Quick" \
-            -DQt6Qml_DIR="${QT_AND}/lib/cmake/Qt6Qml" \
-            -DQt6QuickControls2_DIR="${QT_AND}/lib/cmake/Qt6QuickControls2" \
-            -DQt6Network_DIR="${QT_AND}/lib/cmake/Qt6Network" \
             -DQT_HOST_PATH="${QT_HOST}" \
-            -DQT_HOST_PATH_CMAKE_DIR="${QT_HOST}/lib/cmake" \
+            -DQt6HostInfo_DIR="${QT_HOST}/lib/cmake/Qt6HostInfo" \
             -DCMAKE_BUILD_TYPE=Release \
             -S .
 
