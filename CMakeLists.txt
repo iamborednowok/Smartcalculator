@@ -62,3 +62,11 @@ if(ANDROID)
     set_property(TARGET SmartCalc APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
                  ${CMAKE_CURRENT_SOURCE_DIR}/android)
 endif()
+
+# ── Android 16KB page-size support (required for Android 15+ devices) ─────────
+# The workflow uses zipalign -p 16384 to align the APK for 16KB pages.
+# Without this matching linker flag, libSmartCalc.so's ELF segments stay at 4KB
+# alignment and dlopen() kills the process before main() runs.
+if(ANDROID)
+    target_link_options(SmartCalc PRIVATE "-Wl,-z,max-page-size=16384")
+endif()
