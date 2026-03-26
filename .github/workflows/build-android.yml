@@ -45,10 +45,10 @@ jobs:
       - name: Install aqtinstall
         run: pip install aqtinstall
 
-      # Qt 6.8+: desktop arch is now "linux_gcc_64" not "gcc_64"
+      # Qt 6.8+: host MUST use "all_os" host OS — "linux" no longer ships Qt6HostInfo.cmake
       - name: Install Qt6 Linux host
         run: |
-          aqt install-qt linux desktop ${{ env.QT_VERSION }} linux_gcc_64 \
+          aqt install-qt all_os desktop ${{ env.QT_VERSION }} linux_gcc_64 \
             --outputdir ${{ env.QT_INSTALL_DIR }} \
             --modules qtcharts qtnetworkauth
           echo "QT_HOST_PATH=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/linux_gcc_64" >> $GITHUB_ENV
@@ -98,7 +98,7 @@ jobs:
             -DQt6QuickControls2_DIR="${QT_AND}/lib/cmake/Qt6QuickControls2" \
             -DQt6Network_DIR="${QT_AND}/lib/cmake/Qt6Network" \
             -DQT_HOST_PATH="${QT_HOST}" \
-            -DQT_HOST_PATH_CMAKE_DIR="${QT_HOST}/lib/cmake/Qt6" \
+            -DQT_HOST_PATH_CMAKE_DIR="${QT_HOST}/lib/cmake" \
             -DCMAKE_BUILD_TYPE=Release \
             -S .
 
