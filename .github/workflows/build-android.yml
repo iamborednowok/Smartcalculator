@@ -16,7 +16,7 @@ jobs:
 
     env:
       QT_VERSION: "6.8.3"
-      ANDROID_NDK_VERSION: "27.2.12479018"
+      ANDROID_NDK_VERSION: "27.3.13750724"
       QT_INSTALL_DIR: "${{ github.workspace }}/Qt"
 
     steps:
@@ -82,13 +82,27 @@ jobs:
 
           echo "QT_HOST_PATH = $QT_HOST"
           echo "QT_ANDROID   = $QT_AND"
+          echo "NDK_HOME     = $NDK_HOME"
 
-          # Use qt-cmake (Qt's own Android wrapper) instead of plain cmake.
-          # Plain cmake + NDK toolchain sets CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY,
-          # which prevents find_package(Qt6HostInfo) from seeing the host Qt dir
-          # even when QT_HOST_PATH is explicitly set. qt-cmake sets up the Qt
-          # toolchain file (qt.toolchain.cmake) which handles host-package discovery
-          # correctly before any FIND_ROOT_PATH restrictions are applied.
+          # Validate that the host Qt and its HostInfo cmake package exist.
+          # Fail fast with a clear message instead of a cryptic CMake error.
+          if [ ! -f "${QT_HOST}/lib/cmake/Qt6HostInfo/Qt6HostInfoConfig.cmake" ]; then
+            echo "ERROR: Qt6HostInfoConfig.cmake not found at:"
+            echo "  ${QT_HOST}/lib/cmake/Qt6HostInfo/"
+            echo "Contents of ${QT_HOST}/lib/cmake/:"
+            ls "${QT_HOST}/lib/cmake/" 2>/dev/null || echo "(directory missing)"
+            exit 1
+          fi
+
+          # CRITICAL: export QT_HOST_PATH as a shell environment variable *before*
+          # calling qt-cmake.  Qt's qt.toolchain.cmake is processed during CMake's
+          # early toolchain-detection phase — before command-line -D cache variables
+          # are fully applied.  The toolchain reads QT_HOST_PATH from the environment
+          # (via $ENV{QT_HOST_PATH}) first; without this export the cache variable
+          # passed via -DQT_HOST_PATH arrives too late and Qt treats the path as
+          # unset, triggering the "please set QT_HOST_PATH" fatal error.
+          export QT_HOST_PATH="${QT_HOST}"
+
           "${QT_AND}/bin/qt-cmake" \
             -B build-android \
             -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" \
