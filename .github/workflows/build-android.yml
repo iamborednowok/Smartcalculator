@@ -172,6 +172,6 @@ jobs:
           body: |
             SmartCalc v${{ github.run_number }}
             Tai SmartCalc.apk ve cai tren Android.
-          overwrite: true
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
