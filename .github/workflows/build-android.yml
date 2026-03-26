@@ -45,12 +45,11 @@ jobs:
       - name: Install aqtinstall
         run: pip install aqtinstall
 
-      # Qt 6.8+: host MUST use "all_os" host OS — "linux" no longer ships Qt6HostInfo.cmake
+      # Qt 6.8+: host uses 'linux desktop'. The real fix is QT_HOST_PATH_CMAKE_DIR below (no trailing /Qt6)
       - name: Install Qt6 Linux host
         run: |
-          aqt install-qt all_os desktop ${{ env.QT_VERSION }} linux_gcc_64 \
-            --outputdir ${{ env.QT_INSTALL_DIR }} \
-            --modules qtcharts qtnetworkauth
+          aqt install-qt linux desktop ${{ env.QT_VERSION }} linux_gcc_64 \
+            --outputdir ${{ env.QT_INSTALL_DIR }}
           echo "QT_HOST_PATH=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/linux_gcc_64" >> $GITHUB_ENV
 
       # Qt 6.8+: android must use "all_os" host and "android" target
