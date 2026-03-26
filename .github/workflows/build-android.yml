@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      QT_VERSION: "6.8.3"           # Qt 6.8+ has proper Android 15 support
-      ANDROID_NDK_VERSION: "27.2.12479018"  # NDK 27 supports 16KB page alignment
+      QT_VERSION: "6.8.3"
+      ANDROID_NDK_VERSION: "27.2.12479018"
       QT_INSTALL_DIR: "${{ github.workspace }}/Qt"
 
     steps:
@@ -45,16 +45,18 @@ jobs:
       - name: Install aqtinstall
         run: pip install aqtinstall
 
+      # Qt 6.8+: desktop arch is now "linux_gcc_64" not "gcc_64"
       - name: Install Qt6 Linux host
         run: |
-          aqt install-qt linux desktop ${{ env.QT_VERSION }} gcc_64 \
+          aqt install-qt linux desktop ${{ env.QT_VERSION }} linux_gcc_64 \
             --outputdir ${{ env.QT_INSTALL_DIR }} \
             --modules qtcharts qtnetworkauth
-          echo "QT_HOST_PATH=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/gcc_64" >> $GITHUB_ENV
+          echo "QT_HOST_PATH=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/linux_gcc_64" >> $GITHUB_ENV
 
+      # Qt 6.8+: android must use "all_os" host and "android" target
       - name: Install Qt6 Android arm64
         run: |
-          aqt install-qt linux android ${{ env.QT_VERSION }} android_arm64_v8a \
+          aqt install-qt all_os android ${{ env.QT_VERSION }} android_arm64_v8a \
             --outputdir ${{ env.QT_INSTALL_DIR }} \
             --modules qtcharts qtnetworkauth
           echo "QT_ANDROID=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a" >> $GITHUB_ENV
@@ -98,7 +100,6 @@ jobs:
           fi
           echo "Signing: $APK"
 
-          # Generate debug keystore
           mkdir -p ~/.android
           keytool -genkeypair -v \
             -keystore ~/.android/debug.keystore \
@@ -110,9 +111,8 @@ jobs:
           ZIPALIGN=$ANDROID_SDK_ROOT/build-tools/35.0.0/zipalign
           APKSIGNER=$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner
 
-          # 16KB page alignment — required for Android 15+
+          # 16KB page alignment required for Android 15+
           $ZIPALIGN -v -p 16384 "$APK" apk-out/SmartCalc-aligned.apk
-
           $APKSIGNER sign \
             --ks ~/.android/debug.keystore \
             --ks-key-alias androiddebugkey \
