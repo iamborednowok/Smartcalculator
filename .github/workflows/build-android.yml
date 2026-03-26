@@ -7,6 +7,10 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+# ✅ FIX 1: Grant contents:write so the token can create releases
+permissions:
+  contents: write
+
 jobs:
   build-android:
     runs-on: ubuntu-22.04
@@ -40,9 +44,6 @@ jobs:
       # ── 3b. Remove broken Android preview platforms ───────────────────────
       - name: Remove broken Android preview platforms
         run: |
-          # android-36-ext19 ships a corrupt android.jar on this runner image.
-          # Keep android-34 (needed by Gradle compileSdkVersion).
-          # NDK 25 caps at API 33 for cmake; Gradle uses android-34 for resource linking.
           find $ANDROID_SDK_ROOT/platforms -maxdepth 1 -name "android-3[5-9]*" -exec rm -rf {} + || true
           echo "Remaining platforms:"
           ls $ANDROID_SDK_ROOT/platforms/
@@ -97,7 +98,11 @@ jobs:
       - name: Build APK
         run: cmake --build build-android --target apk -- -j$(nproc)
 
-      # ── 9. Upload APK ──────────────────────────────────────────────
+      # ── 9. (Debug) Show what APKs were actually produced ──────────
+      - name: List produced APKs
+        run: find build-android -name "*.apk" | sort
+
+      # ── 10. Upload APK as workflow artifact ────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -105,17 +110,19 @@ jobs:
           path: build-android/**/*.apk
           if-no-files-found: error
 
-
-          # ── 12. Create GitHub Release ────────────────────────────────────────────
-      - uses: softprops/action-gh-release@v2
+      # ── 11. Create GitHub Release (push to main only) ──────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
           tag_name: apk-v${{ github.run_number }}
           name: SmartCalc APK v${{ github.run_number }}
-          files: build-android/android-build/build/outputs/apk/release/*.apk  # 👈 fixed
+          # ✅ FIX 2: `--target apk` produces a DEBUG apk — path is apk/debug/, not apk/release/
+          files: build-android/android-build/build/outputs/apk/debug/*.apk
           generate_release_notes: false
           body: |
             SmartCalc v${{ github.run_number }}
             Tải app-debug.apk về cài trên Android.
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
