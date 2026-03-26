@@ -1,4 +1,4 @@
-name: 🤖 Build Android APK
+name: Build Android APK
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
-# ✅ FIX 1: Grant contents:write so the token can create releases
 permissions:
   contents: write
 
@@ -21,18 +20,15 @@ jobs:
       QT_INSTALL_DIR: "${{ github.workspace }}/Qt"
 
     steps:
-      # ── 1. Lấy code ────────────────────────────────────────────────
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # ── 2. Java 17 ─────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── 3. Android SDK + NDK ───────────────────────────────────────
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -41,18 +37,14 @@ jobs:
           sdkmanager "ndk;${{ env.ANDROID_NDK_VERSION }}" "build-tools;34.0.0" "platforms;android-34"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> $GITHUB_ENV
 
-      # ── 3b. Remove broken Android preview platforms ───────────────────────
       - name: Remove broken Android preview platforms
         run: |
           find $ANDROID_SDK_ROOT/platforms -maxdepth 1 -name "android-3[5-9]*" -exec rm -rf {} + || true
-          echo "Remaining platforms:"
           ls $ANDROID_SDK_ROOT/platforms/
 
-      # ── 4. Python + aqtinstall ─────────────────────────────────────
       - name: Install aqtinstall
         run: pip install aqtinstall
 
-      # ── 5. Qt6 host (Linux) ────────────────────────────────────────
       - name: Install Qt6 Linux host
         run: |
           aqt install-qt linux desktop ${{ env.QT_VERSION }} gcc_64 \
@@ -60,7 +52,6 @@ jobs:
             --modules qtcharts qtnetworkauth
           echo "QT_HOST_PATH=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/gcc_64" >> $GITHUB_ENV
 
-      # ── 6. Qt6 Android arm64 ───────────────────────────────────────
       - name: Install Qt6 Android arm64
         run: |
           aqt install-qt linux android ${{ env.QT_VERSION }} android_arm64_v8a \
@@ -68,13 +59,6 @@ jobs:
             --modules qtcharts qtnetworkauth
           echo "QT_ANDROID=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a" >> $GITHUB_ENV
 
-      # ── 6b. Verify Qt components are present ──────────────────────
-      - name: Verify Qt Android install
-        run: |
-          echo "Checking Qt Android cmake modules:"
-          ls $QT_ANDROID/lib/cmake/ | grep -E "Qt6(Quick|Qml|Network|Core)" || true
-
-      # ── 7. Configure CMake ─────────────────────────────────────────
       - name: Configure CMake for Android
         run: |
           cmake -B build-android \
@@ -94,46 +78,69 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -S .
 
-      # ── 8. Build APK ───────────────────────────────────────────────
       - name: Build APK
         run: cmake --build build-android --target apk -- -j$(nproc)
 
-      # ── 9. Find APK and stage it to a known location ─────────────
-      - name: Stage APK for release
+      - name: Sign APK
         run: |
           mkdir -p apk-out
-          # Find every .apk produced anywhere in the build tree and copy to apk-out/
+
+          echo "All APKs found:"
           find build-android -name "*.apk" | sort
-          # Prefer the Qt-renamed APK; fall back to any .apk if not found
+
+          # Pick best candidate: Qt-named > unsigned > any
           APK=$(find build-android -name "SmartCalc.apk" | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find build-android -name "*unsigned*.apk" | head -1)
+          fi
           if [ -z "$APK" ]; then
             APK=$(find build-android -name "*.apk" | head -1)
           fi
-          echo "Using APK: $APK"
-          cp "$APK" apk-out/SmartCalc.apk
-          echo "Staged APKs:"
+          echo "Signing: $APK"
+
+          # Generate debug keystore (any valid signature lets Android install the APK)
+          mkdir -p ~/.android
+          keytool -genkeypair -v \
+            -keystore ~/.android/debug.keystore \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+          ZIPALIGN=$ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign
+          APKSIGNER=$ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner
+
+          $ZIPALIGN -v 4 "$APK" apk-out/SmartCalc-aligned.apk
+          $APKSIGNER sign \
+            --ks ~/.android/debug.keystore \
+            --ks-key-alias androiddebugkey \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out apk-out/SmartCalc.apk \
+            apk-out/SmartCalc-aligned.apk
+          rm apk-out/SmartCalc-aligned.apk
+
+          echo "Final APK:"
           ls -lh apk-out/
 
-      # ── 10. Upload APK as workflow artifact ────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: SmartCalc-APK
-          path: apk-out/*.apk
+          path: apk-out/SmartCalc.apk
           if-no-files-found: error
 
-      # ── 11. Create GitHub Release (push to main only) ──────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
           tag_name: apk-v${{ github.run_number }}
           name: SmartCalc APK v${{ github.run_number }}
-          files: apk-out/*.apk
+          files: apk-out/SmartCalc.apk
           generate_release_notes: false
           body: |
             SmartCalc v${{ github.run_number }}
-            Tải app-debug.apk về cài trên Android.
+            Tai SmartCalc.apk ve cai tren Android.
           overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
