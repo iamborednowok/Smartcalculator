@@ -61,6 +61,19 @@ jobs:
             --modules qtcharts qtnetworkauth
           echo "QT_ANDROID=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a" >> $GITHUB_ENV
 
+      - name: Debug Qt install structure
+        run: |
+          QT_HOST="${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/linux_gcc_64"
+          QT_AND="${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a"
+          echo "=== Host Qt cmake dir ==="
+          ls "${QT_HOST}/lib/cmake/Qt6/" | grep -E "Host|Info|Config" || echo "NOT FOUND"
+          echo "=== Android Qt cmake dir ==="
+          ls "${QT_AND}/lib/cmake/Qt6/" | grep -E "Host|Info|Config" || echo "NOT FOUND"
+          echo "=== Full linux_gcc_64 tree (2 levels) ==="
+          ls "${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/"
+          echo "=== Qt6HostInfo search ==="
+          find "${{ env.QT_INSTALL_DIR }}" -name "Qt6HostInfo.cmake" 2>/dev/null || echo "Qt6HostInfo.cmake not found anywhere"
+
       - name: Configure CMake for Android
         run: |
           # Resolve all paths explicitly so CMake never sees empty variables
@@ -85,7 +98,7 @@ jobs:
             -DQt6QuickControls2_DIR="${QT_AND}/lib/cmake/Qt6QuickControls2" \
             -DQt6Network_DIR="${QT_AND}/lib/cmake/Qt6Network" \
             -DQT_HOST_PATH="${QT_HOST}" \
-            -DQT_HOST_PATH_CMAKE_DIR="${QT_HOST}/lib/cmake" \
+            -DQT_HOST_PATH_CMAKE_DIR="${QT_HOST}/lib/cmake/Qt6" \
             -DCMAKE_BUILD_TYPE=Release \
             -S .
 
