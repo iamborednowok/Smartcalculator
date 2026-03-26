@@ -4,13 +4,13 @@
     android:versionCode="1"
     android:versionName="1.0">
 
-    <!-- Quyền truy cập internet (dùng cho ApiClient) -->
+    <!-- Quyen truy cap internet (dung cho ApiClient) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <uses-sdk
-        android:minSdkVersion="24"
-        android:targetSdkVersion="33" />
+        android:minSdkVersion="28"
+        android:targetSdkVersion="35" />
 
     <application
         android:name="org.qtproject.qt.android.bindings.QtApplication"
@@ -33,10 +33,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Qt 6 metadata: only lib_name and extract_android_style are needed.     -->
-            <!-- qt_sources_resource_id / qt_libs_resource_id / bundled_libs_resource_id -->
-            <!-- are Qt 5 legacy entries — Qt 6 androiddeployqt does NOT generate       -->
-            <!-- those @array/ resources, so keeping them causes resource link failure.  -->
             <meta-data android:name="android.app.lib_name" android:value="SmartCalc" />
             <meta-data android:name="android.app.extract_android_style" android:value="minimal" />
         </activity>
