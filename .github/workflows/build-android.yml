@@ -1,207 +1,44 @@
-name: Build Android APK
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.smartcalc.app"
+    android:versionCode="1"
+    android:versionName="1.0">
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    <!-- Quyền truy cập internet (dùng cho ApiClient) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-permissions:
-  contents: write
+    <uses-sdk
+        android:minSdkVersion="28"
+        android:targetSdkVersion="35" />
 
-jobs:
-  build-android:
-    runs-on: ubuntu-22.04
+    <application
+        android:name="org.qtproject.qt.android.bindings.QtApplication"
+        android:label="SmartCalc"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/AppTheme"
+        android:hardwareAccelerated="true">
 
-    env:
-      QT_VERSION: "6.8.3"
-      ANDROID_NDK_VERSION: "27.3.13750724"
-      QT_INSTALL_DIR: "${{ github.workspace }}/Qt"
+        <activity
+            android:name="org.qtproject.qt.android.bindings.QtActivity"
+            android:exported="true"
+            android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:label="SmartCalc">
 
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
-        run: |
-          sdkmanager "ndk;${{ env.ANDROID_NDK_VERSION }}" "build-tools;35.0.0" "platforms;android-35"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> $GITHUB_ENV
-
-      - name: Remove broken Android preview platforms
-        run: |
-          find $ANDROID_SDK_ROOT/platforms -maxdepth 1 -name "android-3[6-9]*" -exec rm -rf {} + || true
-          ls $ANDROID_SDK_ROOT/platforms/
-
-      - name: Install aqtinstall
-        # Pin to a known-good release. Latest aqtinstall can have breaking
-        # changes in how it resolves Qt 6.8+ linux_gcc_64 desktop packages.
-        run: pip install "aqtinstall==3.2.1"
-
-      # Install Android Qt + matching host Qt in a single step.
-      # --autodesktop is the officially supported Qt 6.5+ way to get host tools
-      # (moc, rcc, Qt6HostInfo cmake package) for cross-compilation. Using two
-      # separate installs with "aqt install-qt linux desktop ... linux_gcc_64"
-      # silently produces an empty installation on Qt 6.8+ with newer aqtinstall.
-      - name: Install Qt6 Android arm64 + host Qt
-        run: |
-          aqt install-qt linux android ${{ env.QT_VERSION }} android_arm64_v8a \
-            --outputdir "${{ env.QT_INSTALL_DIR }}" \
-            --autodesktop \
-            --modules qtcharts qtnetworkauth
-
-          # aqt --autodesktop installs the host Qt as either gcc_64 or linux_gcc_64
-          # depending on the aqtinstall version — discover the actual path at runtime.
-          HOST_QT=$(find "${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}" \
-            -maxdepth 1 -type d \( -name "gcc_64" -o -name "linux_gcc_64" \) | head -1)
-
-          if [ -z "$HOST_QT" ]; then
-            echo "ERROR: --autodesktop did not create a host Qt directory."
-            echo "Contents of ${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/:"
-            ls "${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/" 2>/dev/null || echo "(missing)"
-            exit 1
-          fi
-
-          if [ ! -f "${HOST_QT}/lib/cmake/Qt6HostInfo/Qt6HostInfoConfig.cmake" ]; then
-            echo "ERROR: Qt6HostInfoConfig.cmake missing from host Qt at ${HOST_QT}"
-            echo "Contents of ${HOST_QT}/lib/cmake/:"
-            ls "${HOST_QT}/lib/cmake/" 2>/dev/null || echo "(missing)"
-            exit 1
-          fi
-
-          echo "Host Qt   : $HOST_QT"
-          echo "Android Qt: ${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a"
-          echo "QT_HOST_PATH=${HOST_QT}" >> $GITHUB_ENV
-          echo "QT_ANDROID=${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/android_arm64_v8a" >> $GITHUB_ENV
-
-      - name: Debug Qt install structure
-        run: |
-          QT_HOST="${QT_HOST_PATH}"
-          QT_AND="${QT_ANDROID}"
-          echo "=== Host Qt cmake dir ==="
-          ls "${QT_HOST}/lib/cmake/Qt6/" | grep -E "Host|Info|Config" || echo "NOT FOUND"
-          echo "=== Android Qt cmake dir ==="
-          ls "${QT_AND}/lib/cmake/Qt6/" | grep -E "Host|Info|Config" || echo "NOT FOUND"
-          echo "=== Qt install tree ==="
-          ls "${{ env.QT_INSTALL_DIR }}/${{ env.QT_VERSION }}/"
-          echo "=== Qt6HostInfo search ==="
-          find "${{ env.QT_INSTALL_DIR }}" -name "Qt6HostInfoConfig.cmake" 2>/dev/null || echo "Qt6HostInfoConfig.cmake not found anywhere"
-
-      - name: Configure CMake for Android
-        run: |
-          # Use paths discovered at install time — the host arch dir is gcc_64 or
-          # linux_gcc_64 depending on the aqtinstall version, so we rely on the env
-          # var set dynamically by the install step rather than hard-coding the name.
-          QT_HOST="${QT_HOST_PATH}"
-          QT_AND="${QT_ANDROID}"
-          NDK_HOME="${ANDROID_SDK_ROOT}/ndk/${{ env.ANDROID_NDK_VERSION }}"
-
-          echo "QT_HOST_PATH = $QT_HOST"
-          echo "QT_ANDROID   = $QT_AND"
-          echo "NDK_HOME     = $NDK_HOME"
-
-          # Validate that the host Qt and its HostInfo cmake package exist.
-          # Fail fast with a clear message instead of a cryptic CMake error.
-          if [ ! -f "${QT_HOST}/lib/cmake/Qt6HostInfo/Qt6HostInfoConfig.cmake" ]; then
-            echo "ERROR: Qt6HostInfoConfig.cmake not found at:"
-            echo "  ${QT_HOST}/lib/cmake/Qt6HostInfo/"
-            echo "Contents of ${QT_HOST}/lib/cmake/:"
-            ls "${QT_HOST}/lib/cmake/" 2>/dev/null || echo "(directory missing)"
-            exit 1
-          fi
-
-          # CRITICAL: export QT_HOST_PATH as a shell environment variable *before*
-          # calling qt-cmake.  Qt's qt.toolchain.cmake is processed during CMake's
-          # early toolchain-detection phase — before command-line -D cache variables
-          # are fully applied.  The toolchain reads QT_HOST_PATH from the environment
-          # (via $ENV{QT_HOST_PATH}) first; without this export the cache variable
-          # passed via -DQT_HOST_PATH arrives too late and Qt treats the path as
-          # unset, triggering the "please set QT_HOST_PATH" fatal error.
-          export QT_HOST_PATH="${QT_HOST}"
-
-          "${QT_AND}/bin/qt-cmake" \
-            -B build-android \
-            -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" \
-            -DANDROID_NDK="${NDK_HOME}" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-35 \
-            -DQT_HOST_PATH="${QT_HOST}" \
-            -DQt6HostInfo_DIR="${QT_HOST}/lib/cmake/Qt6HostInfo" \
-            -DCMAKE_BUILD_TYPE=Release \
-            -S .
-
-      - name: Build APK
-        run: cmake --build build-android --target apk -- -j$(nproc)
-
-      - name: Sign APK
-        run: |
-          mkdir -p apk-out
-
-          echo "All APKs found:"
-          find build-android -name "*.apk" | sort
-
-          # Pick best candidate: Qt-named > unsigned > any
-          APK=$(find build-android -name "SmartCalc.apk" | head -1)
-          if [ -z "$APK" ]; then
-            APK=$(find build-android -name "*unsigned*.apk" | head -1)
-          fi
-          if [ -z "$APK" ]; then
-            APK=$(find build-android -name "*.apk" | head -1)
-          fi
-          echo "Signing: $APK"
-
-          mkdir -p ~/.android
-          keytool -genkeypair -v \
-            -keystore ~/.android/debug.keystore \
-            -alias androiddebugkey \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US"
-
-          ZIPALIGN=$ANDROID_SDK_ROOT/build-tools/35.0.0/zipalign
-          APKSIGNER=$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner
-
-          # 16KB page alignment required for Android 15+
-          $ZIPALIGN -v -p 16384 "$APK" apk-out/SmartCalc-aligned.apk
-          $APKSIGNER sign \
-            --ks ~/.android/debug.keystore \
-            --ks-key-alias androiddebugkey \
-            --ks-pass pass:android \
-            --key-pass pass:android \
-            --out apk-out/SmartCalc.apk \
-            apk-out/SmartCalc-aligned.apk
-          rm apk-out/SmartCalc-aligned.apk
-
-          echo "Final APK:"
-          ls -lh apk-out/
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SmartCalc-APK
-          path: apk-out/SmartCalc.apk
-          if-no-files-found: error
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main'
-        with:
-          tag_name: apk-v${{ github.run_number }}
-          name: SmartCalc APK v${{ github.run_number }}
-          files: apk-out/SmartCalc.apk
-          generate_release_notes: false
-          body: |
-            SmartCalc v${{ github.run_number }}
-            Tai SmartCalc.apk ve cai tren Android.
-          overwrite: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            <!-- Qt 6 metadata: only lib_name and extract_android_style are needed.     -->
+            <!-- qt_sources_resource_id / qt_libs_resource_id / bundled_libs_resource_id -->
+            <!-- are Qt 5 legacy entries — Qt 6 androiddeployqt does NOT generate       -->
+            <!-- those @array/ resources, so keeping them causes resource link failure.  -->
+            <meta-data android:name="android.app.lib_name" android:value="SmartCalc" />
+            <meta-data android:name="android.app.extract_android_style" android:value="minimal" />
+        </activity>
+    </application>
+</manifest>
