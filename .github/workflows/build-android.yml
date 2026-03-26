@@ -104,7 +104,13 @@ jobs:
           mkdir -p apk-out
           # Find every .apk produced anywhere in the build tree and copy to apk-out/
           find build-android -name "*.apk" | sort
-          find build-android -name "*.apk" -exec cp {} apk-out/ \;
+          # Prefer the Qt-renamed APK; fall back to any .apk if not found
+          APK=$(find build-android -name "SmartCalc.apk" | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find build-android -name "*.apk" | head -1)
+          fi
+          echo "Using APK: $APK"
+          cp "$APK" apk-out/SmartCalc.apk
           echo "Staged APKs:"
           ls -lh apk-out/
 
