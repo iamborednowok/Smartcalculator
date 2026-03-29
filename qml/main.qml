@@ -15,7 +15,7 @@ ApplicationWindow {
     MathEngine  { id: mathEngine }
     ApiClient   { id: apiClient
         onResponseReceived: function(content, isError) {
-            if (tabBar.currentIndex === 5)
+            if (root.currentTab === 5)
                 aiLoader.item?.handleResponse(content, isError)
         }
     }
@@ -34,6 +34,17 @@ ApplicationWindow {
     property color accentColor:  "#7C3AED"
     property color accent2Color: "#A78BFA"
     property var   appSettings:  settings   // ← correct name (was `settings` only, causing AITab bug)
+
+    // ── Active tab ─────────────────────────────────────────────────────
+    // CRASH FIX: Loader `active` bindings must NOT reference `tabBar` because
+    // tabBar (AppTabBar) is declared BELOW the Loaders in the ColumnLayout.
+    // During QML component creation objects are instantiated top-to-bottom, so
+    // when the Loader bindings are first evaluated `tabBar` is still null.
+    // `null.currentIndex === 0` fails silently → ALL Loaders stay inactive →
+    // the screen stays permanently white/blank.
+    // Solution: hoist the selected index into a root property that both the
+    // Loaders and AppTabBar bind to.  No forward reference; no null access.
+    property int currentTab: 0
 
     // ── History ────────────────────────────────────────────────────────
     property var calcHistory: []
@@ -116,18 +127,23 @@ ApplicationWindow {
             Layout.fillWidth:  true
             Layout.fillHeight: true
 
-            Loader { id: calcLoader;    anchors.fill: parent; active: tabBar.currentIndex === 0; visible: active; source: "CalcTab.qml" }
-            Loader { id: formulaLoader; anchors.fill: parent; active: tabBar.currentIndex === 1; visible: active; source: "FormulaTab.qml" }
-            Loader { id: convertLoader; anchors.fill: parent; active: tabBar.currentIndex === 2; visible: active; source: "ConvertTab.qml" }
-            Loader { id: randomLoader;  anchors.fill: parent; active: tabBar.currentIndex === 3; visible: active; source: "RandomTab.qml" }
-            Loader { id: graphLoader;   anchors.fill: parent; active: tabBar.currentIndex === 4; visible: active; source: "GraphTab.qml" }
-            Loader { id: aiLoader;      anchors.fill: parent; active: true; visible: tabBar.currentIndex === 5; source: "AITab.qml" }
+            // CRASH FIX: all Loaders now bind to root.currentTab (a plain property
+            // declared above) rather than tabBar.currentIndex.  tabBar is created
+            // AFTER these Loaders in the layout, so tabBar would be null on the
+            // first evaluation, causing every Loader to stay inactive (white screen).
+            Loader { id: calcLoader;    anchors.fill: parent; active: root.currentTab === 0; visible: active; source: "CalcTab.qml" }
+            Loader { id: formulaLoader; anchors.fill: parent; active: root.currentTab === 1; visible: active; source: "FormulaTab.qml" }
+            Loader { id: convertLoader; anchors.fill: parent; active: root.currentTab === 2; visible: active; source: "ConvertTab.qml" }
+            Loader { id: randomLoader;  anchors.fill: parent; active: root.currentTab === 3; visible: active; source: "RandomTab.qml" }
+            Loader { id: graphLoader;   anchors.fill: parent; active: root.currentTab === 4; visible: active; source: "GraphTab.qml" }
+            Loader { id: aiLoader;      anchors.fill: parent; active: true; visible: root.currentTab === 5; source: "AITab.qml" }
         }
 
         AppTabBar {
             id: tabBar
             Layout.fillWidth: true
-            onTabClicked: function(i) { currentIndex = i }
+            currentIndex: root.currentTab
+            onTabClicked: function(i) { root.currentTab = i }
         }
     }
 
