@@ -120,9 +120,15 @@ int main(int argc, char *argv[])
         },
         Qt::QueuedConnection);
 
-    const QUrl url(QStringLiteral("qrc:/SmartCalc/qml/main.qml"));
-    writeLog("Loading QML root: " + url.toString());
-    engine.load(url);
+    // CRASH FIX: The old qrc:/SmartCalc/qml/main.qml path was WRONG.
+    // qt_standard_project_setup(REQUIRES 6.5) makes qt_add_qml_module store
+    // files under /qt/qml/<URI>/ — i.e. qrc:/qt/qml/SmartCalc/Backend/main.qml.
+    // The hard-coded qrc URL never existed, so objectCreationFailed fired
+    // immediately, triggering QCoreApplication::exit(-1) → app closes.
+    // loadFromModule() resolves the path from the URI at runtime, so it is
+    // immune to Qt version differences in resource prefix conventions.
+    writeLog("Loading QML root via module: SmartCalc.Backend / main");
+    engine.loadFromModule("SmartCalc.Backend", "main");
 
     int exitCode = app.exec();
     writeLog("=== SmartCalc exited with code " + QString::number(exitCode) + " ===");
