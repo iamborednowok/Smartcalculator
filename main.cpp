@@ -1,5 +1,6 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQmlError>
 #include <QtDebug>
 #include <QFile>
@@ -15,7 +16,6 @@
 
 static QString logFilePath()
 {
-    // On Android this resolves to the app's external files dir (readable via adb pull)
     QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(dir);
     return dir + "/crash_log.txt";
@@ -23,9 +23,7 @@ static QString logFilePath()
 
 static void writeLog(const QString &message)
 {
-    // Mirror to logcat / Qt debug output so adb logcat also captures it
     qCritical().noquote() << "[SmartCalc]" << message;
-
     QFile f(logFilePath());
     if (f.open(QIODevice::Append | QIODevice::Text)) {
         QTextStream ts(&f);
@@ -37,25 +35,18 @@ static void writeLog(const QString &message)
 static void installMessageHandler()
 {
     qInstallMessageHandler([](QtMsgType type, const QMessageLogContext &ctx, const QString &msg) {
-        // Forward everything to the default handler (logcat on Android)
         QByteArray localMsg = msg.toLocal8Bit();
-
         switch (type) {
         case QtDebugMsg:
-            fprintf(stderr, "D [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line);
-            break;
+            fprintf(stderr, "D [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line); break;
         case QtInfoMsg:
-            fprintf(stderr, "I [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line);
-            break;
+            fprintf(stderr, "I [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line); break;
         case QtWarningMsg:
-            fprintf(stderr, "W [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line);
-            break;
+            fprintf(stderr, "W [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line); break;
         case QtCriticalMsg:
-            fprintf(stderr, "E [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line);
-            break;
+            fprintf(stderr, "E [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line); break;
         case QtFatalMsg:
             fprintf(stderr, "F [SmartCalc] %s (%s:%u)\n", localMsg.constData(), ctx.file, ctx.line);
-            // Write fatal errors to file before the process dies
             {
                 QFile f(logFilePath());
                 if (f.open(QIODevice::Append | QIODevice::Text)) {
@@ -70,11 +61,141 @@ static void installMessageHandler()
     });
 }
 
+// ── Fallback error screen ─────────────────────────────────────────────────────
+// Loaded via engine.loadData() when objectCreationFailed fires.
+// Uses only core Qt imports — no SmartCalc.Backend — so it always works.
+// Error text is injected via rootContext properties (never string-interpolated).
+
+static const char *ERROR_SCREEN_QML = R"QML(
+import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
+
+ApplicationWindow {
+    visible: true
+    width:   400
+    height:  820
+    title:   "SmartCalc — Startup Error"
+
+    background: Rectangle { color: "#010208" }
+
+    ColumnLayout {
+        anchors.fill:    parent
+        anchors.margins: 28
+        spacing:         18
+
+        Item { Layout.fillHeight: true; Layout.preferredHeight: 1 }
+
+        Text {
+            text:             "⚠️"
+            font.pixelSize:   52
+            Layout.alignment: Qt.AlignHCenter
+        }
+
+        Text {
+            text:             "UI Failed to Initialize"
+            color:            "#f0f0ff"
+            font.pixelSize:   22
+            font.bold:        true
+            Layout.alignment: Qt.AlignHCenter
+        }
+
+        Text {
+            text:                "SmartCalc loaded, but its interface could not start.\n"
+                               + "No data was lost. See the error details below."
+            color:               "#8888cc"
+            font.pixelSize:      13
+            wrapMode:            Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            Layout.fillWidth:    true
+        }
+
+        // Error detail box
+        Rectangle {
+            Layout.fillWidth:  true
+            Layout.fillHeight: true
+            color:             Qt.rgba(1, 0.18, 0.18, 0.07)
+            border.color:      Qt.rgba(1, 0.3, 0.3, 0.35)
+            radius:            14
+
+            ScrollView {
+                anchors.fill:    parent
+                anchors.margins: 14
+                clip:            true
+                Text {
+                    // errorLog is set by main.cpp via rootContext property
+                    text:            typeof errorLog !== "undefined"
+                                         ? errorLog
+                                         : "(no error details captured)"
+                    color:           "#ff7070"
+                    font.pixelSize:  11
+                    font.family:     "monospace"
+                    wrapMode:        Text.WrapAnywhere
+                    width:           parent.width
+                }
+            }
+        }
+
+        // Log file path hint
+        Text {
+            text:             "📁 " + (typeof logPath !== "undefined" ? logPath : "")
+            color:            "#44446a"
+            font.pixelSize:   10
+            wrapMode:         Text.WrapAnywhere
+            Layout.fillWidth: true
+        }
+
+        // Copy button
+        Rectangle {
+            Layout.fillWidth: true
+            height:  50
+            radius:  12
+            color:   copyArea.pressed ? "#5b21b6" : "#7C3AED"
+            Behavior on color { ColorAnimation { duration: 80 } }
+
+            Text {
+                anchors.centerIn: parent
+                text:  "📋  Copy Error"
+                color: "white"
+                font.pixelSize: 14
+                font.bold:      true
+            }
+
+            MouseArea {
+                id: copyArea
+                anchors.fill: parent
+                onClicked: {
+                    var report = "[SmartCalc Crash Report]\n"
+                               + "Time: " + new Date().toString() + "\n\n"
+                               + (typeof errorLog !== "undefined" ? errorLog : "(none)") + "\n\n"
+                               + "Log: " + (typeof logPath !== "undefined" ? logPath : "");
+                    if (Qt.application.clipboard)
+                        Qt.application.clipboard.setText(report);
+                    copyDone.visible = true;
+                    hideTimer.start();
+                }
+            }
+        }
+
+        Text {
+            id:               copyDone
+            visible:          false
+            text:             "✓ Copied to clipboard"
+            color:            "#7C3AED"
+            font.pixelSize:   12
+            Layout.alignment: Qt.AlignHCenter
+            Timer { id: hideTimer; interval: 2000; onTriggered: copyDone.visible = false }
+        }
+
+        Item { Layout.fillHeight: true; Layout.preferredHeight: 1 }
+    }
+}
+)QML";
+
 // ── main ─────────────────────────────────────────────────────────────────────
 
 int main(int argc, char *argv[])
 {
-    // Install message handler FIRST so every qDebug/qWarning/qCritical is captured
     installMessageHandler();
 
     QGuiApplication app(argc, argv);
@@ -85,48 +206,64 @@ int main(int argc, char *argv[])
     writeLog("=== SmartCalc starting — v" + app.applicationVersion() + " ===");
     writeLog("Log file: " + logFilePath());
 
-    // Types are auto-registered via QML_ELEMENT + qt_add_qml_module (URI SmartCalc.Backend).
-    // Do NOT also call qmlRegisterType() here — double-registration causes warnings and
-    // can silently shadow the CMake-generated plugin, breaking import path resolution.
-
     QQmlApplicationEngine engine;
 
-    // ── Capture QML warnings (import errors, binding failures, etc.) ──────────
+    // Collect every QML warning emitted during loading.
+    // Qt emits warnings() synchronously, before objectCreationFailed, so this
+    // list is fully populated by the time the failure handler runs.
+    QStringList collectedErrors;
+
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::warnings,
         &app,
-        [](const QList<QQmlError> &warnings) {
+        [&collectedErrors](const QList<QQmlError> &warnings) {
             for (const QQmlError &err : warnings) {
                 writeLog("QML WARNING: " + err.toString());
+                collectedErrors << err.toString();
             }
         });
 
-    // ── Handle load failure — log every detail before exiting ────────────────
+    // On failure: show the error screen instead of closing the app.
+    //
+    // Qt::QueuedConnection is required — objectCreationFailed fires from inside
+    // engine.loadFromModule() while the loader is still unwinding. Calling
+    // engine.loadData() synchronously here would re-enter the engine. Queuing
+    // defers the call to the next event-loop tick when the engine is idle.
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,
         &app,
-        []() {
-            writeLog("FATAL: QML object creation failed.");
-            writeLog("Common causes:");
-            writeLog("  1. Missing Qt .so libraries in APK (run androiddeployqt)");
-            writeLog("  2. SmartCalc.Backend plugin not deployed (libSmartCalcplugin.so missing)");
-            writeLog("  3. ABI mismatch (arm64 vs x86_64)");
-            writeLog("  4. QML import path not set correctly");
-            writeLog("Check logcat: adb logcat -s Qt,SmartCalc");
-            writeLog("Pull crash log: adb pull " + logFilePath());
-            QCoreApplication::exit(-1);
+        [&engine, &collectedErrors]() {
+
+            writeLog("UI init failed — showing error screen (app stays open).");
+
+            QString errorText;
+            if (collectedErrors.isEmpty()) {
+                errorText =
+                    "No QML warnings were captured.\n\n"
+                    "Possible causes:\n"
+                    "  • Missing Qt .so libraries in APK\n"
+                    "  • libSmartCalcplugin.so not deployed\n"
+                    "  • ABI mismatch (arm64 vs x86_64)\n"
+                    "  • QML import path not set correctly\n\n"
+                    "Run:  adb logcat -s Qt,SmartCalc";
+            } else {
+                errorText = collectedErrors.join("\n\n");
+            }
+
+            // Inject via context properties — no string escaping needed.
+            // These are readable in QML as plain identifiers (errorLog, logPath).
+            engine.rootContext()->setContextProperty("errorLog", errorText);
+            engine.rootContext()->setContextProperty("logPath",  logFilePath());
+
+            // Load the fallback screen. It only imports QtQuick and
+            // QtQuick.Controls.Basic, so it works even when SmartCalc.Backend
+            // is the thing that broke.
+            engine.loadData(QByteArray(ERROR_SCREEN_QML));
         },
         Qt::QueuedConnection);
 
-    // CRASH FIX: The old qrc:/SmartCalc/qml/main.qml path was WRONG.
-    // qt_standard_project_setup(REQUIRES 6.5) makes qt_add_qml_module store
-    // files under /qt/qml/<URI>/ — i.e. qrc:/qt/qml/SmartCalc/Backend/main.qml.
-    // The hard-coded qrc URL never existed, so objectCreationFailed fired
-    // immediately, triggering QCoreApplication::exit(-1) → app closes.
-    // loadFromModule() resolves the path from the URI at runtime, so it is
-    // immune to Qt version differences in resource prefix conventions.
     writeLog("Loading QML root via module: SmartCalc.Backend / main");
     engine.loadFromModule("SmartCalc.Backend", "main");
 
