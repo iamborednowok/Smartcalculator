@@ -17,6 +17,14 @@ qt_add_executable(SmartCalc
     backend/ApiClient.h
 )
 
+# CRASH FIX: Theme.qml uses `pragma Singleton` — Qt 6.5+ requires this property
+# to be declared explicitly, otherwise the generated qmldir marks Theme as a
+# regular (non-singleton) type.  At runtime Qt 6.7+ treats the pragma/qmldir
+# mismatch as a fatal error, causing the entire SmartCalc.Backend module to
+# fail loading → objectCreationFailed → QCoreApplication::exit(-1) → crash.
+# The black background the user sees is the Android system splash, not QML.
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(SmartCalc
     URI SmartCalc.Backend
     VERSION 1.0
