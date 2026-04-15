@@ -265,7 +265,7 @@ int main(int argc, char *argv[])
         Qt::QueuedConnection);
 
     writeLog("Loading QML root via module: SmartCalc.Backend / main");
-    engine.loadFromModule("SmartCalc.Backend", "main");
+    engine.loadFromModule("SmartCalc.Backend", "Main");
 
     int exitCode = app.exec();
     writeLog("=== SmartCalc exited with code " + QString::number(exitCode) + " ===");

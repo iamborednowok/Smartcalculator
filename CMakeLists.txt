@@ -29,7 +29,7 @@ qt_add_qml_module(SmartCalc
     URI SmartCalc.Backend
     VERSION 1.0
     QML_FILES
-        qml/main.qml
+        qml/Main.qml
         qml/CalcTab.qml
         qml/FormulaTab.qml
         qml/ConvertTab.qml
