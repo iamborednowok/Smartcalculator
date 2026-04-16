@@ -89,7 +89,8 @@ Item {
                 anchors.fill: parent
                 antialiasing: true
 
-                Component.onCompleted: requestPaint()
+                // onWidthChanged fires after layout resolves (non-zero size) on Android
+                onWidthChanged: requestPaint()
 
                 onPaint: {
                     var ctx = getContext("2d")
@@ -158,9 +159,14 @@ Item {
 
                 // Pinch-to-zoom
                 PinchHandler {
-                    onScaleChanged: function() {
+                    id: pinch
+                    property real lastScale: 1.0
+                    onActiveChanged: if (active) lastScale = 1.0
+                    onScaleChanged: {
+                        var delta = scale / lastScale
+                        lastScale = scale
                         var cx = (xMin + xMax) / 2, cy = (yMin + yMax) / 2
-                        var hw = (xMax - xMin) / 2 / scale, hh = (yMax - yMin) / 2 / scale
+                        var hw = (xMax - xMin) / 2 / delta, hh = (yMax - yMin) / 2 / delta
                         xMin = cx - hw; xMax = cx + hw; yMin = cy - hh; yMax = cy + hh
                         canvas.requestPaint()
                     }
