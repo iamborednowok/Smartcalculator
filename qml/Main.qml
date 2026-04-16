@@ -135,7 +135,7 @@ ApplicationWindow {
             Loader { id: formulaLoader; anchors.fill: parent; active: root.currentTab === 1; visible: active; source: "FormulaTab.qml" }
             Loader { id: convertLoader; anchors.fill: parent; active: root.currentTab === 2; visible: active; source: "ConvertTab.qml" }
             Loader { id: randomLoader;  anchors.fill: parent; active: root.currentTab === 3; visible: active; source: "RandomTab.qml" }
-            Loader { id: graphLoader;   anchors.fill: parent; active: root.currentTab === 4; visible: active; source: "GraphTab.qml" }
+            Loader { id: graphLoader;   anchors.fill: parent; active: true; visible: root.currentTab === 4; source: "GraphTab.qml"}
             Loader { id: aiLoader;      anchors.fill: parent; active: true; visible: root.currentTab === 5; source: "AITab.qml" }
         }
 
