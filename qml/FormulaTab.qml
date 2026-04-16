@@ -187,7 +187,14 @@ Item {
                     GradientStop { position: 1.0; color: Qt.rgba(0.31,0.20,0.82,0.05) }
                 }
                 border.color: selectedFormula ? selectedFormula.color + "40" : "transparent"; border.width: 1
-                leftBorder.color: selectedFormula ? selectedFormula.color : "transparent"; leftBorder.width: 3
+
+                // Left accent bar (replaces invalid leftBorder.color / leftBorder.width)
+                Rectangle {
+                    anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                    anchors.topMargin: 4; anchors.bottomMargin: 4
+                    width: 3; radius: 2
+                    color: selectedFormula ? selectedFormula.color : "transparent"
+                }
 
                 Column {
                     anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter

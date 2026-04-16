@@ -89,6 +89,8 @@ Item {
                 anchors.fill: parent
                 antialiasing: true
 
+                Component.onCompleted: requestPaint()
+
                 onPaint: {
                     var ctx = getContext("2d")
                     var W = width, H = height
