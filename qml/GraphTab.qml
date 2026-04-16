@@ -90,6 +90,7 @@ Item {
                 antialiasing: true
 
                 // onWidthChanged fires after layout resolves (non-zero size) on Android
+                Component.onCompleted: requestPaint()
                 onWidthChanged: requestPaint()
 
                 onPaint: {
