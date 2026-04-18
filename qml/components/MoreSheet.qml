@@ -1,12 +1,14 @@
 import QtQuick
 import QtQuick.Layouts
 
-// MoreSheet v79 — slide-up bottom sheet for overflow tabs
+// MoreSheet — dropdown from the top header button
+// Slides DOWN from below the header (instead of up from the bottom).
 // Shows FORMULA(1), RANDOM(3), PROG(5)
 Item {
     id: root
 
     property int currentIndex: 0
+    property int topOffset:    52    // Set from Main.qml to match appHeader.height
     signal tabClicked(int index)
 
     property bool isOpen: false
@@ -21,61 +23,74 @@ Item {
         { icon: "01", label: "PROG",    sub: "Bit / Hex",  tabIndex: 5 },
     ]
 
-    // Guard: only intercept the item tree (and run animations) when needed.
-    // sheetPanel.height isn't stable at construction, so compare against a
-    // threshold instead of root.height to avoid a binding that fires too early.
-    visible: root.isOpen || sheetSlide.y < (sheetPanel.height + 10)
+    // Visible while open or while the panel is still animating out
+    visible: root.isOpen || sheetSlide.y > -(sheetPanel.height + 9)
 
-    // Dim overlay
-    Rectangle {
-        anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.50)
-        opacity: root.isOpen ? 1.0 : 0.0
-        Behavior on opacity { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
-        // Disable hit-testing when invisible so taps reach content behind the sheet
-        MouseArea { anchors.fill: parent; enabled: root.isOpen; onClicked: root.close() }
+    // Dim overlay — covers the content area below the header
+    Item {
+        anchors.top:       parent.top
+        anchors.topMargin: root.topOffset
+        anchors.left:      parent.left
+        anchors.right:     parent.right
+        anchors.bottom:    parent.bottom
+
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.52)
+            opacity: root.isOpen ? 1.0 : 0.0
+            Behavior on opacity { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+        }
+        // Tap outside to close
+        MouseArea {
+            anchors.fill: parent
+            enabled: root.isOpen
+            onClicked: root.close()
+        }
     }
 
-    // Sheet panel
+    // Sheet panel — slides down from below the header
     Rectangle {
         id: sheetPanel
         width:  parent.width
-        anchors.bottom: parent.bottom
+        anchors.top:       parent.top
+        anchors.topMargin: root.topOffset
 
-        height: sheetInner.implicitHeight + Math.round(24 * Theme.scale)
+        height: sheetInner.implicitHeight + Math.round(32 * Theme.scale)
 
+        // Only round the bottom corners
         radius: Math.round(22 * Theme.scale)
-        // Bottom corners flat
         Rectangle {
-            anchors.bottom: parent.bottom
+            anchors.top: parent.top
             width: parent.width; height: Math.round(22 * Theme.scale)
             color: parent.color
         }
 
         color: Theme.tabBg
         border.color: Qt.rgba(1, 1, 1, 0.09); border.width: 1
+        Behavior on color { ColorAnimation { duration: Theme.normal } }
 
+        // Slide transform: closed = fully above the anchor, open = at anchor
         transform: Translate {
             id: sheetSlide
-            y: root.isOpen ? 0 : sheetPanel.height + 10
+            y: root.isOpen ? 0 : -(sheetPanel.height + 10)
             Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         }
 
-        // Handle bar
+        // Bottom handle bar
         Rectangle {
-            anchors.top:              parent.top
+            anchors.bottom:           parent.bottom
+            anchors.bottomMargin:     Math.round(10 * Theme.scale)
             anchors.horizontalCenter: parent.horizontalCenter
-            y:      Math.round(10 * Theme.scale)
             width:  Math.round(40 * Theme.scale)
             height: Math.round(4  * Theme.scale)
             radius: 2
             color:  Qt.rgba(1, 1, 1, 0.20)
         }
 
-        // Top separator line
+        // Bottom separator line
         Rectangle {
-            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-            height: 1; y: 0
+            anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+            height: 1
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop { position: 0.0; color: "transparent" }
@@ -92,7 +107,7 @@ Item {
                 top:  parent.top
                 margins: Math.round(16 * Theme.scale)
             }
-            anchors.topMargin: Math.round(26 * Theme.scale)
+            anchors.topMargin: Math.round(16 * Theme.scale)
             spacing: Math.round(12 * Theme.scale)
 
             Text {
@@ -123,7 +138,7 @@ Item {
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 160 } }
 
-                        // Inner top sheen when active
+                        // Top sheen when active
                         Rectangle {
                             visible: isActive
                             anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
@@ -135,7 +150,6 @@ Item {
                         Rectangle {
                             visible: isActive
                             anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.topMargin: 0
                             width: parent.width * 0.50; height: Math.round(2 * Theme.scale); radius: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
@@ -172,7 +186,7 @@ Item {
                                 text: modelData.sub
                                 font.pixelSize: Math.round(8  * Theme.scale)
                                 font.family: Theme.fontSans
-                                color: isActive ? Qt.rgba(0.4,0.9,0.8,0.8) : Theme.text3
+                                color: isActive ? Theme.accent2 : Theme.text3
                                 Behavior on color { ColorAnimation { duration: 160 } }
                             }
                         }

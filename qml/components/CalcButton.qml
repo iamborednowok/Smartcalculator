@@ -1,18 +1,13 @@
 import QtQuick
 import SmartCalc.Backend 1.0
 
-// CalcButton v78
-//  • All pixel sizes multiplied by Theme.scale → adapts to any screen size.
-//  • Light-mode border uses full-white top sheen for a crisp "card" look.
-//  • Dark press glow matches theme accent (teal dark, blue light).
-//  • Multi-touch via TapHandler (unchanged from v77).
+// CalcButton — updated for violet/amber palette
 Rectangle {
     id: root
     property string label:   ""
     property string btnType: "normal"   // normal | op | eq | red | sci | dim
     signal clicked()
 
-    // Scale-aware base heights
     readonly property real sciH:    Math.round(38 * Theme.scale)
     readonly property real normalH: Math.round(56 * Theme.scale)
 
@@ -28,8 +23,8 @@ Rectangle {
         anchors { fill: parent; margins: -2; topMargin: 2 }
         z: -1; radius: parent.radius + 2
         color: {
-            if (btnType === "eq")  return Qt.rgba(0,0.78,0.66, Theme.dark ? 0.28 : 0.16)
-            if (btnType === "op")  return Qt.rgba(0,0.78,0.66, Theme.dark ? 0.16 : 0.10)
+            if (btnType === "eq")  return Qt.rgba(0.55,0.36,0.96, Theme.dark ? 0.30 : 0.18)
+            if (btnType === "op")  return Qt.rgba(0.96,0.62,0.04, Theme.dark ? 0.22 : 0.12)
             if (btnType === "red") return Qt.rgba(0.96,0.25,0.37, Theme.dark ? 0.16 : 0.08)
             return Qt.rgba(0, 0, 0, Theme.dark ? 0.30 : 0.07)
         }
@@ -50,7 +45,7 @@ Rectangle {
     }
     Behavior on color { ColorAnimation { duration: Theme.normal } }
 
-    // ── Equals gradient ───────────────────────────────────────────────
+    // ── Equals gradient (violet sweep) ────────────────────────────────
     gradient: Gradient {
         orientation: Gradient.Horizontal
         GradientStop { position: 0.0;  color: btnType === "eq" ? Theme.eqA : "transparent" }
@@ -95,7 +90,7 @@ Rectangle {
         x: rippleX - width / 2;  y: rippleY - height / 2
         width: 0; height: width;  radius: width / 2
         color: btnType === "eq"  ? Qt.rgba(1,1,1,0.24)
-             : btnType === "op"  ? (Theme.dark ? Qt.rgba(0,0.78,0.66,0.30) : Qt.rgba(0.36,0.69,0.96,0.28))
+             : btnType === "op"  ? (Theme.dark ? Qt.rgba(0.96,0.62,0.04,0.30) : Qt.rgba(0.85,0.47,0.02,0.26))
              : btnType === "red" ? Qt.rgba(0.96,0.25,0.37,0.28)
              : Qt.rgba(1,1,1,0.18)
         opacity: 0; z: 1; clip: false
