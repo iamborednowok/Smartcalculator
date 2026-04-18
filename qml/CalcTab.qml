@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls.Basic
+import SmartCalc.Backend 1.0
 import "components"
 
 Item {
@@ -8,10 +10,16 @@ Item {
     property string expr:      ""
     property string prevExpr:  ""
     property bool   justEval:  false
-    property string calcType:  "basic"
     property string angleMode: "deg"
     property bool   fracMode:  false
     property bool   showHist:  false
+    property bool   sciOpen:   false
+    property bool   sciMode:   false
+    property bool   showVars:  false
+    property bool   showAssign: false          // letter-picker for assignment
+
+    // Variable store — persisted in session
+    property var variables: ({})
 
     property string displayVal: expr === "" ? "0" : expr
     property int parenBalance: {
@@ -23,6 +31,40 @@ Item {
         return Math.max(0, n)
     }
 
+    property var window: ApplicationWindow.window
+
+    // ── Sci strip buttons ─────────────────────────────────────────────
+    readonly property var sciStrip: [
+        "sin(","cos(","tan(","log(","ln(","√(","(",")", "x²","xʸ","π","e","n!","nCr(","nPr(","sinh("
+    ]
+
+    readonly property var numRows: [
+        ["7","8","9"],
+        ["4","5","6"],
+        ["1","2","3"],
+        ["C","0","⌫"]
+    ]
+    readonly property var opCol: ["÷","×","−","+"]
+
+    // ── Syntax highlighter ────────────────────────────────────────────
+    function highlightExpr(v) {
+        if (!v || v === "Error" || /^-?[\d,]+\.?\d*$/.test(v)) return v
+        // Escape for HTML first
+        var safe = v.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+        // Functions → cyan
+        safe = safe.replace(/(sin|cos|tan|log|ln|sqrt|fact|nCr|nPr|sinh|cosh|tanh|abs)(?=\()/g,
+                            '<font color="#67E8F9">$1</font>')
+        // Operators → soft purple
+        safe = safe.replace(/([\+\-×÷\^%])/g, '<font color="#C4B5FD">$1</font>')
+        // Parens — yellow
+        safe = safe.replace(/\(/g, '<font color="#F59E0B">(</font>')
+        safe = safe.replace(/\)/g, '<font color="#F59E0B">)</font>')
+        // Constants → green
+        safe = safe.replace(/\bπ\b/g, '<font color="#10B981">π</font>')
+        safe = safe.replace(/\be\b/g,  '<font color="#10B981">e</font>')
+        return safe
+    }
+
     function displayFmt(v) {
         if (v === "Error" || v === "0" || v.indexOf("/") >= 0) return v
         var num = parseFloat(v)
@@ -31,68 +73,13 @@ Item {
         parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",")
         return parts.join(".")
     }
-    function displaySize(v) {
-        if (v.length > 18) return 14
-        if (v.length > 13) return 19
-        if (v.length > 9)  return 27
+
+    function displayFontSize(v) {
+        if (v.length > 18) return 15
+        if (v.length > 13) return 20
+        if (v.length > 9)  return 28
         return 38
     }
-
-    // ── BUG FIX: x², xʸ, n! now handled correctly ────────────────────
-    function handleBtn(val) {
-        if (val === "C")  { expr = ""; prevExpr = ""; justEval = false; return }
-        if (val === "⌫")  {
-            if (justEval) { expr = ""; justEval = false; return }
-            expr = expr.length > 1 ? expr.slice(0, -1) : ""; return
-        }
-        if (val === "±")  { expr = expr.startsWith("-") ? expr.slice(1) : (expr ? "-" + expr : ""); justEval = false; return }
-        if (val === "%")  { var pct = parseFloat(expr); if (!isNaN(pct)) { expr = mathEngine.formatNumber(pct / 100); justEval = false }; return }
-
-        // BUG FIX: sci special buttons
-        if (val === "x²") {
-            // Wrap current expression in parens then square it
-            expr = expr ? "(" + expr + ")^2" : ""
-            justEval = false; return
-        }
-        if (val === "xʸ") {
-            // Append ^ so user types exponent next
-            if (expr) expr += "^"
-            justEval = false; return
-        }
-        if (val === "n!") {
-            // Wrap in fact()
-            if (expr) expr = "fact(" + expr + ")"
-            justEval = false; return
-        }
-
-        if (val === "=")  {
-            var t = expr || "0"
-            var r = mathEngine.evaluate(t, angleMode === "deg", fracMode)
-            prevExpr = t + " ="; expr = r; justEval = true
-            flashAnim.restart()
-            window.addHistory(t, r)
-            return
-        }
-        var isOp = ["+","−","×","÷","^"].indexOf(val) >= 0
-        if (justEval) { expr = isOp ? expr + val : val; justEval = false; return }
-        if (val === "." && /\.\d*$/.test(expr)) return
-        if (val === "." && (expr === "" || isOp)) expr += "0"
-        expr += val
-    }
-
-    readonly property var sciRows: [
-        ["sin(","cos(","tan(",   "("],
-        ["log(","ln(",  "√(",    ")"],
-        ["x²",  "xʸ",  "π",    "e"],
-        ["sinh(","n!","nCr(","nPr("]
-    ]
-    readonly property var basicRows: [
-        ["C",  "±",  "%",  "÷"],
-        ["7",  "8",  "9",  "×"],
-        ["4",  "5",  "6",  "−"],
-        ["1",  "2",  "3",  "+"],
-        ["0",  ".",  "⌫",  "="]
-    ]
 
     function btnType(lbl) {
         if (lbl === "=")   return "eq"
@@ -102,221 +89,337 @@ Item {
         return "normal"
     }
 
-    property var window: ApplicationWindow.window
+    function handleBtn(val) {
+        if (val === "C")  { expr = ""; prevExpr = ""; justEval = false; showAssign = false; return }
+        if (val === "⌫")  {
+            if (justEval) { expr = ""; justEval = false; return }
+            expr = expr.length > 1 ? expr.slice(0, -1) : ""
+            return
+        }
+        if (val === "±")  { expr = expr.startsWith("-") ? expr.slice(1) : (expr ? "-" + expr : ""); justEval = false; return }
+        if (val === "%")  {
+            var pct = parseFloat(expr)
+            if (!isNaN(pct)) { expr = mathEngine.formatNumber(pct / 100); justEval = false }
+            return
+        }
+        if (val === "x²") { if (expr) expr = "(" + expr + ")^2"; justEval = false; return }
+        if (val === "xʸ") { if (expr) expr += "^"; justEval = false; return }
+        if (val === "n!") { if (expr) expr = "fact(" + expr + ")"; justEval = false; return }
 
-    // ──────────────────────────────────────────────────────────────────
-    Flickable {
+        if (val === "=") {
+            var t = expr || "0"
+            // Substitute variables in expression
+            t = substituteVars(t)
+            var r = mathEngine.evaluate(t, angleMode === "deg", fracMode)
+            prevExpr = expr + " ="; expr = r; justEval = true; showAssign = (r !== "Error")
+            flashAnim.restart()
+            numPopAnim.restart()
+            if (window) window.addHistory(t, r)
+            return
+        }
+        var isOp = ["+","−","×","÷","^"].indexOf(val) >= 0
+        if (justEval) { expr = isOp ? expr + val : val; justEval = false; showAssign = false; return }
+        if (val === "." && /\.\d*$/.test(expr)) return
+        if (val === ".") {
+            var lastCh = expr.length > 0 ? expr[expr.length - 1] : ""
+            if (expr === "" || ["+","−","×","÷","^","("].indexOf(lastCh) >= 0) expr += "0"
+        }
+        expr += val
+        showAssign = false
+    }
+
+    // Expand stored variables in expression text
+    function substituteVars(t) {
+        for (var k in variables) {
+            var re = new RegExp("\\b" + k + "\\b", "g")
+            t = t.replace(re, "(" + variables[k] + ")")
+        }
+        return t
+    }
+
+    function assignToVar(letter) {
+        if (!justEval || expr === "Error") return
+        variables[letter] = expr
+        variables = variables    // trigger binding update
+        showAssign = false
+        if (window) window.showToast(letter + " = " + expr, true)
+    }
+
+    // ── Clipboard helper (hidden) ─────────────────────────────────────
+    TextEdit { id: clipHelper; visible: false; text: "" }
+    function copyToClipboard(t) { clipHelper.text = t; clipHelper.selectAll(); clipHelper.copy() }
+
+    // ── UI ────────────────────────────────────────────────────────────
+    // Outer ColumnLayout: top display section scrolls independently when
+    // history / variable panels expand; button grid fills remaining space.
+    ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        contentHeight: mainCol.implicitHeight
+        anchors.margins: 14
+        anchors.bottomMargin: 10
+        spacing: 8
+
+    // ── Scrollable top section ────────────────────────────────────────
+    Flickable {
+        id: topFlick
+        Layout.fillWidth: true
+        Layout.preferredHeight: Math.min(contentHeight, root.height * 0.48)
+        contentHeight: topCol.implicitHeight
         clip: true
+        flickableDirection: Flickable.VerticalFlick
 
         ColumnLayout {
-            id: mainCol
+            id: topCol
             width: parent.width
             spacing: 10
 
-            // ── Header ───────────────────────────────────────────────
+            // ── Header ────────────────────────────────────────────────
             RowLayout {
                 Layout.fillWidth: true
 
-                Column {
-                    spacing: 2
-                    Row {
-                        spacing: 0
-                        Text {
-                            text: "Smart"
-                            font.pixelSize: 22; font.family: "DM Sans"
-                            font.weight: Font.Light; color: "#8888cc"
-                        }
-                        Text {
-                            text: "Calc"
-                            font.pixelSize: 22; font.family: "DM Sans"
-                            font.weight: Font.Bold; color: "#A78BFA"
-                        }
-                    }
-                    // Cyan accent underline
-                    Rectangle {
-                        width: 44; height: 2; radius: 1
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "#7C3AED" }
-                            GradientStop { position: 1.0; color: "#06B6D4" }
-                        }
+                Row {
+                    spacing: 0
+                    Text { text: "Smart"; font.pixelSize: 20; font.family: Theme.fontSans; font.weight: Font.Light; color: Theme.text2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                    Text { text: "Calc"; font.pixelSize: 20; font.family: Theme.fontSans; font.weight: Font.Bold; color: Theme.accent2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                    Rectangle { width: 6; height: 6; radius: 3; color: Theme.cyan; anchors.verticalCenter: parent.verticalCenter; anchors.leftMargin: 2
+                        Rectangle { anchors.centerIn: parent; width: 12; height: 12; radius: 6; color: "transparent"; border.color: Theme.cyan; border.width: 1; opacity: 0.45 }
+                        Behavior on color { ColorAnimation { duration: Theme.normal } }
                     }
                 }
 
                 Item { Layout.fillWidth: true }
 
-                // Mode badge
+                // Angle mode (sci only)
                 Rectangle {
-                    height: 28; width: modeLbl.implicitWidth + 22; radius: 14
-                    color: calcType === "sci"
-                        ? Qt.rgba(0.02, 0.71, 0.83, 0.12)
-                        : Qt.rgba(0.49, 0.23, 0.93, 0.12)
-                    border.color: calcType === "sci"
-                        ? Qt.rgba(0.02, 0.71, 0.83, 0.38)
-                        : Qt.rgba(0.49, 0.23, 0.93, 0.30)
-                    border.width: 1
-                    Text {
-                        id: modeLbl; anchors.centerIn: parent
-                        text: calcType === "sci" ? "SCI" : "BASIC"
-                        font.pixelSize: 9; font.family: "DM Sans"; font.weight: Font.Bold
-                        font.letterSpacing: 0.8
-                        color: calcType === "sci" ? "#06B6D4" : "#A78BFA"
-                    }
-                    MouseArea { anchors.fill: parent; onClicked: calcType = calcType === "sci" ? "basic" : "sci" }
+                    visible: sciMode; height: 26; width: 50; radius: 13
+                    color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? (Theme.dark ? 0.15 : 0.12) : (Theme.dark ? 0.06 : 0.04))
+                    border.color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.42 : 0.14); border.width: 1
+                    Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: 9; font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
+                    MouseArea { anchors.fill: parent; onClicked: angleMode = angleMode === "deg" ? "rad" : "deg" }
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
 
-                // Settings / info button
+                // ½ Frac toggle
                 Rectangle {
-                    width: 34; height: 34; radius: 11
-                    color: Qt.rgba(1, 1, 1, 0.055)
-                    border.color: Qt.rgba(1, 1, 1, 0.10); border.width: 1
-                    Rectangle {
-                        anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-                        width: 20; height: 1; y: 2; radius: 1
-                        color: Qt.rgba(1, 1, 1, 0.18)
-                    }
-                    Text { anchors.centerIn: parent; text: "☀️"; font.pixelSize: 14 }
-                    MouseArea { anchors.fill: parent; onClicked: window.showToast("Dark mode only ✦ premium", false) }
+                    height: 26; width: 52; radius: 13
+                    color: fracMode ? Qt.rgba(0.95,0.62,0.07, Theme.dark ? 0.14 : 0.10) : Theme.actionBg
+                    border.color: fracMode ? Qt.rgba(0.95,0.62,0.07,0.42) : Theme.actionBdr; border.width: 1
+                    Text { anchors.centerIn: parent; text: "½ frac"; font.pixelSize: 9; font.family: Theme.fontSans; color: fracMode ? "#F59E0B" : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
+                    MouseArea { anchors.fill: parent; onClicked: fracMode = !fracMode }
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
+
+                // Var manager button
+                Rectangle {
+                    height: 26; width: varBtnLbl.implicitWidth + 14; radius: 13
+                    color: showVars ? Theme.accentDim : Theme.actionBg
+                    border.color: showVars ? Theme.accent : Theme.actionBdr; border.width: 1
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    Text { id: varBtnLbl; anchors.centerIn: parent; text: "VAR" + (Object.keys(variables).length > 0 ? " (" + Object.keys(variables).length + ")" : ""); font.pixelSize: 9; font.family: Theme.fontSans; font.weight: Font.Bold; color: showVars ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
+                    MouseArea { anchors.fill: parent; onClicked: showVars = !showVars }
+                }
+
+                // Theme toggle
+                Rectangle {
+                    height: 26; width: 26; radius: 13
+                    color: Theme.actionBg; border.color: Theme.actionBdr; border.width: 1
+                    Behavior on color { ColorAnimation { duration: Theme.normal } }
+                    Text { anchors.centerIn: parent; text: window && window.darkMode ? "☀" : "🌙"; font.pixelSize: 13 }
+                    MouseArea { anchors.fill: parent; onClicked: if (window) window.darkMode = !window.darkMode }
                 }
             }
 
-            // ── Display panel ─────────────────────────────────────────
+            // ── Variable manager drawer ────────────────────────────────
+            Rectangle {
+                visible: showVars
+                Layout.fillWidth: true
+                height: visible ? varCol.implicitHeight + 24 : 0
+                clip: true; radius: 16
+                color: Theme.sectionBg; border.color: Theme.sectionBdr; border.width: 1
+                Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutQuart } }
+                Behavior on color  { ColorAnimation { duration: Theme.normal } }
+
+                ColumnLayout {
+                    id: varCol
+                    anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
+                    spacing: 8
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text { text: "VARIABLES"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 1.2; font.family: Theme.fontSans; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: "clear all"; font.pixelSize: 8; color: Theme.text3; font.family: Theme.fontSans
+                            MouseArea { anchors.fill: parent; onClicked: { variables = {} } }
+                        }
+                    }
+
+                    // Variable chips
+                    Flow {
+                        Layout.fillWidth: true; spacing: 6
+                        Repeater {
+                            model: Object.keys(variables)
+                            delegate: Rectangle {
+                                height: 28; width: chipLbl.implicitWidth + 20; radius: 10
+                                gradient: Gradient { orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: Qt.rgba(0.49,0.23,0.93,0.20) }
+                                    GradientStop { position: 1.0; color: Qt.rgba(0.02,0.71,0.83,0.16) } }
+                                border.color: Qt.rgba(0.67,0.55,1.0,0.35); border.width: 1
+                                Text { id: chipLbl; anchors.centerIn: parent; text: modelData + " = " + variables[modelData]; font.pixelSize: 11; font.family: Theme.fontMono; color: Theme.accent2 }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: { expr = (justEval ? "" : expr) + modelData; justEval = false }
+                                    onPressAndHold: {
+                                        var v = Object.assign({}, variables)
+                                        delete v[modelData]
+                                        variables = v
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Empty hint
+                    Text {
+                        visible: Object.keys(variables).length === 0
+                        text: "No variables yet. Press = then tap → var to assign a result."
+                        color: Theme.text3; font.pixelSize: 10; wrapMode: Text.WordWrap
+                        Layout.fillWidth: true; font.family: Theme.fontSans
+                    }
+                }
+            }
+
+            // ── Display card ──────────────────────────────────────────
             Rectangle {
                 id: displayRect
                 Layout.fillWidth: true
-                height: 128
-                radius: 24
+                height: 124
+                radius: 22
+                color: Theme.displayBg
+                Behavior on color { ColorAnimation { duration: Theme.normal } }
 
-                // Glass base
-                color: Qt.rgba(1, 1, 1, 0.04)
-
-                // Animated border
-                border.color: bdColorAnim.currentColor
-                border.width: 1
+                border.color: bdColorAnim.currentColor; border.width: 1
 
                 QtObject {
                     id: bdColorAnim
-                    property color currentColor: Qt.rgba(1, 1, 1, 0.10)
+                    property color currentColor: Theme.displayBdr
                 }
                 SequentialAnimation {
                     id: flashAnim
-                    ColorAnimation {
-                        target: bdColorAnim; property: "currentColor"
-                        to: "#06B6D4"; duration: 80
-                    }
-                    ColorAnimation {
-                        target: bdColorAnim; property: "currentColor"
-                        to: Qt.rgba(1, 1, 1, 0.10); duration: 550
-                    }
+                    ColorAnimation { target: bdColorAnim; property: "currentColor"; to: Theme.cyan;       duration: 75 }
+                    ColorAnimation { target: bdColorAnim; property: "currentColor"; to: Theme.displayBdr; duration: 700 }
                 }
 
                 // Top sheen
                 Rectangle {
                     anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-                    width: parent.width * 0.55; height: 1; y: 1; radius: 1
-                    color: Qt.rgba(1, 1, 1, 0.20)
+                    width: parent.width * 0.52; height: 1; y: 1; radius: 1
+                    color: Theme.borderTop; Behavior on color { ColorAnimation { duration: Theme.normal } }
                 }
-
                 // Bottom fade
                 Rectangle {
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left; anchors.right: parent.right
-                    height: 44; radius: parent.radius
+                    anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+                    height: 42; radius: parent.radius
                     gradient: Gradient {
                         GradientStop { position: 0.0; color: "transparent" }
-                        GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.28) }
+                        GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, Theme.dark ? 0.22 : 0.04) }
                     }
                 }
 
-                // Outer glow ring
-                Rectangle {
-                    anchors.fill: parent; anchors.margins: -7
-                    radius: parent.radius + 7
-                    color: "transparent"
-                    border.color: Qt.rgba(0.49, 0.23, 0.93, 0.10); border.width: 1; z: -1
-                }
-
-                // Paren open badge
+                // Paren balance badge
                 Rectangle {
                     visible: parenBalance > 0
-                    anchors.top: parent.top; anchors.left: parent.left; anchors.margins: 14
-                    height: 22; width: pbTxt.implicitWidth + 18; radius: 11
-                    color: Qt.rgba(0.95, 0.62, 0.07, 0.10)
-                    border.color: Qt.rgba(0.95, 0.62, 0.07, 0.35); border.width: 1
-                    Text {
-                        id: pbTxt; anchors.centerIn: parent
-                        text: "( ×" + parenBalance
-                        font.pixelSize: 9; color: "#F59E0B"; font.family: "DM Mono"
-                    }
+                    anchors.top: parent.top; anchors.left: parent.left; anchors.margins: 12
+                    height: 20; width: pbTxt.implicitWidth + 16; radius: 10
+                    color: Qt.rgba(0.95, 0.62, 0.07, Theme.dark ? 0.10 : 0.08)
+                    border.color: Qt.rgba(0.95, 0.62, 0.07, 0.32); border.width: 1
+                    Text { id: pbTxt; anchors.centerIn: parent; text: "( ×" + parenBalance; font.pixelSize: 9; color: "#F59E0B"; font.family: Theme.fontMono }
                 }
 
                 // Copy button
                 Rectangle {
                     visible: displayVal !== "0" && displayVal !== "Error"
-                    anchors.top: parent.top; anchors.right: parent.right; anchors.margins: 14
-                    height: 24; width: cpLbl.implicitWidth + 18; radius: 12
-                    color: cpDone ? Qt.rgba(0.06,0.73,0.51,0.12) : Qt.rgba(1, 1, 1, 0.06)
-                    border.color: cpDone ? Qt.rgba(0.06,0.73,0.51,0.32) : Qt.rgba(1, 1, 1, 0.12); border.width: 1
+                    anchors.top: parent.top; anchors.right: parent.right; anchors.margins: 10
+                    height: 22; width: cpLbl.implicitWidth + 16; radius: 11
+                    color: cpDone ? Qt.rgba(0.06,0.73,0.51, Theme.dark ? 0.12 : 0.10) : Theme.actionBg
+                    border.color: cpDone ? Qt.rgba(0.06,0.73,0.51,0.32) : Theme.actionBdr; border.width: 1
                     property bool cpDone: false
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    Text {
-                        id: cpLbl; anchors.centerIn: parent
-                        text: parent.cpDone ? "✓ copied" : "copy"
-                        font.pixelSize: 9; font.family: "DM Sans"
-                        color: parent.cpDone ? "#10B981" : "#44446a"
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: { parent.cpDone = true; cpTimer.restart() }
-                    }
+                    Text { id: cpLbl; anchors.centerIn: parent; text: parent.cpDone ? "✓ copied" : "copy"; font.pixelSize: 9; font.family: Theme.fontSans; color: parent.cpDone ? Theme.green : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
+                    MouseArea { anchors.fill: parent; onClicked: { copyToClipboard(justEval ? expr : displayFmt(displayVal)); parent.cpDone = true; cpTimer.restart() } }
                     Timer { id: cpTimer; interval: 1800; onTriggered: parent.cpDone = false }
                 }
 
-                // Number + cursor
-                Column {
+                // History pill
+                Rectangle {
+                    anchors.bottom: parent.bottom; anchors.right: parent.right; anchors.margins: 10
+                    height: 22; width: histLbl.implicitWidth + 14; radius: 11
+                    color: showHist ? Theme.accentDim : Theme.actionBg
+                    border.color: showHist ? Theme.accent : Theme.actionBdr; border.width: 1
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    Text { id: histLbl; anchors.centerIn: parent; text: "Hist" + (window && window.calcHistory.length > 0 ? " (" + window.calcHistory.length + ")" : ""); font.pixelSize: 9; font.family: Theme.fontSans; color: showHist ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
+                    MouseArea { anchors.fill: parent; onClicked: showHist = !showHist }
+                }
+
+                // Prev expression
+                Text {
+                    anchors.right: parent.right; anchors.bottom: mainNumber.top
+                    anchors.rightMargin: 16; anchors.bottomMargin: 2
+                    text: prevExpr; font.pixelSize: 11; font.family: Theme.fontMono
+                    color: Theme.text3; opacity: prevExpr ? 1 : 0
+                    Behavior on color   { ColorAnimation { duration: Theme.normal } }
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                }
+
+                // Highlighted expression overlay (shown while typing a complex expr)
+                Text {
+                    visible: !justEval && expr.length > 1
+                    anchors.left: parent.left; anchors.right: parent.right
+                    anchors.bottom: mainNumber.top
+                    anchors.leftMargin: 16; anchors.rightMargin: 60; anchors.bottomMargin: 0
+                    text: highlightExpr(expr)
+                    textFormat: Text.RichText
+                    font.pixelSize: 10; font.family: Theme.fontMono
+                    color: Theme.text2; elide: Text.ElideLeft
+                    opacity: justEval ? 0 : 0.85
+                    Behavior on opacity { NumberAnimation { duration: 180 } }
+                }
+
+                // Main number + cursor
+                Row {
+                    id: mainNumber
                     anchors.right: parent.right; anchors.bottom: parent.bottom
-                    anchors.rightMargin: 18; anchors.bottomMargin: 14
-                    spacing: 5
+                    anchors.rightMargin: 16; anchors.bottomMargin: 12
+                    spacing: 2
 
                     Text {
-                        anchors.right: parent.right
-                        text: prevExpr; font.pixelSize: 11; font.family: "DM Mono"
-                        color: "#33335a"
+                        text: displayFmt(displayVal)
+                        color: displayVal === "Error" ? Theme.red : Theme.text
+                        font.pixelSize: displayFontSize(displayVal)
+                        font.family: Theme.fontMono; font.weight: Font.Light
+                        Behavior on font.pixelSize { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
+                        Behavior on color { ColorAnimation { duration: 120 } }
                     }
 
-                    Row {
-                        anchors.right: parent.right; spacing: 2
+                    transform: Scale {
+                        id: numScale
+                        origin.x: mainNumber.width / 2; origin.y: mainNumber.height / 2
+                        xScale: 1.0; yScale: 1.0
+                    }
 
-                        Text {
-                            id: mainNumber
-                            text: displayFmt(displayVal)
-                            color: displayVal === "Error" ? "#F43F5E" : "#f0f0ff"
-                            font.pixelSize: displaySize(displayVal)
-                            font.family: "DM Mono"; font.weight: Font.Light
-                            Behavior on font.pixelSize { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
-                            Behavior on color { ColorAnimation { duration: 120 } }
+                    // Blinking cursor
+                    Rectangle {
+                        visible: !justEval
+                        width: 2.5
+                        height: Math.max(displayFontSize(displayVal) * 0.68, 16)
+                        anchors.verticalCenter: parent.verticalCenter; radius: 2
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: Theme.accent }
+                            GradientStop { position: 1.0; color: Theme.cyan }
                         }
-
-                        // Blinking cursor
-                        Rectangle {
-                            visible: !justEval
-                            width: 2.5
-                            height: Math.max(displaySize(displayVal) * 0.72, 16)
-                            anchors.verticalCenter: parent.verticalCenter
-                            radius: 2
-                            gradient: Gradient {
-                                GradientStop { position: 0.0; color: "#7C3AED" }
-                                GradientStop { position: 1.0; color: "#06B6D4" }
-                            }
-                            SequentialAnimation on opacity {
-                                running: true; loops: Animation.Infinite
-                                NumberAnimation { to: 0; duration: 530; easing.type: Easing.InOutSine }
-                                NumberAnimation { to: 1; duration: 530; easing.type: Easing.InOutSine }
-                            }
+                        SequentialAnimation on opacity {
+                            running: true; loops: Animation.Infinite
+                            NumberAnimation { to: 0; duration: 520; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: 1; duration: 520; easing.type: Easing.InOutSine }
                         }
                     }
                 }
@@ -328,175 +431,317 @@ Item {
                 }
             }
 
-            // ── Mode pill row ─────────────────────────────────────────
-            RowLayout { Layout.fillWidth: true; spacing: 6
+            // Result pop animation
+            SequentialAnimation {
+                id: numPopAnim
+                // Softer spring: less initial squish, gentler overshoot so
+                // rapid = presses don't feel mushy. Total: ~230ms vs old 335ms.
+                NumberAnimation { target: numScale; properties: "xScale,yScale"; to: 0.94; duration: 35 }
+                NumberAnimation { target: numScale; properties: "xScale,yScale"; to: 1.05; duration: 140; easing.type: Easing.OutBack; easing.overshoot: 1.8 }
+                NumberAnimation { target: numScale; properties: "xScale,yScale"; to: 1.00; duration: 80;  easing.type: Easing.InOutQuad }
+            }
 
-                // DEG / RAD (only in sci mode)
-                Rectangle {
-                    visible: calcType === "sci"
-                    height: 28; width: 56; radius: 14
-                    color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.14 : 0.06)
-                    border.color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.40 : 0.14)
-                    border.width: 1
-                    Text {
-                        anchors.centerIn: parent; text: angleMode.toUpperCase()
-                        font.pixelSize: 9; font.family: "DM Sans"; font.weight: Font.Bold
-                        color: angleMode === "deg" ? "#06B6D4" : "#44446a"
-                        Behavior on color { ColorAnimation { duration: 120 } }
+            // ── → Var assignment row (slides in after = press) ────────
+            Rectangle {
+                visible: showAssign
+                Layout.fillWidth: true
+                height: visible ? 42 : 0
+                clip: true; radius: 12
+                color: Qt.rgba(0.49,0.23,0.93,0.06)
+                border.color: Qt.rgba(0.49,0.23,0.93,0.20); border.width: 1
+                Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+                RowLayout {
+                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10; spacing: 6
+                    Text { text: "→ var:"; font.pixelSize: 10; font.family: Theme.fontSans; color: Theme.accent2; font.weight: Font.Medium }
+                    // Letter quick-picks
+                    Repeater {
+                        model: ["a","b","c","d","e","m","n","x","y","z"]
+                        delegate: Rectangle {
+                            width: 28; height: 28; radius: 8
+                            color: Theme.accentDim; border.color: Qt.rgba(0.67,0.55,1.0,0.35); border.width: 1
+                            scale: letMa.pressed ? 0.85 : 1.0
+                            Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.OutBack } }
+                            Text { anchors.centerIn: parent; text: modelData; font.pixelSize: 12; font.family: Theme.fontMono; color: Theme.accent2 }
+                            MouseArea { id: letMa; anchors.fill: parent; onClicked: assignToVar(modelData) }
+                        }
                     }
-                    MouseArea { anchors.fill: parent; onClicked: angleMode = angleMode === "deg" ? "rad" : "deg" }
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                }
-
-                // ½ frac toggle
-                Rectangle {
-                    height: 28; width: 56; radius: 14
-                    color: fracMode ? Qt.rgba(0.95,0.62,0.07,0.14) : Qt.rgba(1,1,1,0.05)
-                    border.color: fracMode ? Qt.rgba(0.95,0.62,0.07,0.42) : Qt.rgba(1,1,1,0.09)
-                    border.width: 1
-                    Text {
-                        anchors.centerIn: parent; text: "½ frac"
-                        font.pixelSize: 9; font.family: "DM Sans"
-                        color: fracMode ? "#F59E0B" : "#44446a"
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    MouseArea { anchors.fill: parent; onClicked: fracMode = !fracMode }
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                }
-
-                Item { Layout.fillWidth: true }
-
-                // History pill
-                Rectangle {
-                    height: 28; width: histLbl.implicitWidth + 20; radius: 14
-                    color: showHist ? Qt.rgba(0.49,0.23,0.93,0.18) : Qt.rgba(1,1,1,0.05)
-                    border.color: showHist ? Qt.rgba(0.67,0.55,1.0,0.40) : Qt.rgba(1,1,1,0.09)
-                    border.width: 1
-                    Text {
-                        id: histLbl; anchors.centerIn: parent
-                        text: "Hist" + (window && window.calcHistory.length > 0 ? " (" + window.calcHistory.length + ")" : "")
-                        font.pixelSize: 9; font.family: "DM Sans"
-                        color: showHist ? "#A78BFA" : "#44446a"
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    MouseArea { anchors.fill: parent; onClicked: showHist = !showHist }
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Item { Layout.fillWidth: true }
+                    // Close
+                    Text { text: "✕"; font.pixelSize: 12; color: Theme.text3; MouseArea { anchors.fill: parent; onClicked: showAssign = false } }
                 }
             }
 
-            // ── History panel ─────────────────────────────────────────
+            // ── Paper tape history ────────────────────────────────────
             Rectangle {
-                visible: showHist && window && window.calcHistory.length > 0
+                visible: showHist
                 Layout.fillWidth: true
-                height: visible ? Math.min(histView.contentHeight + 52, 196) : 0
-                radius: 20
-                color: Qt.rgba(0, 0, 0, 0.30)
-                border.color: Qt.rgba(1, 1, 1, 0.08); border.width: 1
+                height: visible ? Math.min(tapeListView.contentHeight + 64, 210) : 0
+                radius: 16
                 clip: true
-                Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutQuart } }
+                Behavior on height { NumberAnimation { duration: 220; easing.type: Easing.OutQuart } }
 
+                // Receipt paper texture
+                color: Theme.dark ? "#0a0816" : "#f9f7f2"
+                Behavior on color { ColorAnimation { duration: Theme.normal } }
+
+                // Perforated top edge line
                 Rectangle {
+                    anchors.top: parent.top; width: parent.width; height: 1
+                    color: Theme.dark ? Qt.rgba(0.49,0.23,0.93,0.35) : Qt.rgba(0,0,0,0.08)
+                }
+                // Dotted receipt perforation decoration
+                Row {
                     anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-                    width: parent.width * 0.40; height: 1; y: 1; radius: 1
-                    color: Qt.rgba(1,1,1,0.10)
+                    anchors.topMargin: 6; spacing: 6
+                    Repeater {
+                        model: 22
+                        delegate: Rectangle { width: 4; height: 4; radius: 2; color: Theme.dark ? Qt.rgba(1,1,1,0.06) : Qt.rgba(0,0,0,0.06) }
+                    }
                 }
 
                 ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 12; spacing: 7
+                    anchors.fill: parent; anchors.margins: 12; anchors.topMargin: 16; spacing: 4
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Text { text: "HISTORY"; font.pixelSize: 8; color: "#33335a"; font.letterSpacing: 1.2; font.family: "DM Sans" }
+                        Text { text: "TAPE"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 2.0; font.family: Theme.fontMono; Behavior on color { ColorAnimation { duration: Theme.normal } } }
                         Item { Layout.fillWidth: true }
                         Text {
-                            text: "clear all"; font.pixelSize: 8; color: "#44446a"; font.family: "DM Sans"
+                            text: "clear"; font.pixelSize: 8; color: Theme.text3; font.family: Theme.fontSans
                             MouseArea { anchors.fill: parent; onClicked: { window.calcHistory = []; showHist = false } }
                         }
                     }
 
                     ListView {
-                        id: histView
+                        id: tapeListView
                         Layout.fillWidth: true; Layout.fillHeight: true
                         model: window ? window.calcHistory : []
-                        clip: true; spacing: 2
+                        clip: true; spacing: 0
 
-                        delegate: Rectangle {
-                            width: histView.width; height: 34; radius: 10
-                            color: "transparent"
-                            RowLayout {
-                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                                Text { text: modelData.expr; color: "#666688"; font.pixelSize: 10; font.family: "DM Mono"; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: modelData.result; color: "#A78BFA"; font.pixelSize: 13; font.family: "DM Mono"; font.weight: Font.Light }
-                                Text { text: modelData.time; color: "#33335a"; font.pixelSize: 8; leftPadding: 8; font.family: "DM Sans" }
+                        delegate: Item {
+                            width: tapeListView.width; height: 40
+
+                            // Tape entry line
+                            Rectangle {
+                                anchors.bottom: parent.bottom; width: parent.width; height: 1
+                                color: Theme.dark ? Qt.rgba(1,1,1,0.05) : Qt.rgba(0,0,0,0.05)
                             }
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: { expr = modelData.result; justEval = true; showHist = false }
-                                onPressed:  parent.color = Qt.rgba(1,1,1,0.05)
-                                onReleased: parent.color = "transparent"
+
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 6; anchors.rightMargin: 6
+                                // Time stamp on far left (like a receipt)
+                                Text { text: modelData.time; font.pixelSize: 8; font.family: Theme.fontMono; color: Theme.text3; Layout.preferredWidth: 32 }
+                                // Expression
+                                Text { text: modelData.expr; color: Theme.text2; font.pixelSize: 11; font.family: Theme.fontMono; Layout.fillWidth: true; elide: Text.ElideRight; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                                // Equals sign
+                                Text { text: "="; font.pixelSize: 11; font.family: Theme.fontMono; color: Theme.text3 }
+                                // Result — bold, accented
+                                Text {
+                                    text: modelData.result
+                                    color: modelData.result === "Error" ? Theme.red : Theme.accent2
+                                    font.pixelSize: 14; font.family: Theme.fontMono; font.weight: Font.Medium
+                                    Behavior on color { ColorAnimation { duration: Theme.normal } }
+                                }
+                                // Reuse button
+                                Rectangle {
+                                    width: 24; height: 24; radius: 7
+                                    color: reuseHover ? Theme.accentDim : "transparent"
+                                    border.color: reuseHover ? Qt.rgba(0.67,0.55,1.0,0.40) : "transparent"; border.width: 1
+                                    property bool reuseHover: false
+                                    Behavior on color { ColorAnimation { duration: 80 } }
+                                    Text { anchors.centerIn: parent; text: "↩"; font.pixelSize: 11; color: Theme.accent2 }
+                                    MouseArea {
+                                        anchors.fill: parent; hoverEnabled: true
+                                        onEntered: parent.reuseHover = true
+                                        onExited:  parent.reuseHover = false
+                                        onClicked: {
+                                            if (modelData.result === "Error") return
+                                            expr = modelData.result; justEval = true; showHist = false
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // ── Scientific rows ───────────────────────────────────────
-            Repeater {
-                model: calcType === "sci" ? sciRows : []
-                delegate: Row {
-                    spacing: 6
+        }   // end topCol ColumnLayout
+    }   // end topFlick Flickable
+
+        // ── SCI strip toggle row (outside scroll area) ────────────────
+        RowLayout {
+            Layout.fillWidth: true; spacing: 8
+
+            Rectangle {
+                height: 26; width: sciToggleLbl.implicitWidth + 22; radius: 13
+                color: sciOpen ? Theme.accentDim : Theme.actionBg
+                border.color: sciOpen ? Theme.accent : Theme.actionBdr; border.width: 1
+                Behavior on color { ColorAnimation { duration: 160 } }
+                Text { id: sciToggleLbl; anchors.centerIn: parent; text: sciOpen ? "SCI ▲" : "SCI ▼"; font.pixelSize: 9; font.weight: Font.Bold; font.family: Theme.fontSans; font.letterSpacing: 1.2; color: sciOpen ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 160 } } }
+                TapHandler { onTapped: sciOpen = !sciOpen }
+            }
+
+            Rectangle {
+                height: 26; width: 50; radius: 13
+                color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? (Theme.dark ? 0.12 : 0.09) : 0.04)
+                border.color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.38 : 0.12); border.width: 1
+                Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: 9; font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
+                TapHandler { onTapped: angleMode = angleMode === "deg" ? "rad" : "deg" }
+                Behavior on color { ColorAnimation { duration: 120 } }
+            }
+        }
+
+        // ── SCI strip (collapsible, outside scroll area) ──────────────
+        Item {
+            Layout.fillWidth: true
+            height: sciOpen ? 42 : 0; clip: true
+            Behavior on height { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+            Flickable {
+                anchors.fill: parent; contentWidth: sciRow.implicitWidth + 4
+                flickableDirection: Flickable.HorizontalFlick; clip: true
+                Row { id: sciRow; spacing: 6; x: 2
                     Repeater {
-                        model: modelData
+                        model: sciStrip
                         delegate: CalcButton {
                             label: modelData; btnType: "sci"
-                            width: (mainCol.width - 18) / 4
+                            implicitHeight: 38
+                            width: Math.max(52, label.length * 7 + 24)
                             onClicked: handleBtn(label)
                         }
                     }
                 }
             }
+        }
 
-            // Thin separator before basic grid (in sci mode)
-            Rectangle {
-                visible: calcType === "sci"
-                Layout.fillWidth: true; height: 1
-                color: Qt.rgba(1,1,1,0.06)
-            }
+        // ── Main button grid — fills all remaining screen space ───────
+        // Layout.fillHeight: true on every row/button makes them grow on
+        // tall devices and tablet-sized screens automatically.
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 6
 
-            // ── Basic grid ────────────────────────────────────────────
-            Repeater {
-                model: basicRows
-                delegate: Row {
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 6
+
+                // Number pad (3 cols × 4 rows) + bottom row (± and .)
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     spacing: 6
+
                     Repeater {
-                        model: modelData
+                        model: numRows
+                        delegate: RowLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            spacing: 6
+                            Repeater {
+                                model: modelData
+                                delegate: CalcButton {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    Layout.minimumHeight: 50
+                                    Layout.maximumHeight: 84
+                                    label: modelData
+                                    btnType: root.btnType(modelData)
+                                    onClicked: handleBtn(label)
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: 6
+                        Repeater {
+                            model: ["±", "."]
+                            delegate: CalcButton {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.minimumHeight: 46
+                                Layout.maximumHeight: 76
+                                label: modelData; btnType: "dim"
+                                onClicked: handleBtn(label)
+                            }
+                        }
+                    }
+                }
+
+                // Operators column (right side)
+                ColumnLayout {
+                    Layout.preferredWidth: 66
+                    Layout.fillHeight: true
+                    spacing: 6
+
+                    Repeater {
+                        model: opCol
                         delegate: CalcButton {
-                            label: modelData
-                            btnType: root.btnType(modelData)
-                            width: (mainCol.width - 18) / 4
+                            Layout.preferredWidth: 66
+                            Layout.fillHeight: true
+                            Layout.minimumHeight: 50
+                            Layout.maximumHeight: 84
+                            label: modelData; btnType: "op"
                             onClicked: handleBtn(label)
                         }
+                    }
+
+                    CalcButton {
+                        Layout.preferredWidth: 66
+                        Layout.fillHeight: true
+                        Layout.minimumHeight: 46
+                        Layout.maximumHeight: 76
+                        label: "%"; btnType: "dim"
+                        onClicked: handleBtn("%")
                     }
                 }
             }
 
-            // ── Keyboard hint ─────────────────────────────────────────
+            // Equals — always a bit taller than standard rows
+            CalcButton {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 64
+                Layout.minimumHeight: 56
+                Layout.maximumHeight: 88
+                label: "="; btnType: "eq"
+                onClicked: handleBtn("=")
+            }
+
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: "⌨  0–9 · +-×÷ · Enter · Esc · Backspace"
-                font.pixelSize: 8; font.family: "DM Sans"
-                color: "#22223c"; font.letterSpacing: 0.3
+                font.pixelSize: 8; font.family: Theme.fontSans
+                color: Theme.text3; font.letterSpacing: 0.3
+                Behavior on color { ColorAnimation { duration: Theme.normal } }
             }
+        }   // end button ColumnLayout
 
-            Item { height: 4 }
-        }
-    }
+    }   // end outer ColumnLayout
 
+    // ── Keyboard input ────────────────────────────────────────────────
     Keys.onPressed: function(event) {
-        var map = { "Return":"=","Enter":"=","Backspace":"⌫","Escape":"C",
-                    "+":"+","-":"−","*":"×","/":"÷","(":"(",")":")","^":"^","%":"%",".":"." }
-        if (map[event.key]) { handleBtn(map[event.key]); event.accepted = true }
-        else if (event.text >= "0" && event.text <= "9") { handleBtn(event.text); event.accepted = true }
+        switch (event.key) {
+            case Qt.Key_Return:
+            case Qt.Key_Enter:       handleBtn("=");  event.accepted = true; break
+            case Qt.Key_Backspace:   handleBtn("⌫");  event.accepted = true; break
+            case Qt.Key_Escape:      handleBtn("C");   event.accepted = true; break
+            case Qt.Key_Plus:        handleBtn("+");   event.accepted = true; break
+            case Qt.Key_Minus:       handleBtn("−");   event.accepted = true; break
+            case Qt.Key_Asterisk:    handleBtn("×");   event.accepted = true; break
+            case Qt.Key_Slash:       handleBtn("÷");   event.accepted = true; break
+            case Qt.Key_ParenLeft:   handleBtn("(");   event.accepted = true; break
+            case Qt.Key_ParenRight:  handleBtn(")");   event.accepted = true; break
+            case Qt.Key_AsciiCircum: handleBtn("^");   event.accepted = true; break
+            case Qt.Key_Percent:     handleBtn("%");   event.accepted = true; break
+            case Qt.Key_Period:      handleBtn(".");    event.accepted = true; break
+            default:
+                if (event.text >= "0" && event.text <= "9") { handleBtn(event.text); event.accepted = true }
+        }
     }
     focus: visible
 }

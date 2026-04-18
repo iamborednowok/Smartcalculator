@@ -15,39 +15,39 @@ ApplicationWindow {
     MathEngine  { id: mathEngine }
     ApiClient   { id: apiClient
         onResponseReceived: function(content, isError) {
-            if (root.currentTab === 5)
+            if (root.currentTab === 6)
                 aiLoader.item?.handleResponse(content, isError)
         }
     }
 
-    // ── Theme ──────────────────────────────────────────────────────────
-    property bool darkMode: true
+    property bool darkMode: false
+    property var  appSettings: settings
+    property int  currentTab: 0
+    property int  prevTab:    0
+    property var  calcHistory: []
 
-    // Expose to child tabs
-    property color bgColor:      "#010208"
-    property color bg2Color:     "#04041a"
-    property color surfaceColor: Qt.rgba(1, 1, 1, 0.042)
-    property color textColor:    "#f0f0ff"
-    property color text2Color:   "#8888cc"
-    property color text3Color:   "#44446a"
-    property color borderColor:  Qt.rgba(1, 1, 1, 0.09)
-    property color accentColor:  "#7C3AED"
-    property color accent2Color: "#A78BFA"
-    property var   appSettings:  settings   // ← correct name (was `settings` only, causing AITab bug)
+    onDarkModeChanged: {
+        Theme.dark        = darkMode
+        settings.darkMode = darkMode
+    }
 
-    // ── Active tab ─────────────────────────────────────────────────────
-    // CRASH FIX: Loader `active` bindings must NOT reference `tabBar` because
-    // tabBar (AppTabBar) is declared BELOW the Loaders in the ColumnLayout.
-    // During QML component creation objects are instantiated top-to-bottom, so
-    // when the Loader bindings are first evaluated `tabBar` is still null.
-    // `null.currentIndex === 0` fails silently → ALL Loaders stay inactive →
-    // the screen stays permanently white/blank.
-    // Solution: hoist the selected index into a root property that both the
-    // Loaders and AppTabBar bind to.  No forward reference; no null access.
-    property int currentTab: 0
+    Component.onCompleted: {
+        root.darkMode = settings.darkMode
+        Theme.dark    = root.darkMode
+        var baseW  = 400
+        var baseH  = 820
+        var scaleW = root.width  / baseW
+        var scaleH = root.height / baseH
+        Theme.scale = Math.max(0.75, Math.min(1.35, Math.min(scaleW, scaleH)))
+    }
 
-    // ── History ────────────────────────────────────────────────────────
-    property var calcHistory: []
+    onWidthChanged:  Qt.callLater(function() {
+        Theme.scale = Math.max(0.75, Math.min(1.35, Math.min(root.width / 400, root.height / 820)))
+    })
+    onHeightChanged: Qt.callLater(function() {
+        Theme.scale = Math.max(0.75, Math.min(1.35, Math.min(root.width / 400, root.height / 820)))
+    })
+
     function addHistory(expr, result) {
         var now = Qt.formatTime(new Date(), "hh:mm")
         var arr = [{ expr: expr, result: result, time: now }]
@@ -58,95 +58,191 @@ ApplicationWindow {
 
     function showToast(msg, suc) { toast.show(msg, suc) }
 
-    // ── Background — Neon Noir deep space ─────────────────────────────
+    // ── Background ───────────────────────────────────────────────────
     background: Item {
-        Rectangle { anchors.fill: parent; color: "#010208" }
 
-        // Violet halo — top left
-        Rectangle {
-            x: -100; y: -140; width: 420; height: 420; radius: 210
-            color: "transparent"
-            Repeater {
-                model: 10
-                delegate: Rectangle {
-                    anchors.centerIn: parent
-                    width:  420 - index * 38; height: 420 - index * 38
-                    radius: (420 - index * 38) / 2
-                    color: Qt.rgba(0.49, 0.23, 0.93, 0.018 - index * 0.0015)
+        Item {
+            anchors.fill: parent; visible: root.darkMode
+
+            Rectangle { anchors.fill: parent; color: "#060D14" }
+
+            Canvas {
+                id: darkCanvas
+                anchors.fill: parent
+                Component.onCompleted: requestPaint()
+                Connections {
+                    target: root
+                    function onDarkModeChanged() { if (root.darkMode) darkCanvas.requestPaint() }
+                }
+                onPaint: {
+                    var ctx = getContext("2d")
+                    var W = width, H = height
+
+                    var g1 = ctx.createRadialGradient(60, 50, 0, 60, 50, 280)
+                    g1.addColorStop(0.00, "rgba(0,200,168,0.18)")
+                    g1.addColorStop(0.50, "rgba(0,200,168,0.06)")
+                    g1.addColorStop(1.00, "rgba(0,0,0,0)")
+                    ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H)
+
+                    var g2 = ctx.createRadialGradient(W + 20, H - 40, 0, W + 20, H - 40, 260)
+                    g2.addColorStop(0.00, "rgba(0,140,200,0.16)")
+                    g2.addColorStop(0.50, "rgba(0,100,160,0.06)")
+                    g2.addColorStop(1.00, "rgba(0,0,0,0)")
+                    ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H)
+
+                    var g3 = ctx.createRadialGradient(W * 0.55, H * 0.42, 0, W * 0.55, H * 0.42, 160)
+                    g3.addColorStop(0.00, "rgba(0,229,204,0.04)")
+                    g3.addColorStop(1.00, "rgba(0,0,0,0)")
+                    ctx.fillStyle = g3; ctx.fillRect(0, 0, W, H)
                 }
             }
+
+            Rectangle {
+                x: root.width - 56; y: -10; width: 1; height: 110; rotation: 28
+                color: Qt.rgba(0, 0.78, 0.66, 0.18)
+            }
+            Rectangle {
+                x: root.width - 36; y: -10; width: 1; height: 72; rotation: 28
+                color: Qt.rgba(0, 0.90, 0.80, 0.10)
+            }
+            Rectangle {
+                x: 14; y: root.height - 90; width: 1; height: 100; rotation: -28
+                color: Qt.rgba(0, 0.78, 0.66, 0.12)
+            }
         }
 
-        // Cyan halo — bottom right
-        Rectangle {
-            x: root.width - 80; y: root.height - 200
-            width: 340; height: 340; radius: 170
-            color: "transparent"
-            Repeater {
-                model: 10
-                delegate: Rectangle {
-                    anchors.centerIn: parent
-                    width:  340 - index * 30; height: 340 - index * 30
-                    radius: (340 - index * 30) / 2
-                    color: Qt.rgba(0.02, 0.71, 0.83, 0.016 - index * 0.001)
+        Item {
+            anchors.fill: parent; visible: !root.darkMode; clip: true
+
+            Rectangle {
+                anchors.fill: parent
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#E9F5FC" }
+                    GradientStop { position: 0.5; color: "#D2E9F9" }
+                    GradientStop { position: 1.0; color: "#BDDAF3" }
                 }
             }
-        }
 
-        // Horizontal scanline grid
-        Repeater {
-            model: 16
-            delegate: Rectangle {
-                y: index * (root.height / 16)
-                width: root.width; height: 1
-                color: Qt.rgba(1, 1, 1, 0.009)
+            Rectangle {
+                id: cl1; width: 240; height: 92; radius: 999
+                color: Qt.rgba(1, 1, 1, 0.60); y: 18
+                NumberAnimation on x {
+                    from: -30; to: 50; duration: 9400
+                    loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
+                }
             }
-        }
+            Rectangle {
+                width: 290; height: 126; radius: 999
+                color: Qt.rgba(1, 1, 1, 0.22)
+                y: cl1.y - 18; x: cl1.x - 28
+            }
+            Rectangle {
+                id: cl2; width: 178; height: 66; radius: 999
+                color: Qt.rgba(1, 1, 1, 0.50); y: 100
+                NumberAnimation on x {
+                    from: 160; to: 228; duration: 7800
+                    loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
+                }
+            }
+            Rectangle {
+                id: cl3; width: 128; height: 48; radius: 999
+                color: Qt.rgba(1, 1, 1, 0.40); y: 178
+                NumberAnimation on x {
+                    from: 24; to: 100; duration: 11600
+                    loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
+                }
+            }
+            Rectangle {
+                id: cl4; width: 96; height: 36; radius: 999
+                color: Qt.rgba(1, 1, 1, 0.30); y: 60
+                NumberAnimation on x {
+                    from: root.width - 60; to: root.width - 130; duration: 13200
+                    loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
+                }
+            }
 
-        // Diagonal accent stripe (top-right corner)
-        Rectangle {
-            x: root.width - 60; y: -10
-            width: 2; height: 120
-            rotation: 30
-            color: Qt.rgba(0.49, 0.23, 0.93, 0.18)
-        }
-        Rectangle {
-            x: root.width - 40; y: -10
-            width: 1; height: 80
-            rotation: 30
-            color: Qt.rgba(0.02, 0.71, 0.83, 0.12)
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width; height: 220
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "transparent" }
+                    GradientStop { position: 1.0; color: Qt.rgba(0.05,0.16,0.32,0.08) }
+                }
+            }
+            Rectangle {
+                width: parent.width; height: 64
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: Qt.rgba(1,1,1,0.26) }
+                    GradientStop { position: 1.0; color: "transparent" }
+                }
+            }
         }
     }
 
-    // ── Layout ─────────────────────────────────────────────────────────
+    // ── Layout ───────────────────────────────────────────────────────
     ColumnLayout {
-        anchors.fill: parent
-        spacing: 0
+        anchors.fill: parent; spacing: 0
 
         Item {
-            Layout.fillWidth:  true
-            Layout.fillHeight: true
+            Layout.fillWidth: true; Layout.fillHeight: true
 
-            // CRASH FIX: all Loaders now bind to root.currentTab (a plain property
-            // declared above) rather than tabBar.currentIndex.  tabBar is created
-            // AFTER these Loaders in the layout, so tabBar would be null on the
-            // first evaluation, causing every Loader to stay inactive (white screen).
-            Loader { id: calcLoader;    anchors.fill: parent; active: root.currentTab === 0; visible: active; source: "CalcTab.qml" }
-            Loader { id: formulaLoader; anchors.fill: parent; active: root.currentTab === 1; visible: active; source: "FormulaTab.qml" }
-            Loader { id: convertLoader; anchors.fill: parent; active: root.currentTab === 2; visible: active; source: "ConvertTab.qml" }
-            Loader { id: randomLoader;  anchors.fill: parent; active: root.currentTab === 3; visible: active; source: "RandomTab.qml" }
-            Loader { id: graphLoader;   anchors.fill: parent; active: true; visible: root.currentTab === 4; source: "GraphTab.qml"}
-            Loader { id: aiLoader;      anchors.fill: parent; active: true; visible: root.currentTab === 5; source: "AITab.qml" }
+            // Tab 0 (CALC) loads immediately — it's the default view.
+            // All others lazy-load on first visit so startup is instant.
+            Loader { id: calcLoader;    anchors.fill: parent; source: "CalcTab.qml"
+                active: true
+                opacity: root.currentTab === 0 ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+            Loader { id: formulaLoader; anchors.fill: parent; source: "FormulaTab.qml"
+                active: root.currentTab === 1 || formulaLoader.status === Loader.Ready
+                opacity: root.currentTab === 1 ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+            Loader { id: convertLoader; anchors.fill: parent; source: "ConvertTab.qml"
+                active: root.currentTab === 2 || convertLoader.status === Loader.Ready
+                opacity: root.currentTab === 2 ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+            Loader { id: randomLoader;  anchors.fill: parent; source: "RandomTab.qml"
+                active: root.currentTab === 3 || randomLoader.status === Loader.Ready
+                opacity: root.currentTab === 3 ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+            Loader { id: graphLoader;   anchors.fill: parent; source: "GraphTab.qml"
+                active: root.currentTab === 4 || graphLoader.status === Loader.Ready
+                opacity: root.currentTab === 4 ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+            Loader { id: progLoader;    anchors.fill: parent; source: "ProgrammerTab.qml"
+                active: root.currentTab === 5 || progLoader.status === Loader.Ready
+                opacity: root.currentTab === 5 ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+            Loader { id: aiLoader;      anchors.fill: parent; source: "AITab.qml"
+                active: root.currentTab === 6 || aiLoader.status === Loader.Ready
+                opacity: root.currentTab === 6 ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
         }
 
         AppTabBar {
             id: tabBar
             Layout.fillWidth: true
             currentIndex: root.currentTab
-            onTabClicked: function(i) { root.currentTab = i }
+            onTabClicked: function(i) {
+                moreSheet.close()
+                root.currentTab = i
+            }
+            onMoreClicked: moreSheet.toggle()
         }
     }
 
+    // ── More sheet overlay (above everything) ─────────────────────────
+    MoreSheet {
+        id: moreSheet
+        anchors.fill: parent
+        currentIndex:  root.currentTab
+        onTabClicked:  function(i) { root.currentTab = i }
+    }
+
     ToastMessage { id: toast; anchors.fill: parent }
-    Component.onCompleted: root.darkMode = true
 }

@@ -1,41 +1,49 @@
 #pragma once
 #include <QObject>
-#include <QSettings>
-#include <QtQml/qqmlregistration.h>
+#include <QString>
+#include <qqml.h>
 
+// AppSettings — persists user preferences to QSettings.
+// Registered as a QML element in SmartCalc.Backend 1.0.
+// Instantiate once in Main.qml: AppSettings { id: settings }
 class AppSettings : public QObject
 {
     Q_OBJECT
     QML_ELEMENT
 
+    // ── API keys ──────────────────────────────────────────────────────
+    // OpenRouter key (free tier unlocks Llama 3.3, Gemma 3, vision…)
+    Q_PROPERTY(QString orKey   READ orKey   WRITE setOrKey   NOTIFY orKeyChanged)
+    // Anthropic direct key (optional — used as vision fallback in AITab)
+    Q_PROPERTY(QString anthKey READ anthKey WRITE setAnthKey NOTIFY anthKeyChanged)
+
+    // ── Display / UX prefs ────────────────────────────────────────────
     Q_PROPERTY(bool darkMode  READ darkMode  WRITE setDarkMode  NOTIFY darkModeChanged)
-    Q_PROPERTY(QString lang   READ lang      WRITE setLang      NOTIFY langChanged)
-    Q_PROPERTY(QString orKey  READ orKey     WRITE setOrKey     NOTIFY orKeyChanged)
-    Q_PROPERTY(QString hfToken READ hfToken  WRITE setHfToken   NOTIFY hfTokenChanged)
+    Q_PROPERTY(bool fracMode  READ fracMode  WRITE setFracMode  NOTIFY fracModeChanged)
+    Q_PROPERTY(bool sciMode   READ sciMode   WRITE setSciMode   NOTIFY sciModeChanged)
 
 public:
     explicit AppSettings(QObject *parent = nullptr);
 
-    bool    darkMode() const;
-    QString lang()     const;
-    QString orKey()    const;
-    QString hfToken()  const;
-
-    void setDarkMode(bool v);
-    void setLang(const QString &v);
+    QString orKey()   const;
     void setOrKey(const QString &v);
-    void setHfToken(const QString &v);
 
-    Q_INVOKABLE QString get(const QString &key, const QString &def = {}) const;
-    Q_INVOKABLE void    set(const QString &key, const QString &value);
-    Q_INVOKABLE void    remove(const QString &key);
+    QString anthKey() const;
+    void setAnthKey(const QString &v);
+
+    bool darkMode()  const;
+    void setDarkMode(bool v);
+
+    bool fracMode()  const;
+    void setFracMode(bool v);
+
+    bool sciMode()   const;
+    void setSciMode(bool v);
 
 signals:
-    void darkModeChanged();
-    void langChanged();
     void orKeyChanged();
-    void hfTokenChanged();
-
-private:
-    QSettings m_settings;
+    void anthKeyChanged();
+    void darkModeChanged();
+    void fracModeChanged();
+    void sciModeChanged();
 };

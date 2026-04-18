@@ -11,6 +11,8 @@
 #include "backend/MathEngine.h"
 #include "backend/AppSettings.h"
 #include "backend/ApiClient.h"
+#include "backend/FileHelper.h"   // v75
+#include "backend/HapticHelper.h"  // v77
 
 // ── Crash log helpers ─────────────────────────────────────────────────────────
 
@@ -62,9 +64,6 @@ static void installMessageHandler()
 }
 
 // ── Fallback error screen ─────────────────────────────────────────────────────
-// Loaded via engine.loadData() when objectCreationFailed fires.
-// Uses only core Qt imports — no SmartCalc.Backend — so it always works.
-// Error text is injected via rootContext properties (never string-interpolated).
 
 static const char *ERROR_SCREEN_QML = R"QML(
 import QtQuick
@@ -110,7 +109,6 @@ ApplicationWindow {
             Layout.fillWidth:    true
         }
 
-        // Error detail box
         Rectangle {
             Layout.fillWidth:  true
             Layout.fillHeight: true
@@ -123,7 +121,6 @@ ApplicationWindow {
                 anchors.margins: 14
                 clip:            true
                 Text {
-                    // errorLog is set by main.cpp via rootContext property
                     text:            typeof errorLog !== "undefined"
                                          ? errorLog
                                          : "(no error details captured)"
@@ -136,7 +133,6 @@ ApplicationWindow {
             }
         }
 
-        // Log file path hint
         Text {
             text:             "📁 " + (typeof logPath !== "undefined" ? logPath : "")
             color:            "#44446a"
@@ -145,7 +141,6 @@ ApplicationWindow {
             Layout.fillWidth: true
         }
 
-        // Copy button
         Rectangle {
             Layout.fillWidth: true
             height:  50
@@ -201,16 +196,13 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     app.setOrganizationName("SmartCalc");
     app.setApplicationName("SmartCalc");
-    app.setApplicationVersion("1.0");
+    app.setApplicationVersion("1.2");       // v77
 
     writeLog("=== SmartCalc starting — v" + app.applicationVersion() + " ===");
     writeLog("Log file: " + logFilePath());
 
     QQmlApplicationEngine engine;
 
-    // Collect every QML warning emitted during loading.
-    // Qt emits warnings() synchronously, before objectCreationFailed, so this
-    // list is fully populated by the time the failure handler runs.
     QStringList collectedErrors;
 
     QObject::connect(
@@ -224,12 +216,6 @@ int main(int argc, char *argv[])
             }
         });
 
-    // On failure: show the error screen instead of closing the app.
-    //
-    // Qt::QueuedConnection is required — objectCreationFailed fires from inside
-    // engine.loadFromModule() while the loader is still unwinding. Calling
-    // engine.loadData() synchronously here would re-enter the engine. Queuing
-    // defers the call to the next event-loop tick when the engine is idle.
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,
@@ -252,14 +238,8 @@ int main(int argc, char *argv[])
                 errorText = collectedErrors.join("\n\n");
             }
 
-            // Inject via context properties — no string escaping needed.
-            // These are readable in QML as plain identifiers (errorLog, logPath).
             engine.rootContext()->setContextProperty("errorLog", errorText);
             engine.rootContext()->setContextProperty("logPath",  logFilePath());
-
-            // Load the fallback screen. It only imports QtQuick and
-            // QtQuick.Controls.Basic, so it works even when SmartCalc.Backend
-            // is the thing that broke.
             engine.loadData(QByteArray(ERROR_SCREEN_QML));
         },
         Qt::QueuedConnection);

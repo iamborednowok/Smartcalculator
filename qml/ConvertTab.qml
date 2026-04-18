@@ -7,6 +7,10 @@ Item {
     id: root
     property var window: ApplicationWindow.window
 
+    // ── Clipboard helper ──────────────────────────────────────────────
+    TextEdit { id: clipHelper; visible: false; text: "" }
+    function copyToClipboard(t) { clipHelper.text = t; clipHelper.selectAll(); clipHelper.copy() }
+
     readonly property var unitCategories: ({
         "Length":      ["mm","cm","m","km","in","ft","yd","mi"],
         "Weight":      ["g","kg","lb","oz","t"],
@@ -44,7 +48,7 @@ Item {
 
             Text {
                 text: "UNIT CONVERTER"
-                font.pixelSize: 9; color: "#6060a0"; font.letterSpacing: 1
+                font.pixelSize: 9; color: Theme.text3; font.letterSpacing: 1
             }
 
             // ── Category row ──────────────────────────────────────────
@@ -77,13 +81,13 @@ Item {
                 // From unit selector
                 Rectangle {
                     Layout.fillWidth: true; height: 40; radius: 10
-                    color: Qt.rgba(1,1,1,0.06)
-                    border.color: Qt.rgba(1,1,1,0.14); border.width: 1
+                    color: Theme.actionBg
+                    border.color: Theme.border2; border.width: 1
 
                     Text {
                         anchors.centerIn: parent
                         text: fromUnit
-                        color: "#a29bfe"; font.pixelSize: 13; font.family: "JetBrains Mono"
+                        color: Theme.accent2; font.pixelSize: 13; font.family: Theme.fontMono
                     }
 
                     MouseArea {
@@ -101,7 +105,7 @@ Item {
                                     width: 120; height: 36
                                     color: modelData === fromUnit ? Qt.rgba(0.42,0.36,0.91,0.12) : "transparent"
                                     Text { anchors.centerIn: parent; text: modelData
-                                        color: "#f0f0ff"; font.pixelSize: 13 }
+                                        color: Theme.text; font.pixelSize: 13 }
                                     MouseArea { anchors.fill: parent
                                         onClicked: { fromUnit = modelData; fromUnitPopup.close(); doConvert() }}
                                 }
@@ -113,7 +117,7 @@ Item {
                 // Swap button
                 Rectangle {
                     width: 38; height: 40; radius: 10
-                    color: Qt.rgba(1,1,1,0.06)
+                    color: Theme.actionBg
                     border.color: Qt.rgba(1,1,1,0.12); border.width: 1
                     Text { anchors.centerIn: parent; text: "⇄"; color: "#a0a0c8"; font.pixelSize: 16 }
                     MouseArea { anchors.fill: parent
@@ -124,13 +128,13 @@ Item {
                 // To unit selector
                 Rectangle {
                     Layout.fillWidth: true; height: 40; radius: 10
-                    color: Qt.rgba(1,1,1,0.06)
-                    border.color: Qt.rgba(1,1,1,0.14); border.width: 1
+                    color: Theme.actionBg
+                    border.color: Theme.border2; border.width: 1
 
                     Text {
                         anchors.centerIn: parent
                         text: toUnit
-                        color: "#a29bfe"; font.pixelSize: 13; font.family: "JetBrains Mono"
+                        color: Theme.accent2; font.pixelSize: 13; font.family: Theme.fontMono
                     }
 
                     MouseArea {
@@ -148,7 +152,7 @@ Item {
                                     width: 120; height: 36
                                     color: modelData === toUnit ? Qt.rgba(0.42,0.36,0.91,0.12) : "transparent"
                                     Text { anchors.centerIn: parent; text: modelData
-                                        color: "#f0f0ff"; font.pixelSize: 13 }
+                                        color: Theme.text; font.pixelSize: 13 }
                                     MouseArea { anchors.fill: parent
                                         onClicked: { toUnit = modelData; toUnitPopup.close(); doConvert() }}
                                 }
@@ -164,7 +168,7 @@ Item {
 
                 Column {
                     spacing: 5; Layout.fillWidth: true
-                    Text { text: "FROM (" + fromUnit + ")"; font.pixelSize: 8; color: "#6060a0"; font.letterSpacing: 0.8 }
+                    Text { text: "FROM (" + fromUnit + ")"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 0.8 }
                     StyledInput {
                         width: parent.width
                         placeholderText: "0"
@@ -175,7 +179,7 @@ Item {
 
                 Column {
                     spacing: 5; Layout.fillWidth: true
-                    Text { text: "TO (" + toUnit + ")"; font.pixelSize: 8; color: "#6060a0"; font.letterSpacing: 0.8 }
+                    Text { text: "TO (" + toUnit + ")"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 0.8 }
                     Rectangle {
                         width: parent.width; height: 42; radius: 10
                         color: Qt.rgba(0,0,0,0.30)
@@ -184,8 +188,8 @@ Item {
                             anchors.fill: parent; anchors.margins: 12
                             verticalAlignment: Text.AlignVCenter
                             text: resultVal || "—"
-                            color: "#c8bcff"; font.pixelSize: 16; font.weight: Font.Light
-                            font.family: "JetBrains Mono"
+                            color: Theme.accent2; font.pixelSize: 16; font.weight: Font.Light
+                            font.family: Theme.fontMono
                         }
                     }
                 }
@@ -198,14 +202,14 @@ Item {
 
                 Rectangle {
                     width: 50; height: 26; radius: 8
-                    color: "transparent"; border.color: Qt.rgba(1,1,1,0.14); border.width: 1
+                    color: "transparent"; border.color: Theme.border2; border.width: 1
                     Text { anchors.centerIn: parent; text: "copy"; font.pixelSize: 9; color: "#60609a" }
                     MouseArea { anchors.fill: parent
-                        onClicked: { if(window) window.showToast("Copied!", true) } }
+                        onClicked: { copyToClipboard(resultVal + " " + toUnit); if(window) window.showToast("Copied!", true) } }
                 }
                 Rectangle {
                     width: 60; height: 26; radius: 8
-                    color: "transparent"; border.color: Qt.rgba(1,1,1,0.14); border.width: 1
+                    color: "transparent"; border.color: Theme.border2; border.width: 1
                     Text { anchors.centerIn: parent; text: "→ Calc"; font.pixelSize: 9; color: "#60609a" }
                     MouseArea { anchors.fill: parent
                         onClicked: { if(window) window.currentTab = 0 } }

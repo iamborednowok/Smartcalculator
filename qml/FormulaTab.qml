@@ -108,10 +108,10 @@ Item {
 
                 Rectangle {
                     width: 70; height: 28; radius: 8
-                    color: Qt.rgba(1,1,1,0.06)
+                    color: Theme.sectionBg
                     border.color: Qt.rgba(1,1,1,0.12); border.width: 1
                     Text { anchors.centerIn: parent; text: "← back"
-                        font.pixelSize: 11; color: "#a0a0c8" }
+                        font.pixelSize: 11; color: Theme.text2 }
                     MouseArea { anchors.fill: parent
                         onClicked: { selectedFormula = null; varValues = {}; result = ""; resultUnit = "" } }
                 }
@@ -119,7 +119,7 @@ Item {
                 Text {
                     visible: selectedFormula !== null
                     text: selectedFormula ? (selectedFormula.icon + " " + selectedFormula.name) : ""
-                    color: window ? window.textColor : "#f0f0ff"
+                    color: Theme.text
                     font.pixelSize: 14; font.weight: Font.Medium
                     leftPadding: 8
                 }
@@ -146,7 +146,7 @@ Item {
                 delegate: Rectangle {
                     Layout.fillWidth: true
                     height: 56; radius: 12
-                    color: Qt.rgba(1,1,1,0.06)
+                    color: Theme.sectionBg
                     border.color: Qt.rgba(1,1,1,0.09); border.width: 1
 
                     RowLayout {
@@ -158,7 +158,7 @@ Item {
                             spacing: 2; Layout.fillWidth: true
                             RowLayout {
                                 spacing: 8
-                                Text { text: modelData.name; color: "#d0d0f8"; font.pixelSize: 12 }
+                                Text { text: modelData.name; color: Theme.text; font.pixelSize: 12 }
                                 Text { text: modelData.expr; color: modelData.color; font.pixelSize: 10; opacity: 0.8 }
                             }
                         }
@@ -199,7 +199,7 @@ Item {
                 Column {
                     anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                     anchors.leftMargin: 14; spacing: 2
-                    Text { text: "FORMULA"; font.pixelSize: 8; color: "#8080b8"; font.letterSpacing: 1 }
+                    Text { text: "FORMULA"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 1 }
                     Text {
                         text: selectedFormula ? selectedFormula.expr : ""
                         color: selectedFormula ? selectedFormula.color : "transparent"
@@ -217,7 +217,7 @@ Item {
 
                     Column {
                         spacing: 2; Layout.preferredWidth: parent.width * 0.40
-                        Text { text: modelData.label; color: "#9090c0"; font.pixelSize: 11 }
+                        Text { text: modelData.label; color: Theme.text2; font.pixelSize: 11 }
                         Text { text: modelData.hint;  color: "#7070a0"; font.pixelSize: 9 }
                     }
 
@@ -255,15 +255,15 @@ Item {
             Rectangle {
                 visible: result !== ""
                 Layout.fillWidth: true; height: 80; radius: 12
-                color: Qt.rgba(0,0,0,0.25)
+                color: Qt.rgba(0,0,0, Theme.dark ? 0.25 : 0.06)
                 border.color: selectedFormula ? selectedFormula.color + "30" : "transparent"; border.width: 1
 
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 14; spacing: 4
-                    Text { text: "RESULT"; font.pixelSize: 8; color: "#6060a0"; font.letterSpacing: 1 }
+                    Text { text: "RESULT"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 1 }
                     RowLayout {
-                        Text { text: result; color: "#f4f4ff"; font.pixelSize: 24; font.weight: Font.Light }
-                        Text { text: resultUnit; color: "#8080a8"; font.pixelSize: 12; leftPadding: 4 }
+                        Text { text: result; color: Theme.text; font.pixelSize: 24; font.weight: Font.Light }
+                        Text { text: resultUnit; color: Theme.text3; font.pixelSize: 12; leftPadding: 4 }
                         Item { Layout.fillWidth: true }
                     }
                     RowLayout {
@@ -271,14 +271,14 @@ Item {
                         Rectangle {
                             width: 50; height: 22; radius: 7
                             color: "transparent"; border.color: Qt.rgba(1,1,1,0.14); border.width: 1
-                            Text { anchors.centerIn: parent; text: "copy"; font.pixelSize: 9; color: "#60609a" }
+                            Text { anchors.centerIn: parent; text: "copy"; font.pixelSize: 9; color: Theme.text3 }
                             MouseArea { anchors.fill: parent
                                 onClicked: { if(window) window.showToast("Copied!", true) } }
                         }
                         Rectangle {
                             width: 60; height: 22; radius: 7
                             color: "transparent"; border.color: Qt.rgba(1,1,1,0.14); border.width: 1
-                            Text { anchors.centerIn: parent; text: "→ Calc"; font.pixelSize: 9; color: "#60609a" }
+                            Text { anchors.centerIn: parent; text: "→ Calc"; font.pixelSize: 9; color: Theme.text3 }
                             MouseArea { anchors.fill: parent
                                 onClicked: {
                                     if (window) {
