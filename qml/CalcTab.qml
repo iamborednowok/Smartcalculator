@@ -154,9 +154,9 @@ Item {
     // history / variable panels expand; button grid fills remaining space.
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 14
-        anchors.bottomMargin: 10
-        spacing: 8
+        anchors.margins: 10
+        anchors.bottomMargin: 6
+        spacing: 6
 
     // ── Scrollable top section ────────────────────────────────────────
     Flickable {
@@ -170,7 +170,7 @@ Item {
         ColumnLayout {
             id: topCol
             width: parent.width
-            spacing: 10
+            spacing: 8
 
             // ── Header ────────────────────────────────────────────────
             RowLayout {
@@ -190,7 +190,7 @@ Item {
 
                 // Angle mode (sci only)
                 Rectangle {
-                    visible: sciMode; height: 26; width: 50; radius: 13
+                    visible: sciMode; height: 24; width: 50; radius: 12
                     color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? (Theme.dark ? 0.15 : 0.12) : (Theme.dark ? 0.06 : 0.04))
                     border.color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.42 : 0.14); border.width: 1
                     Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: 9; font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
@@ -200,7 +200,7 @@ Item {
 
                 // ½ Frac toggle
                 Rectangle {
-                    height: 26; width: 52; radius: 13
+                    height: 24; width: 52; radius: 12
                     color: fracMode ? Qt.rgba(0.95,0.62,0.07, Theme.dark ? 0.14 : 0.10) : Theme.actionBg
                     border.color: fracMode ? Qt.rgba(0.95,0.62,0.07,0.42) : Theme.actionBdr; border.width: 1
                     Text { anchors.centerIn: parent; text: "½ frac"; font.pixelSize: 9; font.family: Theme.fontSans; color: fracMode ? "#F59E0B" : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
@@ -292,7 +292,7 @@ Item {
             Rectangle {
                 id: displayRect
                 Layout.fillWidth: true
-                height: 124
+                height: 100
                 radius: 22
                 color: Theme.displayBg
                 Behavior on color { ColorAnimation { duration: Theme.normal } }
@@ -388,7 +388,7 @@ Item {
                 Row {
                     id: mainNumber
                     anchors.right: parent.right; anchors.bottom: parent.bottom
-                    anchors.rightMargin: 16; anchors.bottomMargin: 12
+                    anchors.rightMargin: 16; anchors.bottomMargin: 8
                     spacing: 2
 
                     Text {
@@ -575,7 +575,7 @@ Item {
             Layout.fillWidth: true; spacing: 8
 
             Rectangle {
-                height: 26; width: sciToggleLbl.implicitWidth + 22; radius: 13
+                height: 24; width: sciToggleLbl.implicitWidth + 22; radius: 12
                 color: sciOpen ? Theme.accentDim : Theme.actionBg
                 border.color: sciOpen ? Theme.accent : Theme.actionBdr; border.width: 1
                 Behavior on color { ColorAnimation { duration: 160 } }
@@ -584,7 +584,7 @@ Item {
             }
 
             Rectangle {
-                height: 26; width: 50; radius: 13
+                height: 24; width: 50; radius: 12
                 color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? (Theme.dark ? 0.12 : 0.09) : 0.04)
                 border.color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.38 : 0.12); border.width: 1
                 Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: 9; font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
@@ -596,7 +596,7 @@ Item {
         // ── SCI strip (collapsible, outside scroll area) ──────────────
         Item {
             Layout.fillWidth: true
-            height: sciOpen ? 42 : 0; clip: true
+            height: sciOpen ? 38 : 0; clip: true
             Behavior on height { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
             Flickable {
                 anchors.fill: parent; contentWidth: sciRow.implicitWidth + 4
@@ -606,7 +606,7 @@ Item {
                         model: sciStrip
                         delegate: CalcButton {
                             label: modelData; btnType: "sci"
-                            implicitHeight: 38
+                            implicitHeight: 34
                             width: Math.max(52, label.length * 7 + 24)
                             onClicked: handleBtn(label)
                         }
@@ -621,32 +621,32 @@ Item {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 6
+            spacing: 5
 
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 6
+                spacing: 5
 
                 // Number pad (3 cols × 4 rows) + bottom row (± and .)
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 6
+                    spacing: 5
 
                     Repeater {
                         model: numRows
                         delegate: RowLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            spacing: 6
+                            spacing: 5
                             Repeater {
                                 model: modelData
                                 delegate: CalcButton {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
-                                    Layout.minimumHeight: 50
-                                    Layout.maximumHeight: 84
+                                    Layout.minimumHeight: 44
+                                    Layout.maximumHeight: 76
                                     label: modelData
                                     btnType: root.btnType(modelData)
                                     onClicked: handleBtn(label)
@@ -658,14 +658,14 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        spacing: 6
+                        spacing: 5
                         Repeater {
                             model: ["±", "."]
                             delegate: CalcButton {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                Layout.minimumHeight: 46
-                                Layout.maximumHeight: 76
+                                Layout.minimumHeight: 40
+                                Layout.maximumHeight: 68
                                 label: modelData; btnType: "dim"
                                 onClicked: handleBtn(label)
                             }
@@ -675,27 +675,27 @@ Item {
 
                 // Operators column (right side)
                 ColumnLayout {
-                    Layout.preferredWidth: 66
+                    Layout.preferredWidth: 62
                     Layout.fillHeight: true
-                    spacing: 6
+                    spacing: 5
 
                     Repeater {
                         model: opCol
                         delegate: CalcButton {
-                            Layout.preferredWidth: 66
+                            Layout.preferredWidth: 62
                             Layout.fillHeight: true
-                            Layout.minimumHeight: 50
-                            Layout.maximumHeight: 84
+                            Layout.minimumHeight: 44
+                            Layout.maximumHeight: 76
                             label: modelData; btnType: "op"
                             onClicked: handleBtn(label)
                         }
                     }
 
                     CalcButton {
-                        Layout.preferredWidth: 66
+                        Layout.preferredWidth: 62
                         Layout.fillHeight: true
-                        Layout.minimumHeight: 46
-                        Layout.maximumHeight: 76
+                        Layout.minimumHeight: 40
+                        Layout.maximumHeight: 68
                         label: "%"; btnType: "dim"
                         onClicked: handleBtn("%")
                     }
@@ -705,20 +705,13 @@ Item {
             // Equals — always a bit taller than standard rows
             CalcButton {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 64
-                Layout.minimumHeight: 56
-                Layout.maximumHeight: 88
+                Layout.preferredHeight: 58
+                Layout.minimumHeight: 50
+                Layout.maximumHeight: 80
                 label: "="; btnType: "eq"
                 onClicked: handleBtn("=")
             }
 
-            Text {
-                Layout.alignment: Qt.AlignHCenter
-                text: "⌨  0–9 · +-×÷ · Enter · Esc · Backspace"
-                font.pixelSize: 8; font.family: Theme.fontSans
-                color: Theme.text3; font.letterSpacing: 0.3
-                Behavior on color { ColorAnimation { duration: Theme.normal } }
-            }
         }   // end button ColumnLayout
 
     }   // end outer ColumnLayout
