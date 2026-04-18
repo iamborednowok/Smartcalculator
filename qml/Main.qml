@@ -20,6 +20,7 @@ ApplicationWindow {
         }
     }
 
+    // FIX: start in light mode by default (matches user preference)
     property bool darkMode: false
     property var  appSettings: settings
     property int  currentTab:  0
@@ -32,7 +33,7 @@ ApplicationWindow {
     readonly property int  contentMaxW: Math.min(root.width, isWide ? 540 : root.width)
 
     readonly property bool isMoreActive: currentTab === 1 || currentTab === 3 || currentTab === 5
-    readonly property int  headerH: Math.round(52 * Theme.scale)
+    readonly property int  headerH: Math.round(56 * Theme.scale)
 
     onDarkModeChanged: {
         Theme.dark        = darkMode
@@ -103,22 +104,9 @@ ApplicationWindow {
                     ctx.fillStyle = g3; ctx.fillRect(0, 0, W, H)
                 }
             }
-
-            Rectangle {
-                x: root.width - 56; y: -10; width: 1; height: 110; rotation: 28
-                color: Qt.rgba(0, 0.78, 0.66, 0.18)
-            }
-            Rectangle {
-                x: root.width - 36; y: -10; width: 1; height: 72; rotation: 28
-                color: Qt.rgba(0, 0.90, 0.80, 0.10)
-            }
-            Rectangle {
-                x: 14; y: root.height - 90; width: 1; height: 100; rotation: -28
-                color: Qt.rgba(0, 0.78, 0.66, 0.12)
-            }
         }
 
-        // LIGHT: sky-blue gradient with animated cloud blobs
+        // LIGHT: clean sky-blue gradient — animated clouds
         Item {
             anchors.fill: parent; visible: !root.darkMode; clip: true
 
@@ -126,11 +114,12 @@ ApplicationWindow {
                 anchors.fill: parent
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: "#E9F5FC" }
-                    GradientStop { position: 0.5; color: "#D2E9F9" }
-                    GradientStop { position: 1.0; color: "#BDDAF3" }
+                    GradientStop { position: 0.5; color: "#D8EDFA" }
+                    GradientStop { position: 1.0; color: "#C8E3F8" }
                 }
             }
 
+            // Animated cloud blobs
             Rectangle {
                 id: cl1; width: 240; height: 92; radius: 999
                 color: Qt.rgba(1, 1, 1, 0.60); y: 18
@@ -160,38 +149,23 @@ ApplicationWindow {
                     loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
                 }
             }
-            Rectangle {
-                id: cl4; width: 96; height: 36; radius: 999
-                color: Qt.rgba(1, 1, 1, 0.30); y: 60
-                NumberAnimation on x {
-                    from: root.width - 60; to: root.width - 130; duration: 13200
-                    loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
-                }
-            }
 
             Rectangle {
                 anchors.bottom: parent.bottom
                 width: parent.width; height: 220
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: "transparent" }
-                    GradientStop { position: 1.0; color: Qt.rgba(0.05,0.16,0.32,0.08) }
-                }
-            }
-            Rectangle {
-                width: parent.width; height: 64
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(1,1,1,0.26) }
-                    GradientStop { position: 1.0; color: "transparent" }
+                    GradientStop { position: 1.0; color: Qt.rgba(0.05,0.16,0.32,0.07) }
                 }
             }
         }
     }
 
-    // ── Root shell: frosted rails on tablets, centered column ────────
+    // ── Root shell ───────────────────────────────────────────────────
     Item {
         anchors.fill: parent
 
-        // Frosted side rails (visible only on wide/tablet screens)
+        // Frosted side rails (tablets only)
         Rectangle {
             visible: root.isWide
             anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
@@ -207,7 +181,7 @@ ApplicationWindow {
             Behavior on color { ColorAnimation { duration: Theme.normal } }
         }
 
-        // ── Content column (centered, max-width capped) ───────────────
+        // ── Content column ────────────────────────────────────────────
         Item {
             id: contentCol
             anchors { top: parent.top; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
@@ -216,15 +190,17 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.fill: parent; spacing: 0
 
-                // ── Top Header ───────────────────────────────────────
+                // ── Top Header ────────────────────────────────────────
                 Rectangle {
                     id: appHeader
                     Layout.fillWidth: true
                     height: root.headerH
 
+                    // FIX: solid header background, no transparency bleed
                     color: Theme.tabBg
                     Behavior on color { ColorAnimation { duration: Theme.normal } }
 
+                    // Drop shadow for header bottom edge
                     Rectangle {
                         anchors.bottom: parent.bottom
                         width: parent.width; height: 1
@@ -238,16 +214,17 @@ ApplicationWindow {
                         }
                     }
 
+                    // Left: Logo + App name
                     Row {
                         anchors.left: parent.left
                         anchors.leftMargin: Math.round(16 * Theme.scale)
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Math.round(8 * Theme.scale)
+                        spacing: Math.round(9 * Theme.scale)
 
                         Rectangle {
-                            width:  Math.round(28 * Theme.scale)
-                            height: Math.round(28 * Theme.scale)
-                            radius: Math.round(8 * Theme.scale)
+                            width:  Math.round(30 * Theme.scale)
+                            height: Math.round(30 * Theme.scale)
+                            radius: Math.round(9  * Theme.scale)
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: Theme.accent }
@@ -255,74 +232,69 @@ ApplicationWindow {
                             }
                             Text {
                                 anchors.centerIn: parent; text: "⊞"
-                                font.pixelSize: Math.round(14 * Theme.scale)
+                                font.pixelSize: Math.round(15 * Theme.scale)
                                 color: "#FFFFFF"; font.family: Theme.fontSans
                             }
                         }
 
-                        Text {
+                        Column {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "SmartCalc"
-                            font.pixelSize: Math.round(16 * Theme.scale)
-                            font.weight: Font.Bold; font.family: Theme.fontSans
-                            color: Theme.text
-                            Behavior on color { ColorAnimation { duration: Theme.normal } }
-                        }
-                    }
-
-                    Row {
-                        anchors.right: parent.right
-                        anchors.rightMargin: Math.round(10 * Theme.scale)
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Math.round(2 * Theme.scale)
-
-                        Rectangle {
-                            width: Math.round(36 * Theme.scale); height: Math.round(36 * Theme.scale)
-                            radius: Math.round(10 * Theme.scale)
-                            color: dmMa.pressed ? Theme.accentDim : "transparent"
-                            Behavior on color { ColorAnimation { duration: 120 } }
+                            spacing: 0
                             Text {
-                                anchors.centerIn: parent; text: root.darkMode ? "☀" : "☽"
-                                font.pixelSize: Math.round(16 * Theme.scale); color: Theme.text2
+                                text: "Smart"
+                                font.pixelSize: Math.round(15 * Theme.scale)
+                                font.weight: Font.Bold; font.family: Theme.fontSans
+                                color: Theme.text
                                 Behavior on color { ColorAnimation { duration: Theme.normal } }
                             }
-                            MouseArea { id: dmMa; anchors.fill: parent; onClicked: root.darkMode = !root.darkMode }
-                        }
-
-                        Rectangle {
-                            id: moreBtnRect
-                            width: Math.round(44 * Theme.scale); height: Math.round(36 * Theme.scale)
-                            radius: Math.round(10 * Theme.scale)
-                            color: moreSheet.isOpen ? Theme.accentDim : (moreMa.pressed ? Theme.accentDim : "transparent")
-                            border.color: moreSheet.isOpen ? Theme.tabPillBdr : "transparent"; border.width: 1
-                            Behavior on color        { ColorAnimation { duration: 120 } }
-                            Behavior on border.color { ColorAnimation { duration: 120 } }
-
-                            Column {
-                                anchors.centerIn: parent; spacing: Math.round(3 * Theme.scale)
-                                Repeater {
-                                    model: 3
-                                    delegate: Rectangle {
-                                        width: Math.round(4 * Theme.scale); height: width; radius: width / 2
-                                        color: moreSheet.isOpen ? Theme.tabLblActive : Theme.tabLblInactive
-                                        Behavior on color { ColorAnimation { duration: 150 } }
-                                    }
-                                }
-                            }
-
+                            // Thin accent line under brand name
                             Rectangle {
-                                visible: root.isMoreActive
-                                anchors { top: parent.top; right: parent.right
-                                          topMargin: Math.round(5*Theme.scale); rightMargin: Math.round(5*Theme.scale) }
-                                width: Math.round(7 * Theme.scale); height: width; radius: width / 2
+                                width: parent.children[0].implicitWidth
+                                height: Math.round(2 * Theme.scale); radius: 1
                                 gradient: Gradient {
                                     orientation: Gradient.Horizontal
                                     GradientStop { position: 0.0; color: Theme.accent }
                                     GradientStop { position: 1.0; color: Theme.cyan   }
                                 }
                             }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Calc"
+                            font.pixelSize: Math.round(15 * Theme.scale)
+                            font.weight: Font.Bold; font.family: Theme.fontSans
+                            color: Theme.accent
+                            Behavior on color { ColorAnimation { duration: Theme.normal } }
+                        }
+                    }
 
-                            MouseArea { id: moreMa; anchors.fill: parent; onClicked: moreSheet.toggle() }
+                    // Right: dark-mode toggle only (More moved to tab bar)
+                    Row {
+                        anchors.right: parent.right
+                        anchors.rightMargin: Math.round(12 * Theme.scale)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Math.round(4 * Theme.scale)
+
+                        // Dark / Light mode toggle
+                        Rectangle {
+                            width:  Math.round(38 * Theme.scale)
+                            height: Math.round(38 * Theme.scale)
+                            radius: Math.round(11 * Theme.scale)
+                            color:  dmMa.pressed
+                                ? Theme.accentDim
+                                : (Theme.dark ? Qt.rgba(1,1,1,0.06) : Qt.rgba(0.07,0.33,0.75,0.08))
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            border.color: Theme.dark ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0.07,0.33,0.75,0.25)
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: root.darkMode ? "☀" : "☽"
+                                font.pixelSize: Math.round(17 * Theme.scale)
+                                color: Theme.text2
+                                Behavior on color { ColorAnimation { duration: Theme.normal } }
+                            }
+                            MouseArea { id: dmMa; anchors.fill: parent; onClicked: root.darkMode = !root.darkMode }
                         }
                     }
                 }
@@ -372,17 +344,30 @@ ApplicationWindow {
                     id: tabBar
                     Layout.fillWidth: true
                     currentIndex: root.currentTab
+                    // FIX: tab bar z is above MoreSheet dim overlay
+                    z: 60
                     onTabClicked: function(i) {
-                        moreSheet.close()
-                        root.currentTab = i
+                        if (i === -1) {
+                            // "More" button — toggle the sheet
+                            moreSheet.toggle()
+                        } else {
+                            moreSheet.close()
+                            root.currentTab = i
+                        }
                     }
                 }
             }
 
-            // ── More dropdown ─────────────────────────────────────────
+            // ── MoreSheet overlay (above content, below tab bar) ───────
             MoreSheet {
                 id: moreSheet
-                anchors.fill: parent
+                // Fill only up to (but not including) the tab bar
+                anchors {
+                    top:    parent.top
+                    left:   parent.left
+                    right:  parent.right
+                    bottom: tabBar.top
+                }
                 topOffset:    root.headerH
                 currentIndex: root.currentTab
                 onTabClicked: function(i) { root.currentTab = i }
@@ -390,5 +375,5 @@ ApplicationWindow {
         }
     }
 
-    ToastMessage { id: toast; anchors.fill: parent }
+    ToastMessage { id: toast; anchors.fill: parent; z: 200 }
 }

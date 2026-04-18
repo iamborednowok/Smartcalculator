@@ -35,6 +35,8 @@ Item {
 
     // ── Dim overlay ───────────────────────────────────────────────────
     // The MoreSheet parent is anchored to stop at the tab bar in Main.qml
+    Item {
+        id: dimOverlay
         anchors.top:    parent.top
         anchors.topMargin: root.topOffset
         anchors.left:   parent.left
