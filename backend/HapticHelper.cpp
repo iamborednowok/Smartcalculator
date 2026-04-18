@@ -2,7 +2,12 @@
 
 #ifdef Q_OS_ANDROID
 #include <QJniObject>
-#include <QNativeInterface>
+// Qt 6.2+: QNativeInterface lives in QtCore/qnativeinterface.h (lowercase).
+// The umbrella <QNativeInterface> header is missing on some NDK toolchains,
+// so we include the canonical path directly.
+#if __has_include(<QtCore/qnativeinterface.h>)
+#  include <QtCore/qnativeinterface.h>
+#endif
 #endif
 
 HapticHelper::HapticHelper(QObject *parent) : QObject(parent) {}
@@ -12,7 +17,19 @@ HapticHelper::HapticHelper(QObject *parent) : QObject(parent) {}
 static void androidVibrate(jlong durationMs, jint amplitude)
 {
     // amplitude: -1 = DEFAULT_AMPLITUDE, 1-255 explicit
+    //
+    // Prefer QNativeInterface if the header resolved; fall back to the stable
+    // QtNative JNI call that works across all Qt 6 + NDK 27 toolchains.
+#if defined(QT_CORE_LIB) && __has_include(<QtCore/qnativeinterface.h>)
     QJniObject activity = QNativeInterface::QAndroidApplication::context();
+#else
+    // Fallback: ask Qt's internal Java layer for the current Activity.
+    QJniObject activity = QJniObject::callStaticObjectMethod(
+        "org/qtproject/qt/android/QtNative",
+        "activity",
+        "()Landroid/app/Activity;"
+    );
+#endif
     if (!activity.isValid()) return;
 
     QJniObject vibratorManager = activity.callObjectMethod(
