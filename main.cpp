@@ -11,8 +11,8 @@
 #include "backend/MathEngine.h"
 #include "backend/AppSettings.h"
 #include "backend/ApiClient.h"
-#include "backend/FileHelper.h"   // v75
-#include "backend/HapticHelper.h"  // v77
+#include "backend/FileHelper.h"
+#include "backend/HapticHelper.h"
 
 // ── Crash log helpers ─────────────────────────────────────────────────────────
 
@@ -63,9 +63,28 @@ static void installMessageHandler()
     });
 }
 
+// ── Format a QQmlError into a readable block ──────────────────────────────────
+
+static QString formatError(int index, const QQmlError &err)
+{
+    QString header = QString("── Error %1 ").arg(index);
+    header += QString("─").repeated(qMax(0, 42 - header.length()));
+
+    // Trim the URL to "qml/..." so it fits on screen
+    QString url = err.url().toString();
+    int qmlIdx  = url.indexOf("/qml/");
+    QString shortUrl = (qmlIdx >= 0) ? url.mid(qmlIdx + 1) : url;
+
+    return header + "\n"
+         + "File:    " + shortUrl + "\n"
+         + "Line:    " + (err.line()   > 0 ? QString::number(err.line())   : "?") + "\n"
+         + "Column:  " + (err.column() > 0 ? QString::number(err.column()) : "?") + "\n"
+         + "Message: " + err.description() + "\n";
+}
+
 // ── Fallback error screen ─────────────────────────────────────────────────────
 
-static const char *ERROR_SCREEN_QML = R"QML(
+static const char *ERROR_SCREEN_QML = R"QMLSRC(
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -77,6 +96,19 @@ ApplicationWindow {
     title:   "SmartCalc — Startup Error"
 
     background: Rectangle { color: "#010208" }
+
+    // Hidden TextEdit used as clipboard bridge.
+    // Qt.application.clipboard does not exist in QML; this is the correct pattern.
+    TextEdit {
+        id:      clipBridge
+        visible: false
+        function copyText(s) {
+            text = s
+            selectAll()
+            copy()
+            text = ""
+        }
+    }
 
     ColumnLayout {
         anchors.fill:    parent
@@ -120,15 +152,21 @@ ApplicationWindow {
                 anchors.fill:    parent
                 anchors.margins: 14
                 clip:            true
-                Text {
-                    text:            typeof errorLog !== "undefined"
-                                         ? errorLog
-                                         : "(no error details captured)"
-                    color:           "#ff7070"
-                    font.pixelSize:  11
-                    font.family:     "monospace"
-                    wrapMode:        Text.WrapAnywhere
-                    width:           parent.width
+
+                // TextEdit (read-only) so the user can also long-press select manually
+                TextEdit {
+                    width:             parent.width
+                    text:              typeof errorLog !== "undefined"
+                                           ? errorLog
+                                           : "(no error details captured)"
+                    color:             "#ff7070"
+                    font.pixelSize:    11
+                    font.family:       "monospace"
+                    wrapMode:          TextEdit.WrapAnywhere
+                    readOnly:          true
+                    selectByMouse:     true
+                    selectionColor:    Qt.rgba(0.49, 0.23, 0.93, 0.45)
+                    selectedTextColor: "#ffffff"
                 }
             }
         }
@@ -150,7 +188,7 @@ ApplicationWindow {
 
             Text {
                 anchors.centerIn: parent
-                text:  "📋  Copy Error"
+                text:  copyDone.visible ? "✓  Copied!" : "📋  Copy Error"
                 color: "white"
                 font.pixelSize: 14
                 font.bold:      true
@@ -160,14 +198,14 @@ ApplicationWindow {
                 id: copyArea
                 anchors.fill: parent
                 onClicked: {
-                    var report = "[SmartCalc Crash Report]\n"
-                               + "Time: " + new Date().toString() + "\n\n"
-                               + (typeof errorLog !== "undefined" ? errorLog : "(none)") + "\n\n"
-                               + "Log: " + (typeof logPath !== "undefined" ? logPath : "");
-                    if (Qt.application.clipboard)
-                        Qt.application.clipboard.setText(report);
-                    copyDone.visible = true;
-                    hideTimer.start();
+                    var report = "=== SmartCalc Error Report ===\n"
+                               + "Time: " + new Date().toString() + "\n"
+                               + "Log:  " + (typeof logPath !== "undefined" ? logPath : "n/a") + "\n"
+                               + "==============================\n\n"
+                               + (typeof errorLog !== "undefined" ? errorLog : "(none)")
+                    clipBridge.copyText(report)
+                    copyDone.visible = true
+                    hideTimer.restart()
                 }
             }
         }
@@ -179,13 +217,13 @@ ApplicationWindow {
             color:            "#7C3AED"
             font.pixelSize:   12
             Layout.alignment: Qt.AlignHCenter
-            Timer { id: hideTimer; interval: 2000; onTriggered: copyDone.visible = false }
+            Timer { id: hideTimer; interval: 2500; onTriggered: copyDone.visible = false }
         }
 
         Item { Layout.fillHeight: true; Layout.preferredHeight: 1 }
     }
 }
-)QML";
+)QMLSRC";
 
 // ── main ─────────────────────────────────────────────────────────────────────
 
@@ -196,14 +234,14 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     app.setOrganizationName("SmartCalc");
     app.setApplicationName("SmartCalc");
-    app.setApplicationVersion("1.2");       // v77
+    app.setApplicationVersion("1.2");
 
     writeLog("=== SmartCalc starting — v" + app.applicationVersion() + " ===");
     writeLog("Log file: " + logFilePath());
 
     QQmlApplicationEngine engine;
 
-    QStringList collectedErrors;
+    QList<QQmlError> collectedErrors;
 
     QObject::connect(
         &engine,
@@ -212,7 +250,7 @@ int main(int argc, char *argv[])
         [&collectedErrors](const QList<QQmlError> &warnings) {
             for (const QQmlError &err : warnings) {
                 writeLog("QML WARNING: " + err.toString());
-                collectedErrors << err.toString();
+                collectedErrors << err;
             }
         });
 
@@ -235,7 +273,11 @@ int main(int argc, char *argv[])
                     "  • QML import path not set correctly\n\n"
                     "Run:  adb logcat -s Qt,SmartCalc";
             } else {
-                errorText = collectedErrors.join("\n\n");
+                QStringList blocks;
+                for (int i = 0; i < collectedErrors.size(); ++i)
+                    blocks << formatError(i + 1, collectedErrors[i]);
+                errorText = QString("Total errors: %1\n\n").arg(collectedErrors.size())
+                          + blocks.join("\n");
             }
 
             engine.rootContext()->setContextProperty("errorLog", errorText);
