@@ -7,7 +7,7 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
-    height: Math.round(68 * Theme.scale)
+    height: Math.round(60 * Theme.scale)
     Behavior on height { NumberAnimation { duration: Theme.normal; easing.type: Easing.OutCubic } }
 
     color: Theme.tabBg
