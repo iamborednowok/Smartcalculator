@@ -57,6 +57,7 @@ qt_add_qml_module(SmartCalc
         qml/components/UnitPill.qml
         qml/components/ToastMessage.qml
         qml/components/TabIcon.qml          # v76: custom icon loader w/ fallback
+        qml/components/MoreSheet.qml        # v79: slide-up overflow sheet
         qml/Theme.qml
     # ── Custom tab icons (optional) ──────────────────────────────────────────
     # Drop an image into qml/icons/ named after the tab label (lowercase):
