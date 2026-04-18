@@ -1,16 +1,20 @@
 import QtQuick
 import QtQuick.Layouts
 
-// MoreSheet — dropdown from the top header button
-// Slides DOWN from below the header (instead of up from the bottom).
-// Shows FORMULA(1), RANDOM(3), PROG(5)
+// MoreSheet — slides DOWN from below the header when toggled.
+// BUG FIX: Old implementation had a complex visible binding that caused
+// the sheet to flash open on startup (sheetPanel.height starts at 0,
+// making the initial y = -10 which passed the > -(h+9) guard while
+// the Behavior animated from 0 → -10, blocking all tab taps).
+// NEW: use opacity-gated visibility + z-ordering so it never blocks taps.
 Item {
     id: root
 
-    property int currentIndex: 0
-    property int topOffset:    52    // Set from Main.qml to match appHeader.height
+    property int  currentIndex: 0
+    property int  topOffset:    52
     signal tabClicked(int index)
 
+    // isOpen is the ONLY source of truth for visibility
     property bool isOpen: false
 
     function open()   { isOpen = true  }
@@ -23,73 +27,67 @@ Item {
         { icon: "01", label: "PROG",    sub: "Bit / Hex",  tabIndex: 5 },
     ]
 
-    // Visible while open or while the panel is still animating out
-    visible: root.isOpen || sheetSlide.y > -(sheetPanel.height + 9)
+    // Only render the overlay when open (or animating out via opacity)
+    // z: 50 keeps this above tab content but we never expand below tab bar
+    z: 50
+    // The item itself always fills parent but only intercepts events when open
+    visible: true
 
-    // Dim overlay — covers the content area below the header
-    Item {
-        anchors.top:       parent.top
+    // ── Dim overlay ───────────────────────────────────────────────────
+    // The MoreSheet parent is anchored to stop at the tab bar in Main.qml
+        anchors.top:    parent.top
         anchors.topMargin: root.topOffset
-        anchors.left:      parent.left
-        anchors.right:     parent.right
-        anchors.bottom:    parent.bottom
+        anchors.left:   parent.left
+        anchors.right:  parent.right
+        // Stop just above the bottom edge so we don't cover the tab bar
+        anchors.bottom: parent.bottom
+
+        opacity: root.isOpen ? 1.0 : 0.0
+        Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
         Rectangle {
             anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, 0.52)
-            opacity: root.isOpen ? 1.0 : 0.0
-            Behavior on opacity { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+            color: Qt.rgba(0, 0, 0, 0.45)
         }
-        // Tap outside to close
+
         MouseArea {
             anchors.fill: parent
+            // Only consume events when fully open; lets taps pass through while animating out
             enabled: root.isOpen
             onClicked: root.close()
         }
     }
 
-    // Sheet panel — slides down from below the header
+    // ── Sheet panel ───────────────────────────────────────────────────
     Rectangle {
         id: sheetPanel
+
         width:  parent.width
         anchors.top:       parent.top
         anchors.topMargin: root.topOffset
 
-        height: sheetInner.implicitHeight + Math.round(32 * Theme.scale)
+        // Height driven by content
+        height: sheetInner.implicitHeight + Math.round(48 * Theme.scale)
+        clip: true
 
-        // Only round the bottom corners
+        // Only round bottom corners
         radius: Math.round(22 * Theme.scale)
         Rectangle {
-            anchors.top: parent.top
-            width: parent.width; height: Math.round(22 * Theme.scale)
+            anchors.top:  parent.top
+            width: parent.width
+            height: Math.round(22 * Theme.scale)
             color: parent.color
         }
 
+        // FIX: solid background — no transparency so content never bleeds through
         color: Theme.tabBg
-        border.color: Qt.rgba(1, 1, 1, 0.09); border.width: 1
         Behavior on color { ColorAnimation { duration: Theme.normal } }
 
-        // Slide transform: closed = fully above the anchor, open = at anchor
-        transform: Translate {
-            id: sheetSlide
-            y: root.isOpen ? 0 : -(sheetPanel.height + 10)
-            Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-        }
-
-        // Bottom handle bar
+        // Top border line
         Rectangle {
-            anchors.bottom:           parent.bottom
-            anchors.bottomMargin:     Math.round(10 * Theme.scale)
-            anchors.horizontalCenter: parent.horizontalCenter
-            width:  Math.round(40 * Theme.scale)
-            height: Math.round(4  * Theme.scale)
-            radius: 2
-            color:  Qt.rgba(1, 1, 1, 0.20)
-        }
-
-        // Bottom separator line
-        Rectangle {
-            anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.left:   parent.left
+            anchors.right:  parent.right
             height: 1
             gradient: Gradient {
                 orientation: Gradient.Horizontal
@@ -100,26 +98,59 @@ Item {
             }
         }
 
+        // Bottom drag handle
+        Rectangle {
+            anchors.bottom:           parent.bottom
+            anchors.bottomMargin:     Math.round(12 * Theme.scale)
+            anchors.horizontalCenter: parent.horizontalCenter
+            width:  Math.round(44 * Theme.scale)
+            height: Math.round(4  * Theme.scale)
+            radius: 2
+            color:  Qt.rgba(0.5, 0.6, 0.7, 0.35)
+        }
+
+        // Drop shadow line
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.left:   parent.left
+            anchors.right:  parent.right
+            height: 1
+            color: Qt.rgba(0.5, 0.6, 0.75, 0.25)
+        }
+
+        // ── Slide animation ───────────────────────────────────────────
+        // FIX: use y-offset on the panel itself, NOT a Transform.
+        // Start at -height (hidden above header), slide to 0 (visible).
+        // The panel is always in the DOM — no height-calculation race.
+        y: root.isOpen ? 0 : -sheetPanel.height
+        Behavior on y {
+            NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+        }
+
+        // ── Content ───────────────────────────────────────────────────
         Column {
             id: sheetInner
             anchors {
-                left: parent.left; right: parent.right
-                top:  parent.top
+                left:  parent.left
+                right: parent.right
+                top:   parent.top
                 margins: Math.round(16 * Theme.scale)
+                topMargin: Math.round(18 * Theme.scale)
             }
-            anchors.topMargin: Math.round(16 * Theme.scale)
-            spacing: Math.round(12 * Theme.scale)
+            spacing: Math.round(14 * Theme.scale)
 
+            // Section header
             Text {
                 text: "MORE TOOLS"
-                font.pixelSize: Math.round(9  * Theme.scale)
-                font.weight:    Font.Bold
+                font.pixelSize:    Math.round(9  * Theme.scale)
+                font.weight:       Font.Bold
                 font.letterSpacing: 1.8
                 font.family: Theme.fontSans
                 color: Theme.text3
                 leftPadding: Math.round(2 * Theme.scale)
             }
 
+            // Three tool cards in a row
             RowLayout {
                 width: parent.width
                 spacing: Math.round(10 * Theme.scale)
@@ -128,29 +159,27 @@ Item {
                     model: root.moreTabs
                     delegate: Rectangle {
                         Layout.fillWidth: true
-                        height: Math.round(80 * Theme.scale)
-                        radius: Math.round(18 * Theme.scale)
+                        height: Math.round(88 * Theme.scale)
+                        radius: Math.round(16 * Theme.scale)
 
                         readonly property bool isActive: root.currentIndex === modelData.tabIndex
 
-                        color: isActive ? Theme.tabPillBg : Qt.rgba(1, 1, 1, 0.04)
-                        border.color: isActive ? Theme.tabPillBdr : Qt.rgba(1, 1, 1, 0.09)
+                        color: isActive
+                            ? Theme.tabPillBg
+                            : (Theme.dark ? Qt.rgba(1,1,1,0.04) : Qt.rgba(0.93,0.97,1.0,1.0))
+                        border.color: isActive ? Theme.tabPillBdr
+                            : (Theme.dark ? Qt.rgba(1,1,1,0.09) : Qt.rgba(0.6,0.75,0.9,0.45))
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 160 } }
 
-                        // Top sheen when active
+                        // Active top bar
                         Rectangle {
                             visible: isActive
-                            anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-                            width: parent.width * 0.55; height: 1; y: 1; radius: 2
-                            color: Qt.rgba(1, 1, 1, 0.28)
-                        }
-
-                        // Active gradient bar at top
-                        Rectangle {
-                            visible: isActive
-                            anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-                            width: parent.width * 0.50; height: Math.round(2 * Theme.scale); radius: 1
+                            anchors.top: parent.top
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: parent.width * 0.50
+                            height: Math.round(3 * Theme.scale)
+                            radius: 2
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: Theme.accent }
@@ -160,12 +189,12 @@ Item {
 
                         Column {
                             anchors.centerIn: parent
-                            spacing: Math.round(5 * Theme.scale)
+                            spacing: Math.round(6 * Theme.scale)
 
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: modelData.icon
-                                font.pixelSize: Math.round(24 * Theme.scale)
+                                font.pixelSize: Math.round(22 * Theme.scale)
                                 color: isActive ? Theme.tabLblActive : Theme.tabLblInactive
                                 Behavior on color { ColorAnimation { duration: 160 } }
                             }
@@ -173,8 +202,8 @@ Item {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: modelData.label
-                                font.pixelSize: Math.round(9  * Theme.scale)
-                                font.weight: Font.Bold
+                                font.pixelSize:    Math.round(9 * Theme.scale)
+                                font.weight:       Font.Bold
                                 font.letterSpacing: 0.8
                                 font.family: Theme.fontSans
                                 color: isActive ? Theme.tabLblActive : Theme.tabLblInactive
@@ -184,8 +213,8 @@ Item {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: modelData.sub
-                                font.pixelSize: Math.round(8  * Theme.scale)
-                                font.family: Theme.fontSans
+                                font.pixelSize: Math.round(8 * Theme.scale)
+                                font.family:    Theme.fontSans
                                 color: isActive ? Theme.accent2 : Theme.text3
                                 Behavior on color { ColorAnimation { duration: 160 } }
                             }
