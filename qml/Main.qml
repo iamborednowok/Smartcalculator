@@ -22,9 +22,17 @@ ApplicationWindow {
 
     property bool darkMode: false
     property var  appSettings: settings
-    property int  currentTab: 0
-    property int  prevTab:    0
+    property int  currentTab:  0
+    property int  prevTab:     0
     property var  calcHistory: []
+
+    // ── Responsive geometry ──────────────────────────────────────────
+    readonly property bool isWide:      root.width >= 600
+    readonly property bool isLandscape: root.height < root.width
+    readonly property int  contentMaxW: Math.min(root.width, isWide ? 540 : root.width)
+
+    readonly property bool isMoreActive: currentTab === 1 || currentTab === 3 || currentTab === 5
+    readonly property int  headerH: Math.round(52 * Theme.scale)
 
     onDarkModeChanged: {
         Theme.dark        = darkMode
@@ -34,19 +42,18 @@ ApplicationWindow {
     Component.onCompleted: {
         root.darkMode = settings.darkMode
         Theme.dark    = root.darkMode
-        var baseW  = 400
-        var baseH  = 820
-        var scaleW = root.width  / baseW
-        var scaleH = root.height / baseH
-        Theme.scale = Math.max(0.75, Math.min(1.35, Math.min(scaleW, scaleH)))
+        recalcScale()
     }
+    onWidthChanged:  Qt.callLater(recalcScale)
+    onHeightChanged: Qt.callLater(recalcScale)
 
-    onWidthChanged:  Qt.callLater(function() {
-        Theme.scale = Math.max(0.75, Math.min(1.35, Math.min(root.width / 400, root.height / 820)))
-    })
-    onHeightChanged: Qt.callLater(function() {
-        Theme.scale = Math.max(0.75, Math.min(1.35, Math.min(root.width / 400, root.height / 820)))
-    })
+    function recalcScale() {
+        var scaleW = root.width  / 400
+        var scaleH = root.height / 820
+        var raw    = Math.min(scaleW, scaleH)
+        var maxS   = root.isWide ? 1.55 : 1.35
+        Theme.scale = Math.max(0.72, Math.min(maxS, raw))
+    }
 
     function addHistory(expr, result) {
         var now = Qt.formatTime(new Date(), "hh:mm")
@@ -55,12 +62,12 @@ ApplicationWindow {
             arr.push(calcHistory[i])
         calcHistory = arr
     }
-
     function showToast(msg, suc) { toast.show(msg, suc) }
 
     // ── Background ───────────────────────────────────────────────────
     background: Item {
 
+        // DARK: deep ocean navy with teal/cyan glows
         Item {
             anchors.fill: parent; visible: root.darkMode
 
@@ -111,6 +118,7 @@ ApplicationWindow {
             }
         }
 
+        // LIGHT: sky-blue gradient with animated cloud blobs
         Item {
             anchors.fill: parent; visible: !root.darkMode; clip: true
 
@@ -179,69 +187,207 @@ ApplicationWindow {
         }
     }
 
-    // ── Layout ───────────────────────────────────────────────────────
-    ColumnLayout {
-        anchors.fill: parent; spacing: 0
-
-        Item {
-            Layout.fillWidth: true; Layout.fillHeight: true
-
-            // Tab 0 (CALC) loads immediately — it's the default view.
-            // All others lazy-load on first visit so startup is instant.
-            Loader { id: calcLoader;    anchors.fill: parent; source: "CalcTab.qml"
-                active: true
-                opacity: root.currentTab === 0 ? 1 : 0; visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-            Loader { id: formulaLoader; anchors.fill: parent; source: "FormulaTab.qml"
-                active: root.currentTab === 1 || formulaLoader.status === Loader.Ready
-                opacity: root.currentTab === 1 ? 1 : 0; visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-            Loader { id: convertLoader; anchors.fill: parent; source: "ConvertTab.qml"
-                active: root.currentTab === 2 || convertLoader.status === Loader.Ready
-                opacity: root.currentTab === 2 ? 1 : 0; visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-            Loader { id: randomLoader;  anchors.fill: parent; source: "RandomTab.qml"
-                active: root.currentTab === 3 || randomLoader.status === Loader.Ready
-                opacity: root.currentTab === 3 ? 1 : 0; visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-            Loader { id: graphLoader;   anchors.fill: parent; source: "GraphTab.qml"
-                active: root.currentTab === 4 || graphLoader.status === Loader.Ready
-                opacity: root.currentTab === 4 ? 1 : 0; visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-            Loader { id: progLoader;    anchors.fill: parent; source: "ProgrammerTab.qml"
-                active: root.currentTab === 5 || progLoader.status === Loader.Ready
-                opacity: root.currentTab === 5 ? 1 : 0; visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-            Loader { id: aiLoader;      anchors.fill: parent; source: "AITab.qml"
-                active: root.currentTab === 6 || aiLoader.status === Loader.Ready
-                opacity: root.currentTab === 6 ? 1 : 0; visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-        }
-
-        AppTabBar {
-            id: tabBar
-            Layout.fillWidth: true
-            currentIndex: root.currentTab
-            onTabClicked: function(i) {
-                moreSheet.close()
-                root.currentTab = i
-            }
-            onMoreClicked: moreSheet.toggle()
-        }
-    }
-
-    // ── More sheet overlay (above everything) ─────────────────────────
-    MoreSheet {
-        id: moreSheet
+    // ── Root shell: frosted rails on tablets, centered column ────────
+    Item {
         anchors.fill: parent
-        currentIndex:  root.currentTab
-        onTabClicked:  function(i) { root.currentTab = i }
+
+        // Frosted side rails (visible only on wide/tablet screens)
+        Rectangle {
+            visible: root.isWide
+            anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
+            width: (parent.width - root.contentMaxW) / 2
+            color: root.darkMode ? Qt.rgba(0,0,0,0.20) : Qt.rgba(1,1,1,0.20)
+            Behavior on color { ColorAnimation { duration: Theme.normal } }
+        }
+        Rectangle {
+            visible: root.isWide
+            anchors { top: parent.top; bottom: parent.bottom; right: parent.right }
+            width: (parent.width - root.contentMaxW) / 2
+            color: root.darkMode ? Qt.rgba(0,0,0,0.20) : Qt.rgba(1,1,1,0.20)
+            Behavior on color { ColorAnimation { duration: Theme.normal } }
+        }
+
+        // ── Content column (centered, max-width capped) ───────────────
+        Item {
+            id: contentCol
+            anchors { top: parent.top; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+            width: root.contentMaxW
+
+            ColumnLayout {
+                anchors.fill: parent; spacing: 0
+
+                // ── Top Header ───────────────────────────────────────
+                Rectangle {
+                    id: appHeader
+                    Layout.fillWidth: true
+                    height: root.headerH
+
+                    color: Theme.tabBg
+                    Behavior on color { ColorAnimation { duration: Theme.normal } }
+
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        width: parent.width; height: 1
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.00; color: "transparent" }
+                            GradientStop { position: 0.15; color: Theme.tabSep0 }
+                            GradientStop { position: 0.50; color: Theme.tabSep0 }
+                            GradientStop { position: 0.85; color: Theme.tabSep1 }
+                            GradientStop { position: 1.00; color: "transparent" }
+                        }
+                    }
+
+                    Row {
+                        anchors.left: parent.left
+                        anchors.leftMargin: Math.round(16 * Theme.scale)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Math.round(8 * Theme.scale)
+
+                        Rectangle {
+                            width:  Math.round(28 * Theme.scale)
+                            height: Math.round(28 * Theme.scale)
+                            radius: Math.round(8 * Theme.scale)
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: Theme.accent }
+                                GradientStop { position: 1.0; color: Theme.cyan  }
+                            }
+                            Text {
+                                anchors.centerIn: parent; text: "⊞"
+                                font.pixelSize: Math.round(14 * Theme.scale)
+                                color: "#FFFFFF"; font.family: Theme.fontSans
+                            }
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "SmartCalc"
+                            font.pixelSize: Math.round(16 * Theme.scale)
+                            font.weight: Font.Bold; font.family: Theme.fontSans
+                            color: Theme.text
+                            Behavior on color { ColorAnimation { duration: Theme.normal } }
+                        }
+                    }
+
+                    Row {
+                        anchors.right: parent.right
+                        anchors.rightMargin: Math.round(10 * Theme.scale)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Math.round(2 * Theme.scale)
+
+                        Rectangle {
+                            width: Math.round(36 * Theme.scale); height: Math.round(36 * Theme.scale)
+                            radius: Math.round(10 * Theme.scale)
+                            color: dmMa.pressed ? Theme.accentDim : "transparent"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Text {
+                                anchors.centerIn: parent; text: root.darkMode ? "☀" : "☽"
+                                font.pixelSize: Math.round(16 * Theme.scale); color: Theme.text2
+                                Behavior on color { ColorAnimation { duration: Theme.normal } }
+                            }
+                            MouseArea { id: dmMa; anchors.fill: parent; onClicked: root.darkMode = !root.darkMode }
+                        }
+
+                        Rectangle {
+                            id: moreBtnRect
+                            width: Math.round(44 * Theme.scale); height: Math.round(36 * Theme.scale)
+                            radius: Math.round(10 * Theme.scale)
+                            color: moreSheet.isOpen ? Theme.accentDim : (moreMa.pressed ? Theme.accentDim : "transparent")
+                            border.color: moreSheet.isOpen ? Theme.tabPillBdr : "transparent"; border.width: 1
+                            Behavior on color        { ColorAnimation { duration: 120 } }
+                            Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                            Column {
+                                anchors.centerIn: parent; spacing: Math.round(3 * Theme.scale)
+                                Repeater {
+                                    model: 3
+                                    delegate: Rectangle {
+                                        width: Math.round(4 * Theme.scale); height: width; radius: width / 2
+                                        color: moreSheet.isOpen ? Theme.tabLblActive : Theme.tabLblInactive
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                visible: root.isMoreActive
+                                anchors { top: parent.top; right: parent.right
+                                          topMargin: Math.round(5*Theme.scale); rightMargin: Math.round(5*Theme.scale) }
+                                width: Math.round(7 * Theme.scale); height: width; radius: width / 2
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: Theme.accent }
+                                    GradientStop { position: 1.0; color: Theme.cyan   }
+                                }
+                            }
+
+                            MouseArea { id: moreMa; anchors.fill: parent; onClicked: moreSheet.toggle() }
+                        }
+                    }
+                }
+
+                // ── Tab content ───────────────────────────────────────
+                Item {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+
+                    Loader { id: calcLoader;    anchors.fill: parent; source: "CalcTab.qml"
+                        active: true
+                        opacity: root.currentTab === 0 ? 1 : 0; visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+                    Loader { id: formulaLoader; anchors.fill: parent; source: "FormulaTab.qml"
+                        active: root.currentTab === 1 || formulaLoader.status === Loader.Ready
+                        opacity: root.currentTab === 1 ? 1 : 0; visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+                    Loader { id: convertLoader; anchors.fill: parent; source: "ConvertTab.qml"
+                        active: root.currentTab === 2 || convertLoader.status === Loader.Ready
+                        opacity: root.currentTab === 2 ? 1 : 0; visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+                    Loader { id: randomLoader;  anchors.fill: parent; source: "RandomTab.qml"
+                        active: root.currentTab === 3 || randomLoader.status === Loader.Ready
+                        opacity: root.currentTab === 3 ? 1 : 0; visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+                    Loader { id: graphLoader;   anchors.fill: parent; source: "GraphTab.qml"
+                        active: root.currentTab === 4 || graphLoader.status === Loader.Ready
+                        opacity: root.currentTab === 4 ? 1 : 0; visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+                    Loader { id: progLoader;    anchors.fill: parent; source: "ProgrammerTab.qml"
+                        active: root.currentTab === 5 || progLoader.status === Loader.Ready
+                        opacity: root.currentTab === 5 ? 1 : 0; visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+
+                    Loader { id: aiLoader;      anchors.fill: parent; source: "AITab.qml"
+                        active: root.currentTab === 6 || aiLoader.status === Loader.Ready
+                        opacity: root.currentTab === 6 ? 1 : 0; visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+                }
+
+                // ── Bottom tab bar ─────────────────────────────────────
+                AppTabBar {
+                    id: tabBar
+                    Layout.fillWidth: true
+                    currentIndex: root.currentTab
+                    onTabClicked: function(i) {
+                        moreSheet.close()
+                        root.currentTab = i
+                    }
+                }
+            }
+
+            // ── More dropdown ─────────────────────────────────────────
+            MoreSheet {
+                id: moreSheet
+                anchors.fill: parent
+                topOffset:    root.headerH
+                currentIndex: root.currentTab
+                onTabClicked: function(i) { root.currentTab = i }
+            }
+        }
     }
 
     ToastMessage { id: toast; anchors.fill: parent }
