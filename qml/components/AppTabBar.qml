@@ -9,7 +9,7 @@ Rectangle {
 
     // Responsive height: compact in landscape, comfortable in portrait
     readonly property bool isLandscape: (parent ? parent.height < parent.width : false)
-    height: Math.round((isLandscape ? 52 : 64) * Theme.scale)
+    height: Math.round((isLandscape ? 44 : 54) * Theme.scale)
     Behavior on height { NumberAnimation { duration: Theme.normal; easing.type: Easing.OutCubic } }
 
     // FIX: Solid, fully opaque background — no bleed-through in light mode
@@ -54,7 +54,7 @@ Rectangle {
 
     // ── Sliding active pill ───────────────────────────────────────────
     // Sits behind the tab icons so it never blocks taps
-    readonly property real slotW: root.width / 5  // 4 primary + 1 more
+    readonly property real slotW: root.width / 4  // 4 primary tabs only
 
     Rectangle {
         id: activePill
@@ -163,88 +163,6 @@ Rectangle {
             }
         }
 
-        // ── "More" button ─────────────────────────────────────────────
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            readonly property bool isActive: root.isMoreActive
-
-            Column {
-                anchors.centerIn: parent
-                spacing: Math.round(3 * Theme.scale)
-
-                // Three-dot icon
-                Row {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: Math.round(4 * Theme.scale)
-                    Repeater {
-                        model: 3
-                        Rectangle {
-                            width:  Math.round(5 * Theme.scale)
-                            height: width
-                            radius: width / 2
-                            color: parent.parent.parent.isActive
-                                ? Theme.tabLblActive : Theme.tabLblInactive
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                        }
-                    }
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "MORE"
-                    font.pixelSize:     Math.round(8 * Theme.scale)
-                    font.weight:        Font.Bold
-                    font.letterSpacing: 0.5
-                    font.family:        Theme.fontSans
-                    color: parent.parent.isActive ? Theme.tabLblActive : Theme.tabLblInactive
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                }
-            }
-
-            // Active indicator dot
-            Rectangle {
-                anchors.bottom:           parent.bottom
-                anchors.bottomMargin:     Math.round(4 * Theme.scale)
-                anchors.horizontalCenter: parent.horizontalCenter
-                width:  Math.round(18 * Theme.scale)
-                height: Math.round(3  * Theme.scale)
-                radius: 2
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: Theme.accent }
-                    GradientStop { position: 1.0; color: Theme.cyan   }
-                }
-                opacity: parent.isActive ? 1.0 : 0.0
-                Behavior on opacity { NumberAnimation { duration: 160 } }
-            }
-
-            // Notification badge when a "More" sub-tab is active
-            Rectangle {
-                visible: root.isMoreActive
-                anchors {
-                    top:        parent.top
-                    horizontalCenter: parent.horizontalCenter
-                    topMargin:  Math.round(6 * Theme.scale)
-                    horizontalCenterOffset: Math.round(14 * Theme.scale)
-                }
-                width: Math.round(8 * Theme.scale)
-                height: width
-                radius: width / 2
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: Theme.accent }
-                    GradientStop { position: 1.0; color: Theme.cyan   }
-                }
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                z: 10
-                // This tab routes through Main.qml's MoreSheet toggle
-                // We emit a special index (-1) that Main handles
-                onClicked: root.tabClicked(-1)
-            }
-        }
+        // (More button removed — now lives as a floating top-corner button)
     }
 }

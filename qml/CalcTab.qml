@@ -157,9 +157,9 @@ Item {
     // history / variable panels expand; button grid fills remaining space.
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
-        anchors.bottomMargin: 6
-        spacing: 6
+        anchors.margins: 7
+        anchors.bottomMargin: 4
+        spacing: 4
 
     // ── Scrollable top section ────────────────────────────────────────
     Flickable {
@@ -181,8 +181,8 @@ Item {
 
                 Row {
                     spacing: 0
-                    Text { text: "Smart"; font.pixelSize: Math.round(20 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Light; color: Theme.text2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
-                    Text { text: "Calc"; font.pixelSize: Math.round(20 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Bold; color: Theme.accent2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                    Text { text: "Smart"; font.pixelSize: Math.round(16 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Light; color: Theme.text2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                    Text { text: "Calc"; font.pixelSize: Math.round(16 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Bold; color: Theme.accent2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
                     Rectangle { width: 6; height: 6; radius: 3; color: Theme.cyan; anchors.verticalCenter: parent.verticalCenter; anchors.leftMargin: 2
                         Rectangle { anchors.centerIn: parent; width: 12; height: 12; radius: 6; color: "transparent"; border.color: Theme.cyan; border.width: 1; opacity: 0.45 }
                         Behavior on color { ColorAnimation { duration: Theme.normal } }
@@ -288,8 +288,8 @@ Item {
             Rectangle {
                 id: displayRect
                 Layout.fillWidth: true
-                height: 100
-                radius: 22
+                height: 80
+                radius: 18
                 color: Theme.displayBg
                 Behavior on color { ColorAnimation { duration: Theme.normal } }
 
@@ -571,7 +571,7 @@ Item {
             Layout.fillWidth: true; spacing: 8
 
             Rectangle {
-                height: 24; width: sciToggleLbl.implicitWidth + 22; radius: 12
+                height: 20; width: sciToggleLbl.implicitWidth + 18; radius: 10
                 color: sciOpen ? Theme.accentDim : Theme.actionBg
                 border.color: sciOpen ? Theme.accent : Theme.actionBdr; border.width: 1
                 Behavior on color { ColorAnimation { duration: 160 } }
@@ -580,7 +580,7 @@ Item {
             }
 
             Rectangle {
-                height: 24; width: 50; radius: 12
+                height: 20; width: 46; radius: 10
                 color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? (Theme.dark ? 0.12 : 0.09) : 0.04)
                 border.color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.38 : 0.12); border.width: 1
                 Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
@@ -592,7 +592,7 @@ Item {
         // ── SCI strip (collapsible, outside scroll area) ──────────────
         Item {
             Layout.fillWidth: true
-            height: sciOpen ? 38 : 0; clip: true
+            height: sciOpen ? 30 : 0; clip: true
             Behavior on height { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
             Flickable {
                 anchors.fill: parent; contentWidth: sciRow.implicitWidth + 4
@@ -602,8 +602,8 @@ Item {
                         model: sciStrip
                         delegate: CalcButton {
                             label: modelData; btnType: "sci"
-                            implicitHeight: 34
-                            width: Math.max(52, label.length * 7 + 24)
+                            implicitHeight: 26
+                            width: Math.max(46, label.length * 7 + 18)
                             onClicked: handleBtn(label)
                         }
                     }
@@ -617,32 +617,32 @@ Item {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 5
+            spacing: 4
 
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 5
+                spacing: 4
 
                 // Number pad (3 cols × 4 rows) + bottom row (± and .)
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 5
+                    spacing: 4
 
                     Repeater {
                         model: numRows
                         delegate: RowLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            spacing: 5
+                            spacing: 4
                             Repeater {
                                 model: modelData
                                 delegate: CalcButton {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
-                                    Layout.minimumHeight: 44
-                                    Layout.maximumHeight: 76
+                                    Layout.minimumHeight: 36
+                                    Layout.maximumHeight: 62
                                     label: modelData
                                     btnType: root.btnType(modelData)
                                     onClicked: handleBtn(label)
@@ -654,14 +654,14 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        spacing: 5
+                        spacing: 4
                         Repeater {
                             model: ["±", "."]
                             delegate: CalcButton {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                Layout.minimumHeight: 40
-                                Layout.maximumHeight: 68
+                                Layout.minimumHeight: 32
+                                Layout.maximumHeight: 52
                                 label: modelData; btnType: "dim"
                                 onClicked: handleBtn(label)
                             }
@@ -671,27 +671,27 @@ Item {
 
                 // Operators column (right side)
                 ColumnLayout {
-                    Layout.preferredWidth: 62
+                    Layout.preferredWidth: 56
                     Layout.fillHeight: true
-                    spacing: 5
+                    spacing: 4
 
                     Repeater {
                         model: opCol
                         delegate: CalcButton {
-                            Layout.preferredWidth: 62
+                            Layout.preferredWidth: 56
                             Layout.fillHeight: true
-                            Layout.minimumHeight: 44
-                            Layout.maximumHeight: 76
+                            Layout.minimumHeight: 36
+                            Layout.maximumHeight: 62
                             label: modelData; btnType: "op"
                             onClicked: handleBtn(label)
                         }
                     }
 
                     CalcButton {
-                        Layout.preferredWidth: 62
+                        Layout.preferredWidth: 56
                         Layout.fillHeight: true
-                        Layout.minimumHeight: 40
-                        Layout.maximumHeight: 68
+                        Layout.minimumHeight: 32
+                        Layout.maximumHeight: 52
                         label: "%"; btnType: "dim"
                         onClicked: handleBtn("%")
                     }
@@ -701,9 +701,9 @@ Item {
             // Equals — always a bit taller than standard rows
             CalcButton {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 58
-                Layout.minimumHeight: 50
-                Layout.maximumHeight: 80
+                Layout.preferredHeight: 46
+                Layout.minimumHeight: 40
+                Layout.maximumHeight: 64
                 label: "="; btnType: "eq"
                 onClicked: handleBtn("=")
             }
