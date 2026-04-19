@@ -243,6 +243,13 @@ Item {
         "📷 Snap a photo of an equation",
     ]
 
+    // FIX #31: Hidden TextEdit used as a clipboard proxy.
+    // QML has no direct Clipboard API; the standard idiom is to write to a
+    // non-visible TextEdit and call selectAll() + copy().  It is placed at
+    // root scope (not inside the delegate) so a single instance is shared
+    // across all bubbles and is not subject to reuseItems recycling.
+    TextEdit { id: clipHelper; visible: false; readOnly: false }
+
     // ── UI ─────────────────────────────────────────────────────────────
     ColumnLayout {
         anchors.fill: parent
@@ -257,7 +264,7 @@ Item {
                 spacing: 3
                 Text {
                     text: "AI Assistant"
-                    font.pixelSize: 18; font.family: Theme.fontSans; font.weight: Font.SemiBold
+                    font.pixelSize: Math.round(18 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.SemiBold
                     color: Theme.text
                 }
                 // Active engine chip
@@ -278,7 +285,7 @@ Item {
                         text: window && window.appSettings.orKey
                               ? "⚡ " + orModels[aiPrefs.orModelIdx].label
                               : "☁ Claude"
-                        font.pixelSize: 9; font.family: Theme.fontSans
+                        font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans
                         color: window && window.appSettings.orKey ? "#F59E0B" : Theme.accent2
                     }
                 }
@@ -293,7 +300,7 @@ Item {
                 border.color: settingsPanel.visible ? Qt.rgba(0.67,0.55,1.0,0.45) : Qt.rgba(1,1,1,0.12)
                 border.width: 1
                 Behavior on color { ColorAnimation { duration: 150 } }
-                Text { anchors.centerIn: parent; text: "⚙"; color: "#9090c0"; font.pixelSize: 16 }
+                Text { anchors.centerIn: parent; text: "⚙"; color: "#9090c0"; font.pixelSize: Math.round(16 * Theme.scale) }
                 MouseArea { anchors.fill: parent; onClicked: settingsPanel.visible = !settingsPanel.visible }
             }
         }
@@ -339,7 +346,7 @@ Item {
                             width: parent.width
                             Text {
                                 text: "⚡  OPENROUTER  ·  FREE MODELS"
-                                font.pixelSize: 9; color: "#F59E0B"
+                                font.pixelSize: Math.round(9 * Theme.scale); color: "#F59E0B"
                                 font.letterSpacing: 1.2; font.weight: Font.Bold
                                 font.family: Theme.fontSans
                             }
@@ -348,7 +355,7 @@ Item {
                                 height: 16; width: freeLbl.implicitWidth + 12; radius: 8
                                 color: Qt.rgba(0.95,0.62,0.07,0.12)
                                 border.color: Qt.rgba(0.95,0.62,0.07,0.30); border.width: 1
-                                Text { id: freeLbl; anchors.centerIn: parent; text: "no credit card"; font.pixelSize: 8; color: "#F59E0B" }
+                                Text { id: freeLbl; anchors.centerIn: parent; text: "no credit card"; font.pixelSize: Math.round(8 * Theme.scale); color: "#F59E0B" }
                             }
                         }
 
@@ -378,7 +385,7 @@ Item {
                                             id: modelPillLbl
                                             text: modelData.label
                                             color: aiPrefs.orModelIdx === index ? "#F59E0B" : Theme.text2
-                                            font.pixelSize: 10; font.family: Theme.fontSans
+                                            font.pixelSize: Math.round(10 * Theme.scale); font.family: Theme.fontSans
                                             font.weight: aiPrefs.orModelIdx === index ? Font.SemiBold : Font.Normal
                                         }
                                         Rectangle {
@@ -388,7 +395,7 @@ Item {
                                             Text {
                                                 id: badgeLbl
                                                 anchors.centerIn: parent
-                                                text: modelData.badge; font.pixelSize: 7; color: "#10B981"
+                                                text: modelData.badge; font.pixelSize: Math.round(7 * Theme.scale); color: "#10B981"
                                             }
                                         }
                                     }
@@ -404,7 +411,7 @@ Item {
                         Text {
                             width: parent.width
                             text: orModels[aiPrefs.orModelIdx].desc
-                            font.pixelSize: 9; color: Theme.text3; font.family: Theme.fontSans
+                            font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3; font.family: Theme.fontSans
                             wrapMode: Text.WordWrap
                         }
 
@@ -420,18 +427,18 @@ Item {
                                 id: gemmaRow
                                 anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 10 }
                                 spacing: 8
-                                Text { text: "💎"; font.pixelSize: 14 }
+                                Text { text: "💎"; font.pixelSize: Math.round(14 * Theme.scale) }
                                 Column {
                                     Layout.fillWidth: true; spacing: 2
                                     Text {
                                         text: "Gemma 3 1B  ·  local download also available"
-                                        font.pixelSize: 9; color: "#A78BFA"; font.weight: Font.SemiBold
+                                        font.pixelSize: Math.round(9 * Theme.scale); color: "#A78BFA"; font.weight: Font.SemiBold
                                         font.family: Theme.fontSans
                                     }
                                     Text {
                                         width: parent.width
                                         text: "Enable local model in More → Local AI settings"
-                                        font.pixelSize: 8; color: Theme.text3; font.family: Theme.fontSans
+                                        font.pixelSize: Math.round(8 * Theme.scale); color: Theme.text3; font.family: Theme.fontSans
                                         wrapMode: Text.WordWrap
                                     }
                                 }
@@ -441,7 +448,7 @@ Item {
                 }
 
                 // ══ OPENROUTER KEY ══════════════════════════════════════
-                Text { text: "OPENROUTER KEY (free — get one at openrouter.ai)"; font.pixelSize: 8; color: "#7070a8"; font.letterSpacing: 1.2 }
+                Text { text: "OPENROUTER KEY (free — get one at openrouter.ai)"; font.pixelSize: Math.round(8 * Theme.scale); color: "#7070a8"; font.letterSpacing: 1.2 }
                 RowLayout { spacing: 8
                     StyledInput {
                         id: keyInput; Layout.fillWidth: true
@@ -453,7 +460,7 @@ Item {
                         gradient: Gradient { orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: "#5B21B6" }
                             GradientStop { position: 1.0; color: "#7C3AED" } }
-                        Text { anchors.centerIn: parent; text: "Save"; color: "#fff"; font.pixelSize: 12; font.weight: Font.Medium }
+                        Text { anchors.centerIn: parent; text: "Save"; color: "#fff"; font.pixelSize: Math.round(12 * Theme.scale); font.weight: Font.Medium }
                         MouseArea { anchors.fill: parent; onClicked: {
                             if (window) window.appSettings.orKey = keyInput.text
                             settingsPanel.visible = false
@@ -463,7 +470,7 @@ Item {
                 }
 
                 // ══ ANTHROPIC KEY ══════════════════════════════════════
-                Text { text: "ANTHROPIC KEY (optional — vision fallback)"; font.pixelSize: 8; color: "#7070a8"; font.letterSpacing: 1.2 }
+                Text { text: "ANTHROPIC KEY (optional — vision fallback)"; font.pixelSize: Math.round(8 * Theme.scale); color: "#7070a8"; font.letterSpacing: 1.2 }
                 RowLayout { spacing: 8
                     StyledInput {
                         id: anthKeyInput; Layout.fillWidth: true
@@ -475,7 +482,7 @@ Item {
                         gradient: Gradient { orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: "#0e6830" }
                             GradientStop { position: 1.0; color: "#10B981" } }
-                        Text { anchors.centerIn: parent; text: "Save"; color: "#fff"; font.pixelSize: 12; font.weight: Font.Medium }
+                        Text { anchors.centerIn: parent; text: "Save"; color: "#fff"; font.pixelSize: Math.round(12 * Theme.scale); font.weight: Font.Medium }
                         MouseArea { anchors.fill: parent; onClicked: {
                             if (window) window.appSettings.anthKey = anthKeyInput.text
                             settingsPanel.visible = false
@@ -488,11 +495,11 @@ Item {
                     visible: window && window.appSettings.orKey !== ""
                     spacing: 8
                     Rectangle { width: 8; height: 8; radius: 4; color: "#10B981"; anchors.verticalCenter: parent.verticalCenter }
-                    Text { text: "OpenRouter active · " + orModels[aiPrefs.orModelIdx].label; color: "#10B981"; font.pixelSize: 10; Layout.fillWidth: true }
+                    Text { text: "OpenRouter active · " + orModels[aiPrefs.orModelIdx].label; color: "#10B981"; font.pixelSize: Math.round(10 * Theme.scale); Layout.fillWidth: true }
                     Rectangle {
                         width: 58; height: 24; radius: 8
                         color: Qt.rgba(0.96,0.25,0.37,0.08); border.color: Qt.rgba(0.96,0.25,0.37,0.28); border.width: 1
-                        Text { anchors.centerIn: parent; text: "Remove"; font.pixelSize: 9; color: "#F43F5E" }
+                        Text { anchors.centerIn: parent; text: "Remove"; font.pixelSize: Math.round(9 * Theme.scale); color: "#F43F5E" }
                         MouseArea { anchors.fill: parent; onClicked: {
                             if(window) window.appSettings.orKey = ""; keyInput.text = "" }}
                     }
@@ -500,54 +507,117 @@ Item {
             }
         }
 
-        // ── Messages area ──────────────────────────────────────────────
-        Flickable {
+        // ── Messages area — ListView for lazy delegate recycling ────────
+        ListView {
             id: msgFlickable
             Layout.fillWidth: true; Layout.fillHeight: true
-            contentHeight: msgCol.implicitHeight + 16
+            model: messages
+            spacing: 10
             clip: true
+            // Recycle delegates that scroll off-screen (Qt 5.15+).
+            // Delegates must handle Component.onCompleted carefully — set
+            // opacity/y in ListView.onReused as well as onCompleted so
+            // recycled items don't retain the slide-in animation state.
+            reuseItems: true
+            // Pre-render 2 screenfuls above and below to reduce blank flicker
+            // when flinging quickly. 800px is a safe default across phone sizes.
+            cacheBuffer: 800
+            // Keep the scroll-to-bottom API identical to the old Flickable
+            // so the Timer at the bottom still works unchanged.
 
-            ColumnLayout {
-                id: msgCol
-                width: parent.width; spacing: 10
+            // FIX #19: ScrollBar dropped during Fix #14 Repeater→ListView
+            // migration. Re-attach so long conversations show a scroll indicator.
+            ScrollBar.vertical: ScrollBar {
+                policy: ScrollBar.AsNeeded
+                minimumSize: 0.06
+                contentItem: Rectangle {
+                    implicitWidth: Math.round(3 * Theme.scale)
+                    radius: width / 2
+                    color: Theme.dark ? Qt.rgba(1,1,1,0.25) : Qt.rgba(0,0,0,0.20)
+                }
+            }
 
-                // Empty state chips
-                Column {
-                    visible: messages.length === 0 && !loading
-                    Layout.fillWidth: true; spacing: 6
+            // ── Empty-state chips + spacer (header) ──────────────────
+            header: Column {
+                width: msgFlickable.width
+                visible: messages.length === 0 && !loading
+                spacing: 6
+                topPadding: 8; bottomPadding: 4
 
-                    Text {
-                        text: "Try asking…"
-                        font.pixelSize: 10; color: Theme.text3; font.family: Theme.fontSans
-                        font.letterSpacing: 0.5; bottomPadding: 4
+                Text {
+                    text: "Try asking…"
+                    font.pixelSize: Math.round(10 * Theme.scale); color: Theme.text3; font.family: Theme.fontSans
+                    font.letterSpacing: 0.5; bottomPadding: 4
+                }
+
+                Repeater {
+                    model: examples
+                    delegate: Rectangle {
+                        width: msgFlickable.width; height: 42; radius: 14
+                        color: Theme.sectionBg; border.color: Theme.border1; border.width: 1
+                        RowLayout {
+                            anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14
+                            Text { text: modelData.startsWith("📷") ? "📷" : "⚡"; font.pixelSize: Math.round(11 * Theme.scale); color: "#7C3AED" }
+                            Text { Layout.fillWidth: true; text: modelData; color: Theme.text3; font.pixelSize: Math.round(12 * Theme.scale); font.family: Theme.fontSans; elide: Text.ElideRight }
+                            Text { text: "›"; font.pixelSize: Math.round(14 * Theme.scale); color: Theme.text3 }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: { if (modelData.startsWith("📷")) filePicker.open(); else sendMessage(modelData) }
+                        }
                     }
+                }
+            }
 
-                    Repeater {
-                        model: examples
-                        delegate: Rectangle {
-                            width: msgCol.width; height: 42; radius: 14
-                            color: Theme.sectionBg; border.color: Theme.border1; border.width: 1
-                            RowLayout {
-                                anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14
-                                Text { text: modelData.startsWith("📷") ? "📷" : "⚡"; font.pixelSize: 11; color: "#7C3AED" }
-                                Text { Layout.fillWidth: true; text: modelData; color: Theme.text3; font.pixelSize: 12; font.family: Theme.fontSans; elide: Text.ElideRight }
-                                Text { text: "›"; font.pixelSize: 14; color: Theme.text3 }
+            // ── Typing indicator (footer) ─────────────────────────────
+            footer: Column {
+                width: msgFlickable.width
+                bottomPadding: 4
+
+                Rectangle {
+                    visible: loading
+                    width: parent.width; height: 52; radius: 18; topLeftRadius: 5
+                    color: Theme.sectionBg; border.color: Theme.border2; border.width: 1
+                    Row {
+                        anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: 16; spacing: 7
+                        Repeater { model: 3
+                            delegate: Rectangle {
+                                width: 8; height: 8; radius: 4
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: "#7C3AED" }
+                                    GradientStop { position: 1.0; color: "#06B6D4" }
+                                }
+                                SequentialAnimation on y {
+                                    running: true; loops: Animation.Infinite
+                                    PauseAnimation  { duration: 140 * index }
+                                    NumberAnimation { to: -8; duration: 260; easing.type: Easing.OutQuad }
+                                    NumberAnimation { to:  0; duration: 260; easing.type: Easing.InQuad }
+                                    PauseAnimation  { duration: 400 - 140 * index }
+                                }
                             }
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: { if (modelData.startsWith("📷")) filePicker.open(); else sendMessage(modelData) }
-                            }
+                        }
+                        Text {
+                            text: "  Thinking…"
+                            color: Theme.text3; font.pixelSize: Math.round(12 * Theme.scale); leftPadding: 2
                         }
                     }
                 }
 
-                // Message bubbles
-                Repeater {
-                    model: messages
-                    delegate: ColumnLayout {
-                        width: parent.width; spacing: 4
+                Item { height: 4 }
+            }
+
+            // ── Message bubble delegate ───────────────────────────────
+            delegate: ColumnLayout {
+                width: msgFlickable.width; spacing: 4
                         opacity: 0; y: 14
                         Component.onCompleted: { opacity = 1; y = 0 }
+                        // When reuseItems is true, Qt reuses this delegate for a different
+                        // model index instead of destroying and recreating it. Reset the
+                        // animation state immediately (no transition) so recycled bubbles
+                        // don't re-play the slide-in when they reappear at a new position.
+                        ListView.onReused: { opacity = 1; y = 0 }
                         Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                         Behavior on y      { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
@@ -564,18 +634,18 @@ Item {
                                 color: Qt.rgba(1,1,1,0.05); border.color: Qt.rgba(1,1,1,0.12); border.width: 1
                                 anchors.right: parent.right
                                 Text { anchors.centerIn: parent; text: "🖼 " + (modelData.attachName || "image")
-                                    font.pixelSize: 11; color: Theme.text2; wrapMode: Text.WordWrap; width: parent.width - 16; horizontalAlignment: Text.AlignHCenter }
+                                    font.pixelSize: Math.round(11 * Theme.scale); color: Theme.text2; wrapMode: Text.WordWrap; width: parent.width - 16; horizontalAlignment: Text.AlignHCenter }
                             }
                             Rectangle {
                                 visible: modelData.hasAttachment && modelData.attachMime && !modelData.attachMime.startsWith("image/")
                                 height: 28; width: pdfLbl.implicitWidth + 28; radius: 10; anchors.right: parent.right
                                 color: Qt.rgba(0.95,0.62,0.07,0.12); border.color: Qt.rgba(0.95,0.62,0.07,0.30); border.width: 1
-                                Text { id: pdfLbl; anchors.centerIn: parent; text: "📄 " + (modelData.attachName || "file"); font.pixelSize: 10; color: "#F59E0B" }
+                                Text { id: pdfLbl; anchors.centerIn: parent; text: "📄 " + (modelData.attachName || "file"); font.pixelSize: Math.round(10 * Theme.scale); color: "#F59E0B" }
                             }
 
                             Rectangle {
                                 Layout.alignment: Qt.AlignRight
-                                width: Math.min(uTxt.implicitWidth + 28, msgCol.width * 0.82)
+                                width: Math.min(uTxt.implicitWidth + 28, msgFlickable.width * 0.82)
                                 height: uTxt.implicitHeight + 22
                                 anchors.right: parent.right
                                 radius: 18; topRightRadius: 5
@@ -586,9 +656,9 @@ Item {
                                 }
                                 border.color: Qt.rgba(0.67,0.55,1.0,0.38); border.width: 1
                                 Text { id: uTxt; anchors.fill: parent; anchors.margins: 13
-                                    text: modelData.content || ""; color: Theme.text; font.pixelSize: 13; wrapMode: Text.WordWrap }
+                                    text: modelData.content || ""; color: Theme.text; font.pixelSize: Math.round(13 * Theme.scale); wrapMode: Text.WordWrap }
                             }
-                            Text { anchors.right: parent.right; text: modelData.time || ""; font.pixelSize: 9; color: Theme.text3; rightPadding: 4 }
+                            Text { anchors.right: parent.right; text: modelData.time || ""; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3; rightPadding: 4 }
                         }
 
                         // Assistant bubble
@@ -628,14 +698,14 @@ Item {
                                             text: modelData.engine === "offline"    ? "⚡ offline"
                                                 : modelData.engine === "openrouter" ? "⚡ " + (modelData.model || "openrouter")
                                                 : "☁ claude"
-                                            font.pixelSize: 9; font.family: Theme.fontSans
+                                            font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans
                                             color: modelData.engine === "offline"    ? "#10B981"
                                                  : modelData.engine === "openrouter" ? "#F59E0B"
                                                  : "#A78BFA"
                                         }
                                     }
                                     Item { Layout.fillWidth: true }
-                                    Text { text: modelData.time || ""; font.pixelSize: 9; color: Theme.text3 }
+                                    Text { text: modelData.time || ""; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3 }
 
                                     // Copy button
                                     Rectangle {
@@ -643,10 +713,16 @@ Item {
                                         color: copyMa.containsMouse ? Qt.rgba(1,1,1,0.10) : "transparent"
                                         border.color: Qt.rgba(1,1,1,0.10); border.width: 1
                                         Behavior on color { ColorAnimation { duration: 100 } }
-                                        Text { anchors.centerIn: parent; text: "⎘"; font.pixelSize: 10; color: Theme.text3 }
+                                        Text { anchors.centerIn: parent; text: "⎘"; font.pixelSize: Math.round(10 * Theme.scale); color: Theme.text3 }
                                         MouseArea {
                                             id: copyMa; anchors.fill: parent; hoverEnabled: true
-                                            onClicked: root.window?.showToast("Copied!", true)
+                                            onClicked: {
+                                                // FIX #31: actually write to clipboard before toasting
+                                                clipHelper.text = modelData.content || ""
+                                                clipHelper.selectAll()
+                                                clipHelper.copy()
+                                                root.window?.showToast("Copied!", true)
+                                            }
                                         }
                                     }
                                 }
@@ -654,7 +730,7 @@ Item {
                                 Text {
                                     text: modelData.content || ""
                                     color: modelData.isError ? "#FDA4AF" : "#f0f0ff"
-                                    font.pixelSize: 16; font.weight: Font.Light
+                                    font.pixelSize: Math.round(16 * Theme.scale); font.weight: Font.Light
                                     wrapMode: Text.WordWrap; Layout.fillWidth: true
                                 }
 
@@ -670,7 +746,7 @@ Item {
                                         id: exprTxt
                                         anchors { fill: parent; margins: 12; topMargin: 7; bottomMargin: 7 }
                                         text: modelData.expr || ""
-                                        color: Theme.accent2; font.pixelSize: 11; font.family: Theme.fontMono
+                                        color: Theme.accent2; font.pixelSize: Math.round(11 * Theme.scale); font.family: Theme.fontMono
                                         wrapMode: Text.WordWrap
                                     }
                                 }
@@ -687,11 +763,11 @@ Item {
                                             Rectangle {
                                                 width: 20; height: 20; radius: 10
                                                 color: Qt.rgba(0.02,0.71,0.83,0.12)
-                                                Text { anchors.centerIn: parent; text: index+1; font.pixelSize: 9; color: "#06B6D4"; font.weight: Font.Bold }
+                                                Text { anchors.centerIn: parent; text: index+1; font.pixelSize: Math.round(9 * Theme.scale); color: "#06B6D4"; font.weight: Font.Bold }
                                             }
                                             Text {
                                                 text: modelData; Layout.fillWidth: true
-                                                color: "#9090cc"; font.pixelSize: 11; font.family: Theme.fontMono
+                                                color: "#9090cc"; font.pixelSize: Math.round(11 * Theme.scale); font.family: Theme.fontMono
                                                 wrapMode: Text.WordWrap
                                             }
                                         }
@@ -704,49 +780,12 @@ Item {
                                     height: noteTxt.implicitHeight + 12
                                     width: noteTxt.implicitWidth + 20; radius: 10
                                     color: Qt.rgba(0.06,0.73,0.51,0.09); border.color: Qt.rgba(0.06,0.73,0.51,0.28); border.width: 1
-                                    Text { id: noteTxt; anchors.centerIn: parent; text: "ⓘ " + (modelData.note||""); color: "#10B981"; font.pixelSize: 10 }
+                                    Text { id: noteTxt; anchors.centerIn: parent; text: "ⓘ " + (modelData.note||""); color: "#10B981"; font.pixelSize: Math.round(10 * Theme.scale) }
                                 }
                             }
                         }
                     }
                 }
-
-                // Typing dots
-                Rectangle {
-                    visible: loading
-                    Layout.fillWidth: true; height: 52; radius: 18; topLeftRadius: 5
-                    color: Theme.sectionBg; border.color: Theme.border2; border.width: 1
-                    Row {
-                        anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: 16; spacing: 7
-                        Repeater { model: 3
-                            delegate: Rectangle {
-                                width: 8; height: 8; radius: 4
-                                gradient: Gradient {
-                                    orientation: Gradient.Horizontal
-                                    GradientStop { position: 0.0; color: "#7C3AED" }
-                                    GradientStop { position: 1.0; color: "#06B6D4" }
-                                }
-                                SequentialAnimation on y {
-                                    running: true; loops: Animation.Infinite
-                                    PauseAnimation  { duration: 140 * index }
-                                    NumberAnimation { to: -8; duration: 260; easing.type: Easing.OutQuad }
-                                    NumberAnimation { to:  0; duration: 260; easing.type: Easing.InQuad }
-                                    PauseAnimation  { duration: 400 - 140 * index }
-                                }
-                            }
-                        }
-                        Text {
-                            text: "  Thinking…"
-                            color: Theme.text3; font.pixelSize: 12; leftPadding: 2
-                        }
-                    }
-                }
-
-                Item { height: 4 }
-            }
-        }
-
         // ── Attachment preview strip ───────────────────────────────────
         Rectangle {
             visible: attachedBase64 !== ""
@@ -758,16 +797,16 @@ Item {
 
             RowLayout {
                 anchors.fill: parent; anchors.margins: 10; spacing: 10
-                Text { text: attachedIsImage ? "🖼" : "📄"; font.pixelSize: 22 }
+                Text { text: attachedIsImage ? "🖼" : "📄"; font.pixelSize: Math.round(22 * Theme.scale) }
                 Column {
                     Layout.fillWidth: true; spacing: 2
-                    Text { text: attachedFileName; font.pixelSize: 12; color: Theme.text; font.family: Theme.fontSans; elide: Text.ElideRight; width: parent.width }
-                    Text { text: attachedMime + " · " + fileHelper.humanSize(attachedFileUrl); font.pixelSize: 9; color: Theme.text3 }
+                    Text { text: attachedFileName; font.pixelSize: Math.round(12 * Theme.scale); color: Theme.text; font.family: Theme.fontSans; elide: Text.ElideRight; width: parent.width }
+                    Text { text: attachedMime + " · " + fileHelper.humanSize(attachedFileUrl); font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3 }
                 }
                 Rectangle {
                     width: 28; height: 28; radius: 8
                     color: Qt.rgba(0.96,0.25,0.37,0.10); border.color: Qt.rgba(0.96,0.25,0.37,0.30); border.width: 1
-                    Text { anchors.centerIn: parent; text: "×"; color: "#F43F5E"; font.pixelSize: 14; font.weight: Font.Bold }
+                    Text { anchors.centerIn: parent; text: "×"; color: "#F43F5E"; font.pixelSize: Math.round(14 * Theme.scale); font.weight: Font.Bold }
                     MouseArea { anchors.fill: parent; onClicked: clearAttachment() }
                 }
             }
@@ -781,7 +820,7 @@ Item {
                 color: attachedBase64 !== "" ? Qt.rgba(0.49,0.23,0.93,0.22) : Qt.rgba(1,1,1,0.06)
                 border.color: attachedBase64 !== "" ? Qt.rgba(0.67,0.55,1.0,0.45) : Qt.rgba(1,1,1,0.12); border.width: 1
                 Behavior on color { ColorAnimation { duration: 150 } }
-                Text { anchors.centerIn: parent; text: "📎"; font.pixelSize: 18 }
+                Text { anchors.centerIn: parent; text: "📎"; font.pixelSize: Math.round(18 * Theme.scale) }
                 MouseArea { anchors.fill: parent; onClicked: filePicker.open() }
             }
 
@@ -799,7 +838,7 @@ Item {
                     text: inputText
                     placeholderText: attachedBase64 !== "" ? "Ask about the attached file…" : "Ask anything…"
                     color: Theme.text; placeholderTextColor: "#44446a"
-                    font.pixelSize: 14; font.family: Theme.fontSans
+                    font.pixelSize: Math.round(14 * Theme.scale); font.family: Theme.fontSans
                     wrapMode: Text.WordWrap; background: null
                     onTextChanged: inputText = text
                     Keys.onReturnPressed: function(e) {
@@ -824,7 +863,7 @@ Item {
                 scale: sendMa.pressed ? 0.88 : 1.0
                 Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.OutBack; easing.overshoot: 2.5 } }
 
-                Text { anchors.centerIn: parent; text: "↑"; color: "#fff"; font.pixelSize: 20; font.weight: Font.Bold }
+                Text { anchors.centerIn: parent; text: "↑"; color: "#fff"; font.pixelSize: Math.round(20 * Theme.scale); font.weight: Font.Bold }
                 MouseArea { id: sendMa; anchors.fill: parent; enabled: parent.enabled; onClicked: sendMessage() }
             }
         }
@@ -835,17 +874,17 @@ Item {
             Rectangle {
                 width: 80; height: 24; radius: 8
                 color: "transparent"; border.color: Qt.rgba(0.96,0.25,0.37,0.25); border.width: 1
-                Text { anchors.centerIn: parent; text: "clear chat"; font.pixelSize: 9; color: "#F43F5E" }
+                Text { anchors.centerIn: parent; text: "clear chat"; font.pixelSize: Math.round(9 * Theme.scale); color: "#F43F5E" }
                 MouseArea { anchors.fill: parent; onClicked: messages = [] }
             }
             Item { Layout.fillWidth: true }
             Text {
                 text: Math.ceil(messages.length / 2) + " exchange" + (messages.length > 2 ? "s" : "")
-                font.pixelSize: 9; color: Theme.text3
+                font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3
             }
         }
     }
 
     Timer { id: scrollTimer; interval: 50
-        onTriggered: msgFlickable.contentY = Math.max(0, msgFlickable.contentHeight - msgFlickable.height) }
+        onTriggered: msgFlickable.positionViewAtEnd() }
 }

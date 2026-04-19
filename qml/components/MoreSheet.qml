@@ -17,6 +17,21 @@ Item {
     // isOpen is the ONLY source of truth for visibility
     property bool isOpen: false
 
+    // Scrim opacity animates independently — leads the sheet on open,
+    // trails it on close — for a smoother layered feel.
+    property real scrimOpacity: 0.0
+    onIsOpenChanged: {
+        if (isOpen) {
+            scrimFadeOut.stop()   // prevent competing fade-out from overriding
+            scrimFadeIn.restart()
+        } else {
+            scrimFadeIn.stop()    // prevent competing fade-in from overriding
+            scrimFadeOut.restart()
+        }
+    }
+    NumberAnimation { id: scrimFadeIn;  target: root; property: "scrimOpacity"; to: 1.0; duration: 160; easing.type: Easing.OutQuad }
+    NumberAnimation { id: scrimFadeOut; target: root; property: "scrimOpacity"; to: 0.0; duration: 320; easing.type: Easing.InQuad }
+
     function open()   { isOpen = true  }
     function close()  { isOpen = false }
     function toggle() { isOpen = !isOpen }
@@ -44,8 +59,8 @@ Item {
         // Stop just above the bottom edge so we don't cover the tab bar
         anchors.bottom: parent.bottom
 
-        opacity: root.isOpen ? 1.0 : 0.0
-        Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        opacity: root.scrimOpacity
+        // No Behavior needed — scrimOpacity has its own NumberAnimations above
 
         Rectangle {
             anchors.fill: parent

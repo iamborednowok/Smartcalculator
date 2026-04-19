@@ -134,5 +134,12 @@ void ApiClient::onReplyFinished()
         return;
     }
 
+    // FIX #27: a 200 response with no content blocks is not a success —
+    // emit as error so the UI shows a red bubble rather than a blank one.
+    if (content.isEmpty()) {
+        emit responseReceived("(Empty response from server)", true);
+        return;
+    }
+
     emit responseReceived(content, false);
 }

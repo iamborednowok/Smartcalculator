@@ -1,0 +1,439 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║        SmartCalc UI Overhaul — Change Log & Bug Report v4           ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BUGS FIXED (v1 — kept for reference)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. [CalcTab.qml] sciMode vs sciOpen — CRITICAL
+2. [CalcTab.qml] displayFontSize() ignored Theme.scale — UI BUG
+3. [CalcTab.qml] Duplicate dark mode toggle — UX BUG
+4. [AppTabBar.qml] Pill animates to negative x — VISUAL BUG
+5. [Main.qml] Fragile header underline width — CODE BUG
+6. [Main.qml] Cloud animation had very limited range — VISUAL BUG
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIXES (v2)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+7.  [CalcTab/FormulaTab/ConvertTab] 52x font.pixelSize scaled
+8.  [ProgrammerTab] Silent clamp now shows ToastMessage
+9.  [GraphTab + MathEngine] Raw eval replaced with evaluateAt()
+10. [Main.qml] Cloud y positions as height fractions; onHeightChanged
+11. [MoreSheet] Scrim opacity decoupled from sheet slide timing
+12. [Main.qml] Qt.SafeAreaInsets top/bottom on contentCol
+13. [Main.qml] Header pill hidden when appHeader.width < 320px
+14. [AITab] Repeater → ListView with header/footer; positionViewAtEnd()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIXES (v3)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+15. [GraphTab] 12x font.pixelSize scaled
+16. [RandomTab] 34x font.pixelSize scaled
+17. [AITab] 38x font.pixelSize scaled in panel UI
+18. [GraphTab] PinchHandler + WheelHandler zoom to focal point not center
+19. [AITab] ScrollBar.vertical re-attached to ListView
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEW FIXES (v4)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+20. [ProgrammerTab.qml] 21x font.pixelSize unscaled — LOW PRIORITY FIX
+    All remaining hardcoded pixel sizes in ProgrammerTab were left out
+    of the Fix #7 pass because the dense display layout needed manual
+    review. Fixed with a targeted pass that handles both simple integers
+    and conditional ternary expressions:
+      Simple:     font.pixelSize: 9  →  Math.round(9 * Theme.scale)
+      Ternary:    font.pixelSize: cond ? 22 : 14
+                    →  Math.round((cond ? 22 : 14) * Theme.scale)
+      Complex:    font.pixelSize: [x,y].indexOf(m) >= 0 ? 9 : 13
+                    →  Math.round(([x,y].indexOf(m) >= 0 ? 9 : 13) * Theme.scale)
+    Affected: "PROGRAMMER" header, bit-width pills (8/16/32/64), base
+    selector pills (DEC/HEX/OCT/BIN), all four display rows (label +
+    value text), bit-grid row/column labels, keyboard button labels
+    (including the three-way ternary for op vs digit vs DEL), zero key,
+    and the "=" key.
+
+21. [components/MoreSheet.qml] Scrim animation race on fast re-open
+    — LOW PRIORITY FIX
+    If the sheet was closed and immediately reopened before scrimFadeOut
+    (320ms) finished, scrimFadeIn started while scrimFadeOut was still
+    running. Both animations targeted the same property, causing a
+    brief opacity glitch (visible as a partial-dim flicker).
+    FIX: Each handler now explicitly stops the competing animation
+    before restarting its own:
+      onIsOpenChanged:
+        if (isOpen)  { scrimFadeOut.stop(); scrimFadeIn.restart()  }
+        else         { scrimFadeIn.stop();  scrimFadeOut.restart() }
+
+22. [Main.qml] Qt.SafeAreaInsets left/right not applied
+    — LOW PRIORITY FIX
+    Fix #12 added top/bottom insets but left and right were omitted.
+    On iPad split-screen, iPhone 14 Pro in landscape, or any device
+    with a wide Dynamic Island or rounded-corner exclusion zones, the
+    side rails and content could underlap the rounded corners.
+    FIX: Added anchors.leftMargin and anchors.rightMargin to contentCol
+    using the same typeof guard pattern as Fix #12:
+      anchors.leftMargin:  Qt.SafeAreaInsets?.left  (or 0 on Qt 6.4)
+      anchors.rightMargin: Qt.SafeAreaInsets?.right (or 0 on Qt 6.4)
+    All four cardinal insets are now applied.
+
+23. [AITab.qml] ListView delegate performance at 500+ messages
+    — LOW PRIORITY FIX
+    The Fix #14 ListView had no cacheBuffer and reuseItems was false
+    (the default). On very long sessions, fast flings caused noticeable
+    blank frames as delegates outside the viewport were destroyed and
+    recreated on demand.
+    FIX:
+      reuseItems: true  — Qt reuses existing delegate instances for new
+        model indices instead of destroy/recreate. Reduces GC pressure
+        and instantiation cost.
+      cacheBuffer: 800  — pre-renders 800px above and below the
+        viewport so delegates are ready before they enter the visible
+        area. 800px ≈ 2 screenfuls on typical phone densities.
+      ListView.onReused handler added to the ColumnLayout delegate —
+        immediately sets opacity=1, y=0 (no animation) so recycled
+        delegates don't re-play the slide-in transition when assigned
+        a new model index. New delegates still get the full 220ms
+        slide-in from Component.onCompleted.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILES MODIFIED (v4)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  qml/ProgrammerTab.qml        Fix #20: 21x font.pixelSize scaled
+  qml/components/MoreSheet.qml Fix #21: scrim race condition resolved
+  qml/Main.qml                 Fix #22: left/right SafeAreaInsets
+  qml/AITab.qml                Fix #23: reuseItems, cacheBuffer,
+                                        ListView.onReused handler
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REMAINING / FUTURE WORK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All items from the v1–v3 REMAINING lists have been addressed.
+
+LOW PRIORITY:
+
+  - evaluateAt() in MathEngine.cpp still calls _M.eval() which uses a
+    Function-constructor-style evaluator inside QJSEngine. For full
+    sandboxing, replace with a recursive-descent parser for the graph
+    expression grammar in C++ (handles: ^, trig, log, sqrt, floor,
+    ceil, abs, exp, pi, e, and binary arithmetic). This eliminates
+    eval entirely from the plotting hot-path.
+
+  - AITab ListView reuseItems: true requires that delegate internals
+    are fully driven by modelData and carry no persistent local state.
+    If bubble sub-components ever gain stateful animations (e.g. a
+    collapsible step list) they should set ListView.delayRemove or
+    be wrapped in a Loader to avoid state corruption on reuse.
+
+  - The frosted side rails (wide tablet layout) do not respond to
+    left/right SafeAreaInsets — they extend edge-to-edge regardless.
+    On iPad in split-screen with a left-rail app the SmartCalc rail
+    may partially underlap the system chrome. The rails are cosmetic
+    so this is low impact, but anchoring their inner edges to the
+    contentCol bounds would be the cleanest fix.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEW FIXES (v5)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+24. [MathEngine.cpp] nCr / nPr return NaN for arguments in ~85–170 range
+    — MEDIUM PRIORITY FIX
+    When n is large enough that both factorial(n) and factorial(n-r)
+    overflow to Infinity, the division Infinity / (k * Infinity) yields
+    NaN rather than the correct finite result. Example:
+      nCr(170, 1) → NaN  (correct answer: 170)
+      nCr(140, 2) → NaN  (correct answer: 9730)
+    The factorial(n) guard only short-circuits at n > 170, so n = 170
+    itself triggers the overflow path. Same defect in nPr whenever
+    factorial(n) and factorial(n-r) both saturate.
+    FIX: Replace the direct-factorial formula with a multiplicative
+    cancellation loop that keeps the running value bounded:
+      _M.nCr = function(n, r) {
+          n = Math.round(n); r = Math.round(r);
+          if (r < 0 || r > n) return 0;
+          if (r === 0 || r === n) return 1;
+          if (r > n - r) r = n - r;
+          var result = 1;
+          for (var i = 0; i < r; i++) {
+              result = result * (n - i) / (i + 1);
+          }
+          return Math.round(result);
+      };
+    nPr uses the same multiply-down approach (no denominator
+    cancellation needed — just accumulate n * (n-1) * ... * (n-r+1)
+    and return Infinity if that product overflows). Both functions now
+    return correct values for all n in [0, 170].
+
+25. [MathEngine.cpp] evaluateAt() silently fails for implicit-
+    multiplication expressions like "2x"  — MEDIUM PRIORITY FIX
+    The x-substitution regex is:
+      _graphExpr.replace(/\bx\b/g, '(' + _graphX + ')')
+    \b requires a transition between a \w char and a \W char. Digits
+    are \w, so there is NO word boundary between '2' and 'x' in "2x".
+    The replacement matches zero times → _M.eval("2x") → SyntaxError
+    → evaluateAt returns NaN for every pixel → graph draws nothing,
+    silently. addFunction()'s probe uses "sin(x)" / "x^2" style tests
+    so the expression passes validation while always failing at paint.
+    Affected: "2x", "3x+1", "0.5x", "10x^2", etc.
+    Unaffected (boundary exists): "-x", "x+1", "x^2", "sin(x)".
+    FIX: Widen the replacement to also match x when preceded by a digit:
+      _graphExpr.replace(
+          /(\d)x(?![A-Za-z_0-9])|(?<![A-Za-z_0-9])x(?![A-Za-z_0-9])/g,
+          function(m, dig) {
+              return dig ? dig + '*(' + _graphX + ')' : '(' + _graphX + ')';
+          }
+      )
+    Correctly handles "2x"→"2*(5)", "3x+1"→"3*(5)+1",
+    "-x"→"-(5)", "x^2"→"(5)^2"; leaves "exp", "xor" untouched.
+
+26. [GraphTab.qml] No minimum zoom clamp — degenerate viewport on
+    extreme pinch / wheel zoom-in  — LOW PRIORITY FIX
+    PinchHandler.onScaleChanged and WheelHandler.onWheel scale the
+    viewport around the focal point but place no lower bound on the
+    resulting range (xMax − xMin, yMax − yMin). At extreme zoom-in,
+    both ranges approach 0. Two failure modes:
+      • wx()/wy() divide by (xMax−xMin) ≈ 0 → ±Infinity pixel coords.
+        Canvas silently ignores Infinity, so the plot goes blank with
+        no message — looks identical to "no functions added".
+      • niceStep(≈0, N) produces step = 0. The label grid loops then
+        execute gx += 0. In practice NaN propagation from
+        Math.ceil(xMin / 0) stops iteration on the first check
+        (NaN <= xMax is false), but this relies on specific IEEE 754
+        behaviour, not an explicit guard.
+    FIX: Clamp both axes at the end of each zoom handler before
+    calling scheduleRepaint():
+      var MIN_RANGE = 1e-9
+      if (xMax - xMin < MIN_RANGE) {
+          var midX = (xMin + xMax) / 2
+          xMin = midX - MIN_RANGE/2; xMax = midX + MIN_RANGE/2
+      }
+      if (yMax - yMin < MIN_RANGE) {
+          var midY = (yMin + yMax) / 2
+          yMin = midY - MIN_RANGE/2; yMax = midY + MIN_RANGE/2
+      }
+    1e-9 is below any useful zoom level and well above float
+    catastrophic-cancellation territory.
+
+27. [ApiClient.cpp] Empty-body HTTP 200 silently emits a blank success
+    bubble  — LOW PRIORITY FIX
+    If the upstream API returns HTTP 200 with a JSON body containing
+    neither a populated "content" array (Anthropic) nor a populated
+    "choices" array (OpenRouter) — soft rate-limit responses, empty
+    assistant turns, certain model error payloads — the local content
+    QString stays "" and the code falls through to:
+      emit responseReceived("", false);
+    In AITab, handleResponse receives isError=false and content="".
+    tryParseJson("") throws → parsed=null → appendMsg is called with
+    content:"" and isError:false. The result is a blank, unstyled
+    assistant bubble — visually indistinguishable from a render glitch.
+    FIX: In onReplyFinished(), guard before the final emit:
+      if (content.isEmpty()) {
+          emit responseReceived("(Empty response from server)", true);
+          return;
+      }
+    Surfaces the condition as a red error bubble, consistent with how
+    network errors and JSON parse failures are already displayed.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILES MODIFIED (v5)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  backend/MathEngine.cpp   Fix #24: nCr/nPr multiplicative loop
+                           Fix #25: evaluateAt x-regex widened
+  qml/GraphTab.qml         Fix #26: MIN_RANGE clamp in both zoom handlers
+  backend/ApiClient.cpp    Fix #27: empty-content guard before emit
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REMAINING / FUTURE WORK (updated from v4)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LOW PRIORITY (all v4 items still open, unchanged):
+
+  - evaluateAt() still routes through _M.eval() which calls JS eval().
+    Replace with a recursive-descent C++ parser for the graph grammar
+    (handles: ^, trig, log, sqrt, floor, ceil, abs, exp, pi, e, and
+    binary arithmetic). Eliminates eval entirely from the plot hot-path.
+
+  - AITab reuseItems: true delegates must carry no persistent local
+    state. Any future stateful sub-components (collapsible step lists,
+    etc.) need ListView.delayRemove or a Loader wrapper to avoid state
+    corruption on reuse.
+
+  - Frosted side rails (wide tablet layout) do not respond to
+    left/right SafeAreaInsets — they extend edge-to-edge regardless.
+    On iPad split-screen the rail may partially underlap system chrome.
+    Anchor inner edges to contentCol bounds as a low-impact fix.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEW FIXES (v6)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+28. [Main.qml] Frosted side rails ignore left/right SafeAreaInsets
+    — LOW PRIORITY FIX
+    Fix #22 added left/right SafeAreaInsets to contentCol, but the
+    frosted side rails used hardcoded widths:
+      width: (parent.width - root.contentMaxW) / 2
+    This made each rail span from the parent edge to a calculated
+    midpoint that did not account for the safe-area offset. On a device
+    where contentCol is shifted right by SafeAreaInsets.left (e.g.
+    Dynamic Island landscape, rounded corner exclusion), the left rail
+    could gap or the right rail could overshoot into the inset zone.
+    FIX: Replace the width-based approach with direct anchor links to
+    contentCol's edges:
+      Left rail:  anchors.right: contentCol.left   (drop: width line)
+      Right rail: anchors.left:  contentCol.right  (drop: width line)
+    Because contentCol already incorporates left/right SafeAreaInsets
+    in its own anchor margins, both rails automatically stop at the
+    correct safe boundary — no extra math or typeof guards required.
+    The cosmetic visual result on phones/small tablets is unchanged
+    (rails are zero-width when not isWide); on wide iPad layouts the
+    rail edges now track contentCol exactly across all orientations.
+
+29. [MathEngine.cpp / MathEngine.h] evaluateAt() routed through JS eval()
+    — LOW PRIORITY FIX
+    All previous versions of evaluateAt() ultimately called _M.eval()
+    inside QJSEngine, which itself called JavaScript's eval() to execute
+    the transformed expression. While the injection surface was zero
+    (expression and x were passed as JS properties, not interpolated
+    into source), eval() still carries inherent risks and is a security
+    audit red flag. It also incurs QJSEngine marshalling overhead on
+    every pixel of every graph render.
+    FIX: Replaced evaluateAt() entirely with a self-contained C++
+    recursive-descent parser (GParser, anonymous namespace in
+    MathEngine.cpp). No QJSEngine calls, no JS eval.
+    Grammar handled:
+      • Binary arithmetic: + - * / ^ (right-associative power)
+      • Unicode aliases: × ÷ − √ π
+      • Implicit multiplication: "2x", "3sin(x)", "2(x+1)", "pix"
+      • All trig functions (sin/cos/tan/asin/acos/atan/sinh/cosh/tanh)
+        with degree↔radian conversion via m_degrees (see below)
+      • sqrt, cbrt, abs, log/log10, ln, exp, floor, ceil, round, sign
+      • Constants: x (variable), pi/π, e (Euler), phi
+      • Scientific notation in literals: "1.5e-3", "1E10"
+        (the 'e'/'E' consumed inside parseNumber so it is never
+        confused with the 'e' constant)
+    MathEngine.h: added private bool m_degrees = true.
+    MathEngine.cpp evaluate(): added m_degrees = degrees synchronisation
+    so that evaluateAt() (which takes no degrees param) uses the mode
+    last set by the most recent evaluate() call — matching the previous
+    JS-engine _M._deg state behaviour.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILES MODIFIED (v6)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  qml/Main.qml             Fix #28: frosted rails anchored to contentCol
+  backend/MathEngine.h     Fix #29: added m_degrees member
+  backend/MathEngine.cpp   Fix #29: GParser recursive-descent evaluateAt()
+                                    + m_degrees sync in evaluate()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEW FIXES (v7)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+30. [GraphTab.qml] +/− zoom buttons bypass MIN_RANGE clamp
+    — LOW PRIORITY FIX
+    Fix #26 added a MIN_RANGE = 1e-9 clamp after every PinchHandler and
+    WheelHandler zoom operation to prevent degenerate viewport geometry.
+    The +/− button MouseArea in the bottom-right corner of the canvas was
+    never included in that pass. The "+" button applies factor 0.70 per
+    tap; after ~80 taps the range collapses through 1e-9 and triggers the
+    identical blank-canvas / NaN-axis-label failure that Fix #26 addressed
+    for gesture zoom.
+    FIX: Added the same three-line MIN_RANGE clamp block (identical to the
+    PinchHandler / WheelHandler versions) immediately before scheduleRepaint()
+    inside the button MouseArea.onClicked handler.
+
+31. [AITab.qml] Copy button shows "Copied!" toast without writing to
+    clipboard  — LOW PRIORITY FIX
+    The ⎘ copy button in every assistant bubble called
+      root.window?.showToast("Copied!", true)
+    but never transferred the message content to the system clipboard.
+    The toast was cosmetically correct but the operation was a no-op.
+    QML has no direct Clipboard API. The standard idiom is to route text
+    through a non-visible TextEdit and call selectAll() + copy().
+    FIX:
+      • Added a single root-level TextEdit { id: clipHelper; visible: false }
+        shared by all bubbles, placed outside the delegate to avoid any
+        interaction with reuseItems recycling.
+      • Expanded the copy MouseArea.onClicked to:
+          clipHelper.text = modelData.content || ""
+          clipHelper.selectAll()
+          clipHelper.copy()
+          root.window?.showToast("Copied!", true)
+
+32. [MathEngine.cpp] sign() / log2() / sgn() produce silent errors
+    — LOW PRIORITY FIX
+    Three functions were partly or fully missing from the engine:
+
+    sign()  — _M.sign = Math.sign was defined in the JS library but the
+      corresponding .replace(/\bsign\(/, '_M.sign(') entry was absent from
+      _M.eval()'s replacement chain. Typing sign(-1) in CalcTab hit a JS
+      ReferenceError → evaluate() returned "Error". (GParser had it, so
+      GraphTab was unaffected.)
+
+    log2()  — Math.log2 was never assigned to _M. Both the _M.eval() chain
+      and the GParser function table were missing it. log2(8) in CalcTab
+      returned "Error"; log2(x) in GraphTab silently returned NaN for every
+      pixel (blank graph, indistinguishable from "no functions added").
+
+    sgn()   — Common alias for sign(). The GParser table had "sign" but
+      not "sgn", so sgn(x) in GraphTab returned NaN silently.
+
+    FIX:
+      JS library (loadMathLibrary):
+        _M.log2 = Math.log2;                 ← new assignment
+
+      _M.eval() replacement chain:
+        .replace(/\bsign\(/g,  '_M.sign(')  ← new (after round)
+        .replace(/\blog2\(/g,  '_M.log2(')  ← new (before log10/log)
+        .replace(/\blog10\(/g, '_M.log10(') ← existing (kept in order)
+        .replace(/\blog\(/g,   '_M.log(')   ← existing
+
+      GParser parseCall() function table:
+        "sgn"  → sign formula                ← new alias
+        "log2" → std::log2(a)               ← new function
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILES MODIFIED (v7)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  qml/GraphTab.qml         Fix #30: MIN_RANGE clamp in button MouseArea
+  qml/AITab.qml            Fix #31: clipHelper TextEdit proxy + copy wiring
+  backend/MathEngine.cpp   Fix #32: _M.log2 defined; sign/log2 in eval()
+                                    chain; sgn/log2 added to GParser table
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REMAINING / FUTURE WORK (updated from v6)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All items from the v6 REMAINING list have now been resolved (Fix #30
+closed the MIN_RANGE gap; Fix #31 completed the copy UX; Fix #32
+completed function coverage for the JS eval chain and GParser).
+
+LOW PRIORITY (open):
+
+  - AITab reuseItems: true delegates must carry no persistent local
+    state. Any future stateful sub-components (collapsible step lists,
+    etc.) need ListView.delayRemove or a Loader wrapper to avoid state
+    corruption on reuse.
+
+  - GParser currently initialises m_degrees to the value set by the
+    last evaluate() call. If evaluateAt() is ever called before any
+    evaluate() call (e.g. in a graph-only session), it defaults to
+    degrees mode (true), matching the _M._deg default in the JS library.
+    This is consistent but worth documenting for future maintainers.
+
+  - Vision path (sendWithVision) appends the user message with content
+    "📎 filename" to the messages array. Subsequent text-only API calls
+    include this string in the history sent to the model, which sees a
+    user turn whose text is a filename emoji rather than the actual
+    vision prompt. Low impact (model ignores it gracefully) but could
+    be cleaned up by tagging vision exchange messages and filtering them
+    from apiMsgs in sendMessage().
+

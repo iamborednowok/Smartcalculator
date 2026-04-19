@@ -7,8 +7,9 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
-    // Increased height for comfortable touch targets on all device sizes
-    height: Math.round(64 * Theme.scale)
+    // Responsive height: compact in landscape, comfortable in portrait
+    readonly property bool isLandscape: (parent ? parent.height < parent.width : false)
+    height: Math.round((isLandscape ? 52 : 64) * Theme.scale)
     Behavior on height { NumberAnimation { duration: Theme.normal; easing.type: Easing.OutCubic } }
 
     // FIX: Solid, fully opaque background — no bleed-through in light mode
@@ -77,11 +78,18 @@ Rectangle {
         opacity: root.pillSlot >= 0 ? 1.0 : 0.0
         Behavior on opacity { NumberAnimation { duration: 180 } }
 
-        Behavior on x { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
+        // FIX: only run x animation when slot is valid (>= 0)
+        // Previously pill would animate to a negative x position when "More" sub-tabs were active
+        Behavior on x {
+            enabled: root.pillSlot >= 0
+            NumberAnimation { duration: 230; easing.type: Easing.OutCubic }
+        }
 
         function sync() {
+            // FIX: guard against pillSlot === -1 to avoid x going off-screen
             if (root.pillSlot >= 0)
                 x = Math.round(4 * Theme.scale) + root.pillSlot * root.slotW
+            // When -1, leave x where it was — opacity hides the pill anyway
         }
         Component.onCompleted: sync()
     }

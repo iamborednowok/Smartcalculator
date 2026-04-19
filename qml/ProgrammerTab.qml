@@ -23,8 +23,12 @@ Item {
     }
 
     function clamp(n) {
-        var max = Math.pow(2, bitWidth) - 1
-        return ((n % Math.pow(2, bitWidth)) + Math.pow(2, bitWidth)) % Math.pow(2, bitWidth)
+        var cap = Math.pow(2, bitWidth)
+        var clamped = ((n % cap) + cap) % cap
+        if (n !== clamped && Math.abs(n) >= cap) {
+            clampToast.show("Clamped to " + bitWidth + "-bit range (0–" + (cap - 1) + ")", false)
+        }
+        return clamped
     }
 
     function bitAt(pos) {
@@ -164,7 +168,7 @@ Item {
             Layout.fillWidth: true; spacing: 8
             Text {
                 text: "PROGRAMMER"
-                font.pixelSize: 15; font.weight: Font.Bold
+                font.pixelSize: Math.round(15 * Theme.scale); font.weight: Font.Bold
                 font.family: Theme.fontSans; font.letterSpacing: 1.5
                 color: Theme.accent2
             }
@@ -180,7 +184,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: modelData + ""
-                        font.pixelSize: 9; font.weight: Font.Bold; font.family: Theme.fontSans
+                        font.pixelSize: Math.round(9 * Theme.scale); font.weight: Font.Bold; font.family: Theme.fontSans
                         color: bitWidth === modelData ? Theme.accent2 : Theme.text3
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
@@ -202,7 +206,7 @@ Item {
                     Behavior on color { ColorAnimation { duration: 130 } }
                     Text {
                         anchors.centerIn: parent; text: modelData.label
-                        font.pixelSize: 9; font.weight: Font.Bold; font.family: Theme.fontSans
+                        font.pixelSize: Math.round(9 * Theme.scale); font.weight: Font.Bold; font.family: Theme.fontSans
                         color: inputBase === modelData.base ? Theme.cyan : Theme.text3
                         Behavior on color { ColorAnimation { duration: 130 } }
                     }
@@ -241,11 +245,11 @@ Item {
                 // DEC row
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "DEC"; font.pixelSize: 9; color: Theme.text3; font.family: Theme.fontMono; minimumPixelSize: 8; Layout.preferredWidth: 28 }
+                    Text { text: "DEC"; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3; font.family: Theme.fontMono; minimumPixelSize: 8; Layout.preferredWidth: 28 }
                     Text {
                         Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                         text: fmtDec(currentVal)
-                        font.pixelSize: inputBase === 10 ? 22 : 14
+                        font.pixelSize: Math.round((inputBase === 10 ? 22 : 14) * Theme.scale)
                         font.family: Theme.fontMono
                         color: inputBase === 10 ? Theme.text : Theme.text2
                         Behavior on font.pixelSize { NumberAnimation { duration: 100 } }
@@ -255,11 +259,11 @@ Item {
                 // HEX row
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "HEX"; font.pixelSize: 9; color: Theme.text3; font.family: Theme.fontMono; Layout.preferredWidth: 28 }
+                    Text { text: "HEX"; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3; font.family: Theme.fontMono; Layout.preferredWidth: 28 }
                     Text {
                         Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                         text: "0x " + fmtHex(currentVal)
-                        font.pixelSize: inputBase === 16 ? 18 : 12
+                        font.pixelSize: Math.round((inputBase === 16 ? 18 : 12) * Theme.scale)
                         font.family: Theme.fontMono
                         color: inputBase === 16 ? Theme.cyan : Theme.text2
                         Behavior on font.pixelSize { NumberAnimation { duration: 100 } }
@@ -269,11 +273,11 @@ Item {
                 // OCT row
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "OCT"; font.pixelSize: 9; color: Theme.text3; font.family: Theme.fontMono; Layout.preferredWidth: 28 }
+                    Text { text: "OCT"; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3; font.family: Theme.fontMono; Layout.preferredWidth: 28 }
                     Text {
                         Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                         text: "0o " + fmtOct(currentVal)
-                        font.pixelSize: inputBase === 8 ? 16 : 11
+                        font.pixelSize: Math.round((inputBase === 8 ? 16 : 11) * Theme.scale)
                         font.family: Theme.fontMono
                         color: inputBase === 8 ? Qt.rgba(0.95,0.62,0.07,1) : Theme.text2
                         Behavior on font.pixelSize { NumberAnimation { duration: 100 } }
@@ -282,11 +286,11 @@ Item {
                 // BIN row (only first 16 bits to fit)
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "BIN"; font.pixelSize: 9; color: Theme.text3; font.family: Theme.fontMono; Layout.preferredWidth: 28 }
+                    Text { text: "BIN"; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3; font.family: Theme.fontMono; Layout.preferredWidth: 28 }
                     Text {
                         Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                         text: fmtBin(currentVal)
-                        font.pixelSize: inputBase === 2 ? 11 : 9
+                        font.pixelSize: Math.round((inputBase === 2 ? 11 : 9) * Theme.scale)
                         font.family: Theme.fontMono
                         color: inputBase === 2 ? Theme.accent2 : Theme.text3
                         elide: Text.ElideLeft
@@ -296,7 +300,7 @@ Item {
                 Text {
                     visible: pendingOp !== ""
                     text: "← " + pendingVal.toString(inputBase).toUpperCase() + "  " + pendingOp + "  ?"
-                    font.pixelSize: 9; font.family: Theme.fontMono
+                    font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontMono
                     color: Qt.rgba(0.95,0.62,0.07,0.85)
                 }
             }
@@ -334,7 +338,7 @@ Item {
                         // Byte label
                         Text {
                             text: "B" + byteIndex
-                            width: 18; font.pixelSize: 7; font.family: Theme.fontMono
+                            width: 18; font.pixelSize: Math.round(7 * Theme.scale); font.family: Theme.fontMono
                             color: Theme.text3; verticalAlignment: Text.AlignVCenter
                             height: 18
                         }
@@ -361,7 +365,7 @@ Item {
                                 Text {
                                     anchors.centerIn: parent
                                     text: bitVal
-                                    font.pixelSize: 8; font.family: Theme.fontMono; font.weight: Font.Bold
+                                    font.pixelSize: Math.round(8 * Theme.scale); font.family: Theme.fontMono; font.weight: Font.Bold
                                     color: bitVal === 1 ? "#e8e8ff" : Theme.text3
                                     Behavior on color { ColorAnimation { duration: 80 } }
                                 }
@@ -375,7 +379,7 @@ Item {
                         // bit position labels
                         Text {
                             text: (byteIndex * 8 + 7) + "–" + (byteIndex * 8)
-                            width: 28; font.pixelSize: 6; font.family: Theme.fontMono
+                            width: 28; font.pixelSize: Math.round(6 * Theme.scale); font.family: Theme.fontMono
                             color: Theme.text3; verticalAlignment: Text.AlignVCenter
                             horizontalAlignment: Text.AlignRight; height: 18
                         }
@@ -411,7 +415,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: modelData
-                            font.pixelSize: ["AND","OR","XOR","NOT"].indexOf(modelData) >= 0 ? 9 : 13
+                            font.pixelSize: Math.round((["AND","OR","XOR","NOT"].indexOf(modelData) >= 0 ? 9 : 13) * Theme.scale)
                             font.family: Theme.fontMono; font.weight: Font.Medium
                             color: ["AND","OR"].indexOf(modelData) >= 0 ? Theme.lblOp : Theme.lblSci
                         }
@@ -449,7 +453,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: modelData
-                            font.pixelSize: ["<<",">>","XOR","NOT","CLR"].indexOf(modelData) >= 0 ? 9 : 16
+                            font.pixelSize: Math.round((["<<",">>","XOR","NOT","CLR"].indexOf(modelData) >= 0 ? 9 : 16) * Theme.scale)
                             font.family: Theme.fontMono
                             color: {
                                 if (modelData === "CLR") return Theme.lblRed
@@ -485,7 +489,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: modelData
-                            font.pixelSize: modelData === "DEL" ? 9 : (["+","-","*","/"].indexOf(modelData) >= 0 ? 18 : 16)
+                            font.pixelSize: Math.round((modelData === "DEL" ? 9 : (["+","-","*","/"].indexOf(modelData) >= 0 ? 18 : 16)) * Theme.scale)
                             font.family: Theme.fontMono
                             color: ["+","-","*","/"].indexOf(modelData) >= 0 ? Theme.lblOp : Theme.lblNormal
                         }
@@ -513,7 +517,7 @@ Item {
                         color: Theme.btnNormal; border.color: Theme.bdrNormal; border.width: 1
                         scale: maNum.pressed ? 0.88 : 1.0
                         Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.OutBack; easing.overshoot: 2.0 } }
-                        Text { anchors.centerIn: parent; text: modelData; font.pixelSize: 18; font.family: Theme.fontMono; color: Theme.lblNormal }
+                        Text { anchors.centerIn: parent; text: modelData; font.pixelSize: Math.round(18 * Theme.scale); font.family: Theme.fontMono; color: Theme.lblNormal }
                         MouseArea { id: maNum; anchors.fill: parent; onClicked: appendChar(modelData) }
                     }
                 }
@@ -524,7 +528,7 @@ Item {
                     color: Theme.btnNormal; border.color: Theme.bdrNormal; border.width: 1
                     scale: maZero.pressed ? 0.88 : 1.0
                     Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.OutBack; easing.overshoot: 2.0 } }
-                    Text { anchors.centerIn: parent; text: "0"; font.pixelSize: 18; font.family: Theme.fontMono; color: Theme.lblNormal }
+                    Text { anchors.centerIn: parent; text: "0"; font.pixelSize: Math.round(18 * Theme.scale); font.family: Theme.fontMono; color: Theme.lblNormal }
                     MouseArea { id: maZero; anchors.fill: parent; onClicked: appendChar("0") }
                 }
 
@@ -540,10 +544,12 @@ Item {
                     border.color: Theme.bdrEq; border.width: 1
                     scale: maEq.pressed ? 0.88 : 1.0
                     Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.OutBack; easing.overshoot: 2.5 } }
-                    Text { anchors.centerIn: parent; text: "="; font.pixelSize: 26; font.weight: Font.Light; font.family: Theme.fontMono; color: "#fff" }
+                    Text { anchors.centerIn: parent; text: "="; font.pixelSize: Math.round(26 * Theme.scale); font.weight: Font.Light; font.family: Theme.fontMono; color: "#fff" }
                     MouseArea { id: maEq; anchors.fill: parent; onClicked: doEquals() }
                 }
             }
         }
     }
+
+    ToastMessage { id: clampToast }
 }

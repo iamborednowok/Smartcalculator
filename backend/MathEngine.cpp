@@ -37,6 +37,7 @@ void MathEngine::loadMathLibrary()
         _M.abs   = Math.abs;
         _M.log   = function(x){ return Math.log10(x); };
         _M.log10 = Math.log10;
+        _M.log2  = Math.log2;   // FIX #32: was defined but missing — log2(x) returned ReferenceError
         _M.ln    = function(x){ return Math.log(x); };
         _M.exp   = Math.exp;
         _M.floor = Math.floor;
@@ -56,12 +57,24 @@ void MathEngine::loadMathLibrary()
         _M.nCr = function(n,r){
             n=Math.round(n); r=Math.round(r);
             if(r<0||r>n) return 0;
-            return _M.factorial(n)/(_M.factorial(r)*_M.factorial(n-r));
+            if(r===0||r===n) return 1;
+            if(r>n-r) r=n-r;          // use smaller side to minimise iterations
+            var result=1;
+            for(var i=0;i<r;i++){
+                result=result*(n-i)/(i+1);  // multiply then divide keeps value bounded
+            }
+            return Math.round(result);
         };
         _M.nPr = function(n,r){
             n=Math.round(n); r=Math.round(r);
             if(r<0||r>n) return 0;
-            return _M.factorial(n)/_M.factorial(n-r);
+            if(r===0) return 1;
+            var result=1;
+            for(var i=0;i<r;i++){
+                result*=(n-i);
+                if(!isFinite(result)) return Infinity;
+            }
+            return result;
         };
         _M.gcd = function(a,b){
             a=Math.round(Math.abs(a)); b=Math.round(Math.abs(b));
@@ -91,14 +104,19 @@ void MathEngine::loadMathLibrary()
                 .replace(/\bcosh\(/g,'_M.cosh(')
                 .replace(/\btanh\(/g,'_M.tanh(')
                 .replace(/\babs\(/g,'_M.abs(')
-                .replace(/\blog10\(/g,'_M.log10(')
-                .replace(/\blog\(/g,'_M.log(')
                 .replace(/\bln\(/g,'_M.ln(')
                 .replace(/\bexp\(/g,'_M.exp(')
                 .replace(/\bfloor\(/g,'_M.floor(')
                 .replace(/\bceil\(/g,'_M.ceil(')
                 .replace(/\bround\(/g,'_M.round(')
-                .replace(/\bfact\(/g,'_M.fact(')
+                // FIX #32: sign() and log2() were defined on _M but their \b-replace
+                // entries were missing, so calling sign(-1) or log2(8) in the Calc /
+                // Formula / Convert tabs hit a JS ReferenceError → "Error" result.
+                // log2 must precede log to avoid a (harmless but wasteful) partial match.
+                .replace(/\bsign\(/g,'_M.sign(')
+                .replace(/\blog2\(/g,'_M.log2(')
+                .replace(/\blog10\(/g,'_M.log10(')
+                .replace(/\blog\(/g,'_M.log(')
                 .replace(/\bnCr\(/g,'_M.nCr(')
                 .replace(/\bnPr\(/g,'_M.nPr(')
                 .replace(/\bgcd\(/g,'_M.gcd(')
@@ -114,6 +132,7 @@ QString MathEngine::evaluate(const QString &expression, bool degrees, bool fracM
     if (expression.isEmpty() || expression == "0")
         return "0";
 
+    m_degrees = degrees;
     m_engine.evaluate(QString("_M._deg = %1;").arg(degrees ? "true" : "false"));
 
     // SECURITY FIX: pass expression as a JS property, never string-interpolate into eval().
@@ -142,6 +161,196 @@ QString MathEngine::evaluate(const QString &expression, bool degrees, bool fracM
     }
 
     return formatNumber(num);
+}
+
+// ── Recursive-descent parser for graph expressions ──────────────────────────
+// Replaces the previous JS eval() path entirely.  No QJSEngine involvement.
+//
+// Grammar (EBNF):
+//   expr    = sum
+//   sum     = product { ('+' | '-' | '−') product }
+//   product = unary   { ('*' | '×' | '/' | '÷' | implicit) unary }
+//   unary   = ('-' | '−' | '+') unary | power
+//   power   = call { '^' unary }                   ← right-associative
+//   call    = '√' call                             ← prefix sqrt
+//           | IDENT '(' expr ')'                   ← named function call
+//           | IDENT                                ← constant: x, pi, π, e, phi
+//           | '(' expr ')'
+//           | NUMBER
+//   NUMBER  = digit+ ['.' digit*] [('e'|'E') ['+'|'-'] digit+]
+//
+// Implicit multiplication fires in parseProd whenever the token after lhs
+// starts with '(', a letter, '√', or 'π' — anything that opens a new unary.
+// Greedy identifier reading keeps "exp", "sin", "xor"-style names intact.
+
+namespace {
+
+struct GParser {
+    const QChar *p;
+    const QChar *end;
+    double       xVal;
+    bool         degrees;
+    bool         ok = true;
+
+    static constexpr double kPhi = 1.6180339887498948482;
+
+    GParser(const QString &s, double x, bool deg)
+        : p(s.constData()), end(s.constData() + s.size()), xVal(x), degrees(deg) {}
+
+    double toRad  (double v) const { return degrees ? v * M_PI / 180.0 : v; }
+    double fromRad(double v) const { return degrees ? v * 180.0 / M_PI : v; }
+
+    void  skipWs() { while (p < end && p->isSpace()) ++p; }
+    QChar peek()   { skipWs(); return (p < end) ? *p : QChar(0); }
+    bool  eat(QChar c) { if (peek() == c) { ++p; return true; } return false; }
+
+    static double nan() { return std::numeric_limits<double>::quiet_NaN(); }
+
+    double parse() { return parseExpr(); }
+
+    double parseExpr() { return parseSum(); }
+
+    double parseSum() {
+        double lhs = parseProd();
+        while (true) {
+            QChar c = peek();
+            if      (c == '+')              { ++p; lhs += parseProd(); }
+            else if (c == '-' || c == QChar(0x2212)) { ++p; lhs -= parseProd(); }
+            else break;
+        }
+        return lhs;
+    }
+
+    double parseProd() {
+        double lhs = parseUnary();
+        while (true) {
+            QChar c = peek();
+            if (c == '*' || c == QChar(0x00D7)) {          // explicit * or ×
+                ++p; lhs *= parseUnary();
+            } else if (c == '/' || c == QChar(0x00F7)) {   // explicit / or ÷
+                ++p;
+                double rhs = parseUnary();
+                lhs = (rhs == 0.0) ? nan() : lhs / rhs;
+            } else if (c == '(' || c == QChar(0x221A) ||   // implicit mult
+                       c == QChar(0x03C0) || c.isLetter()) {
+                lhs *= parseUnary();
+            } else {
+                break;
+            }
+        }
+        return lhs;
+    }
+
+    double parseUnary() {
+        QChar c = peek();
+        if (c == '-' || c == QChar(0x2212)) { ++p; return -parsePower(); }
+        if (c == '+')                        { ++p; return  parsePower(); }
+        return parsePower();
+    }
+
+    double parsePower() {   // right-associative
+        double base = parseCall();
+        if (peek() == '^') { ++p; return std::pow(base, parseUnary()); }
+        return base;
+    }
+
+    double parseCall() {
+        QChar c = peek();
+
+        if (c == QChar(0x221A)) { ++p; return std::sqrt(parsePower()); } // '√'
+
+        if (c == '(') {
+            ++p;
+            double v = parseExpr();
+            if (!eat(')')) ok = false;
+            return v;
+        }
+
+        if (c.isDigit() || c == '.') return parseNumber();
+
+        if (c == QChar(0x03C0)) { ++p; return M_PI; }  // 'π'
+
+        if (c.isLetter()) {
+            skipWs();
+            QString name;
+            while (p < end && (p->isLetterOrNumber() || *p == '_'))
+                name += *p++;
+
+            // Constants
+            if (name.compare("pi",  Qt::CaseInsensitive) == 0) return M_PI;
+            if (name.compare("phi", Qt::CaseInsensitive) == 0) return kPhi;
+            if (name == "x" || name == "X") return xVal;
+            if (name == "e")                return M_E;   // lowercase only; 'E' in "1E5" is consumed by parseNumber
+
+            // Functions — parenthesis required
+            if (!eat('(')) { ok = false; return nan(); }
+            double a = parseExpr();
+            if (!eat(')')) ok = false;
+
+            if (name == "sin")                    return std::sin(toRad(a));
+            if (name == "cos")                    return std::cos(toRad(a));
+            if (name == "tan")                    return std::tan(toRad(a));
+            if (name == "asin")                   return fromRad(std::asin(a));
+            if (name == "acos")                   return fromRad(std::acos(a));
+            if (name == "atan")                   return fromRad(std::atan(a));
+            if (name == "sinh")                   return std::sinh(a);
+            if (name == "cosh")                   return std::cosh(a);
+            if (name == "tanh")                   return std::tanh(a);
+            if (name == "sqrt")                   return std::sqrt(a);
+            if (name == "cbrt")                   return std::cbrt(a);
+            if (name == "abs")                    return std::fabs(a);
+            if (name == "log" || name == "log10") return std::log10(a);
+            if (name == "ln")                     return std::log(a);
+            if (name == "exp")                    return std::exp(a);
+            if (name == "floor")                  return std::floor(a);
+            if (name == "ceil")                   return std::ceil(a);
+            if (name == "round")                  return std::round(a);
+            if (name == "sign")                   return static_cast<double>((a > 0) - (a < 0));
+            // FIX #32: log2(x) and sgn(x) were not in the GParser table — both
+            // silently returned NaN for every pixel, producing a blank graph with
+            // no error message (identical to "no functions added").
+            if (name == "sgn")                    return static_cast<double>((a > 0) - (a < 0));
+            if (name == "log2")                   return std::log2(a);
+
+            ok = false; return nan();
+        }
+
+        ok = false; return nan();
+    }
+
+    // Parses a numeric literal, including scientific notation (e.g. "1.5e-3").
+    // Consuming the 'e'/'E' here prevents it from being mistaken for Euler's number.
+    double parseNumber() {
+        skipWs();
+        const QChar *start = p;
+        while (p < end && p->isDigit()) ++p;
+        if (p < end && *p == '.') { ++p; while (p < end && p->isDigit()) ++p; }
+        if (p < end && (*p == 'e' || *p == 'E')) {
+            const QChar *save = p; ++p;
+            if (p < end && (*p == '+' || *p == '-')) ++p;
+            if (p < end && p->isDigit()) { while (p < end && p->isDigit()) ++p; }
+            else p = save;  // backtrack — not scientific notation
+        }
+        QByteArray bytes;
+        bytes.reserve(static_cast<int>(p - start));
+        for (const QChar *q = start; q < p; ++q) bytes += static_cast<char>(q->toLatin1());
+        bool convOk = false;
+        double val = bytes.toDouble(&convOk);
+        if (!convOk) { ok = false; return nan(); }
+        return val;
+    }
+};
+
+} // anonymous namespace
+
+// evaluateAt — pure C++ evaluation; no QJSEngine / JS eval() involved.
+// The GParser above handles the full graph expression grammar:
+//   ^, all trig/log/exp functions, sqrt, floor, ceil, abs, pi, e, phi,
+//   binary arithmetic, and implicit multiplication ("2x", "3sin(x)", etc.).
+double MathEngine::evaluateAt(const QString &expression, double x)
+{
+    GParser gp(expression.simplified(), x, m_degrees);
+    return gp.parse();   // NaN propagates naturally on parse error (gp.ok=false)
 }
 
 QString MathEngine::formatNumber(double value) const

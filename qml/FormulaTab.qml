@@ -111,7 +111,7 @@ Item {
                     color: Theme.sectionBg
                     border.color: Qt.rgba(1,1,1,0.12); border.width: 1
                     Text { anchors.centerIn: parent; text: "← back"
-                        font.pixelSize: 11; color: Theme.text2 }
+                        font.pixelSize: Math.round(11 * Theme.scale); color: Theme.text2 }
                     MouseArea { anchors.fill: parent
                         onClicked: { selectedFormula = null; varValues = {}; result = ""; resultUnit = "" } }
                 }
@@ -120,7 +120,7 @@ Item {
                     visible: selectedFormula !== null
                     text: selectedFormula ? (selectedFormula.icon + " " + selectedFormula.name) : ""
                     color: Theme.text
-                    font.pixelSize: 14; font.weight: Font.Medium
+                    font.pixelSize: Math.round(14 * Theme.scale); font.weight: Font.Medium
                     leftPadding: 8
                 }
             }
@@ -158,12 +158,12 @@ Item {
                             spacing: 2; Layout.fillWidth: true
                             RowLayout {
                                 spacing: 8
-                                Text { text: modelData.name; color: Theme.text; font.pixelSize: 12 }
-                                Text { text: modelData.expr; color: modelData.color; font.pixelSize: 10; opacity: 0.8 }
+                                Text { text: modelData.name; color: Theme.text; font.pixelSize: Math.round(12 * Theme.scale) }
+                                Text { text: modelData.expr; color: modelData.color; font.pixelSize: Math.round(10 * Theme.scale); opacity: 0.8 }
                             }
                         }
 
-                        Text { text: modelData.icon; font.pixelSize: 18; color: "#383860" }
+                        Text { text: modelData.icon; font.pixelSize: Math.round(18 * Theme.scale); color: "#383860" }
                     }
 
                     scale: ma.pressed ? 0.97 : 1.0
@@ -199,11 +199,11 @@ Item {
                 Column {
                     anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                     anchors.leftMargin: 14; spacing: 2
-                    Text { text: "FORMULA"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 1 }
+                    Text { text: "FORMULA"; font.pixelSize: Math.round(8 * Theme.scale); color: Theme.text3; font.letterSpacing: 1 }
                     Text {
                         text: selectedFormula ? selectedFormula.expr : ""
                         color: selectedFormula ? selectedFormula.color : "transparent"
-                        font.pixelSize: 14; font.family: "serif"
+                        font.pixelSize: Math.round(14 * Theme.scale); font.family: "serif"
                     }
                 }
             }
@@ -217,8 +217,8 @@ Item {
 
                     Column {
                         spacing: 2; Layout.preferredWidth: parent.width * 0.40
-                        Text { text: modelData.label; color: Theme.text2; font.pixelSize: 11 }
-                        Text { text: modelData.hint;  color: "#7070a0"; font.pixelSize: 9 }
+                        Text { text: modelData.label; color: Theme.text2; font.pixelSize: Math.round(11 * Theme.scale) }
+                        Text { text: modelData.hint;  color: "#7070a0"; font.pixelSize: Math.round(9 * Theme.scale) }
                     }
 
                     StyledInput {
@@ -245,7 +245,7 @@ Item {
                     GradientStop { position: 1.0; color: "#7c3aed" }
                 }
                 Text { anchors.centerIn: parent; text: "Calculate"; color: "#fff"
-                    font.pixelSize: 13; font.weight: Font.DemiBold }
+                    font.pixelSize: Math.round(13 * Theme.scale); font.weight: Font.DemiBold }
                 scale: calcMa.pressed ? 0.97 : 1.0
                 Behavior on scale { NumberAnimation { duration: 60 } }
                 MouseArea { id: calcMa; anchors.fill: parent; onClicked: calcFormula() }
@@ -260,10 +260,10 @@ Item {
 
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 14; spacing: 4
-                    Text { text: "RESULT"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 1 }
+                    Text { text: "RESULT"; font.pixelSize: Math.round(8 * Theme.scale); color: Theme.text3; font.letterSpacing: 1 }
                     RowLayout {
-                        Text { text: result; color: Theme.text; font.pixelSize: 24; font.weight: Font.Light }
-                        Text { text: resultUnit; color: Theme.text3; font.pixelSize: 12; leftPadding: 4 }
+                        Text { text: result; color: Theme.text; font.pixelSize: Math.round(24 * Theme.scale); font.weight: Font.Light }
+                        Text { text: resultUnit; color: Theme.text3; font.pixelSize: Math.round(12 * Theme.scale); leftPadding: 4 }
                         Item { Layout.fillWidth: true }
                     }
                     RowLayout {
@@ -271,14 +271,14 @@ Item {
                         Rectangle {
                             width: 50; height: 22; radius: 7
                             color: "transparent"; border.color: Qt.rgba(1,1,1,0.14); border.width: 1
-                            Text { anchors.centerIn: parent; text: "copy"; font.pixelSize: 9; color: Theme.text3 }
+                            Text { anchors.centerIn: parent; text: "copy"; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3 }
                             MouseArea { anchors.fill: parent
                                 onClicked: { if(window) window.showToast("Copied!", true) } }
                         }
                         Rectangle {
                             width: 60; height: 22; radius: 7
                             color: "transparent"; border.color: Qt.rgba(1,1,1,0.14); border.width: 1
-                            Text { anchors.centerIn: parent; text: "→ Calc"; font.pixelSize: 9; color: Theme.text3 }
+                            Text { anchors.centerIn: parent; text: "→ Calc"; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.text3 }
                             MouseArea { anchors.fill: parent
                                 onClicked: {
                                     if (window) {

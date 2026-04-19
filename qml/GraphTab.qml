@@ -21,24 +21,13 @@ Item {
         "sqrt(abs(x))","1/x","x^3-3*x","exp(-x*x)"
     ]
 
+    // evalExpr — delegates to MathEngine.evaluateAt() on the C++ side.
+    // This eliminates the raw Function/eval surface for graph expressions:
+    // user input is passed as a data property, never interpolated into JS source.
     function evalExpr(expr, x) {
         try {
-            var e = expr
-                .replace(/\^/g,"**")
-                .replace(/\bpi\b/gi, Math.PI)
-                .replace(/\be\b/g, Math.E)
-                .replace(/\bsin\b/g,"Math.sin")
-                .replace(/\bcos\b/g,"Math.cos")
-                .replace(/\btan\b/g,"Math.tan")
-                .replace(/\bsqrt\b/g,"Math.sqrt")
-                .replace(/\bcbrt\b/g,"Math.cbrt")
-                .replace(/\babs\b/g,"Math.abs")
-                .replace(/\blog\b/g,"Math.log10")
-                .replace(/\bln\b/g,"Math.log")
-                .replace(/\bexp\b/g,"Math.exp")
-                .replace(/\bfloor\b/g,"Math.floor")
-                .replace(/\bceil\b/g,"Math.ceil")
-            return eval(e.replace(/\bx\b/g, "("+x+")"))
+            var result = mathEngine.evaluateAt(expr, x)
+            return isNaN(result) ? NaN : result
         } catch(e) { return NaN }
     }
 
@@ -94,8 +83,8 @@ Item {
                 spacing: 3
                 Row {
                     spacing: 0
-                    Text { text: "Function"; font.pixelSize: 18; font.family: Theme.fontSans; font.weight: Font.Light; color: Theme.text2 }
-                    Text { text: " Grapher"; font.pixelSize: 18; font.family: Theme.fontSans; font.weight: Font.Bold; color: Theme.accent2 }
+                    Text { text: "Function"; font.pixelSize: Math.round(18 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Light; color: Theme.text2 }
+                    Text { text: " Grapher"; font.pixelSize: Math.round(18 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Bold; color: Theme.accent2 }
                 }
                 Rectangle {
                     width: 42; height: 2; radius: 1
@@ -110,7 +99,7 @@ Item {
             Rectangle {
                 height: 26; width: resetLbl.implicitWidth + 18; radius: 13
                 color: Qt.rgba(1,1,1,0.05); border.color: Theme.border1; border.width: 1
-                Text { id: resetLbl; anchors.centerIn: parent; text: "⌂ reset view"; font.pixelSize: 9; color: Theme.actionLabel; font.family: Theme.fontSans }
+                Text { id: resetLbl; anchors.centerIn: parent; text: "⌂ reset view"; font.pixelSize: Math.round(9 * Theme.scale); color: Theme.actionLabel; font.family: Theme.fontSans }
                 MouseArea { anchors.fill: parent; onClicked: { xMin=-8;xMax=8;yMin=-5;yMax=5; canvas.requestPaint() } }
             }
         }
@@ -214,9 +203,17 @@ Item {
                     onScaleChanged: {
                         var delta = scale / lastScale
                         lastScale = scale
-                        var cx = (xMin + xMax) / 2, cy = (yMin + yMax) / 2
-                        var hw = (xMax - xMin) / 2 / delta, hh = (yMax - yMin) / 2 / delta
-                        xMin = cx - hw; xMax = cx + hw; yMin = cy - hh; yMax = cy + hh
+                        // FIX #18: pivot on pinch centroid in graph-space, not viewport center.
+                        // Keeps the point under the fingers stationary during zoom.
+                        var fp = pinch.centroid.position
+                        var px = xMin + (fp.x / canvas.width)  * (xMax - xMin)
+                        var py = yMax - (fp.y / canvas.height) * (yMax - yMin)
+                        xMin = px - (px - xMin) / delta;  xMax = px + (xMax - px) / delta
+                        yMin = py - (py - yMin) / delta;  yMax = py + (yMax - py) / delta
+                        // FIX #26: clamp to minimum range to prevent degenerate viewport
+                        var MIN_RANGE = 1e-9
+                        if (xMax - xMin < MIN_RANGE) { var midX=(xMin+xMax)/2; xMin=midX-MIN_RANGE/2; xMax=midX+MIN_RANGE/2 }
+                        if (yMax - yMin < MIN_RANGE) { var midY=(yMin+yMax)/2; yMin=midY-MIN_RANGE/2; yMax=midY+MIN_RANGE/2 }
                         scheduleRepaint()
                     }
                 }
@@ -240,9 +237,15 @@ Item {
                 WheelHandler {
                     onWheel: function(event) {
                         var factor = event.angleDelta.y > 0 ? 0.87 : 1.15
-                        var cx = (xMin+xMax)/2, cy = (yMin+yMax)/2
-                        var hw = (xMax-xMin)/2*factor, hh = (yMax-yMin)/2*factor
-                        xMin = cx-hw; xMax = cx+hw; yMin = cy-hh; yMax = cy+hh
+                        // FIX #18: pivot on cursor position in graph-space, not viewport center.
+                        var px = xMin + (event.x / canvas.width)  * (xMax - xMin)
+                        var py = yMax - (event.y / canvas.height) * (yMax - yMin)
+                        xMin = px - (px - xMin) * factor;  xMax = px + (xMax - px) * factor
+                        yMin = py - (py - yMin) * factor;  yMax = py + (yMax - py) * factor
+                        // FIX #26: clamp to minimum range to prevent degenerate viewport
+                        var MIN_RANGE = 1e-9
+                        if (xMax - xMin < MIN_RANGE) { var midX=(xMin+xMax)/2; xMin=midX-MIN_RANGE/2; xMax=midX+MIN_RANGE/2 }
+                        if (yMax - yMin < MIN_RANGE) { var midY=(yMin+yMax)/2; yMin=midY-MIN_RANGE/2; yMax=midY+MIN_RANGE/2 }
                         scheduleRepaint()
                     }
                 }
@@ -258,13 +261,20 @@ Item {
                     delegate: Rectangle {
                         width: 30; height: 30; radius: 10
                         color: Theme.border1; border.color: Theme.border2; border.width: 1
-                        Text { anchors.centerIn: parent; text: modelData; color: Theme.text2; font.pixelSize: 14; font.family: Theme.fontMono }
+                        Text { anchors.centerIn: parent; text: modelData; color: Theme.text2; font.pixelSize: Math.round(14 * Theme.scale); font.family: Theme.fontMono }
                         MouseArea { anchors.fill: parent
                             onClicked: {
                                 var f = modelData==="+" ? 0.70 : 1.43
                                 var cx=(xMin+xMax)/2, cy=(yMin+yMax)/2
                                 xMin=cx-(xMax-xMin)/2*f; xMax=cx+(xMax-xMin)/2*f
                                 yMin=cy-(yMax-yMin)/2*f; yMax=cy+(yMax-yMin)/2*f
+                                // FIX #30: match Fix #26 clamp — repeated "+" taps can drive
+                                // the range below 1e-9, causing identical degenerate-viewport
+                                // bugs (blank canvas, NaN axis labels) that Fix #26 patched
+                                // for PinchHandler/WheelHandler but missed here.
+                                var MIN_RANGE = 1e-9
+                                if (xMax - xMin < MIN_RANGE) { var midX=(xMin+xMax)/2; xMin=midX-MIN_RANGE/2; xMax=midX+MIN_RANGE/2 }
+                                if (yMax - yMin < MIN_RANGE) { var midY=(yMin+yMax)/2; yMin=midY-MIN_RANGE/2; yMax=midY+MIN_RANGE/2 }
                                 scheduleRepaint()
                             }
                         }
@@ -275,7 +285,7 @@ Item {
             Text {
                 anchors.top: parent.top; anchors.left: parent.left
                 anchors.margins: 9; text: "drag · pinch · scroll"
-                font.pixelSize: 8; color: Qt.rgba(1,1,1, Theme.dark ? 0.16 : 0)
+                font.pixelSize: Math.round(8 * Theme.scale); color: Qt.rgba(1,1,1, Theme.dark ? 0.16 : 0)
                 font.family: Theme.fontSans
             }
         }
@@ -291,13 +301,13 @@ Item {
                     anchors.fill: parent; anchors.margins: 10; spacing: 8
 
                     Rectangle { width: 10; height: 10; radius: 5; color: modelData.color }
-                    Text { text: "y = " + modelData.expr; color: Theme.text; font.pixelSize: 12
+                    Text { text: "y = " + modelData.expr; color: Theme.text; font.pixelSize: Math.round(12 * Theme.scale)
                         font.family: Theme.fontMono; Layout.fillWidth: true; elide: Text.ElideRight }
 
                     Rectangle {
                         width: 24; height: 24; radius: 7
                         color: "transparent"; border.color: Qt.rgba(1,1,1,0.14); border.width: 1
-                        Text { anchors.centerIn: parent; text: "✕"; color: "#60609a"; font.pixelSize: 10 }
+                        Text { anchors.centerIn: parent; text: "✕"; color: "#60609a"; font.pixelSize: Math.round(10 * Theme.scale) }
                         MouseArea { anchors.fill: parent
                             onClicked: {
                                 var arr = []; for (var i=0;i<functions.length;i++) if(i!==index) arr.push(functions[i])
@@ -330,15 +340,15 @@ Item {
                     GradientStop { position: 1.0; color: "#7c3aed" }
                 }
                 border.color: Qt.rgba(0.80,0.60,1.0,0.30); border.width: 1
-                Text { anchors.centerIn: parent; text: "+ Add"; color: "#fff"; font.pixelSize: 12; font.family: Theme.fontSans; font.weight: Font.DemiBold }
+                Text { anchors.centerIn: parent; text: "+ Add"; color: "#fff"; font.pixelSize: Math.round(12 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.DemiBold }
                 MouseArea { anchors.fill: parent; onClicked: addFunction() }
             }
         }
 
-        Text { visible: graphError !== ""; text: "⚠  " + graphError; color: Theme.red; font.pixelSize: 10; font.family: Theme.fontSans }
+        Text { visible: graphError !== ""; text: "⚠  " + graphError; color: Theme.red; font.pixelSize: Math.round(10 * Theme.scale); font.family: Theme.fontSans }
 
         // ── Presets ───────────────────────────────────────────────────
-        Text { text: "PRESETS"; font.pixelSize: 8; color: "#484878"; font.letterSpacing: 1; font.family: Theme.fontSans }
+        Text { text: "PRESETS"; font.pixelSize: Math.round(8 * Theme.scale); color: "#484878"; font.letterSpacing: 1; font.family: Theme.fontSans }
         Flow {
             Layout.fillWidth: true; spacing: 6
             Repeater {
@@ -347,7 +357,7 @@ Item {
                     width: lbl.implicitWidth + 18; height: 28; radius: 9
                     color: Theme.sectionBg; border.color: Theme.border1; border.width: 1
                     Text { id: lbl; anchors.centerIn: parent; text: modelData
-                        font.pixelSize: 10; color: "#9898c8"; font.family: Theme.fontMono }
+                        font.pixelSize: Math.round(10 * Theme.scale); color: "#9898c8"; font.family: Theme.fontMono }
                     MouseArea { anchors.fill: parent
                         onClicked: {
                             for (var i=0; i<functions.length; i++) if(functions[i].expr === modelData) return
@@ -364,7 +374,7 @@ Item {
             visible: functions.length > 0
             width: 74; height: 27; radius: 9
             color: "transparent"; border.color: Qt.rgba(1,1,1,0.11); border.width: 1
-            Text { anchors.centerIn: parent; text: "clear all"; font.pixelSize: 9; color: "#8080b0"; font.family: Theme.fontSans }
+            Text { anchors.centerIn: parent; text: "clear all"; font.pixelSize: Math.round(9 * Theme.scale); color: "#8080b0"; font.family: Theme.fontSans }
             MouseArea { anchors.fill: parent; onClicked: { functions = []; canvas.requestPaint() } }
         }
 

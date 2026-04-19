@@ -15,6 +15,9 @@ public:
     // Evaluate a math expression string, returns result as string
     Q_INVOKABLE QString evaluate(const QString &expression, bool degrees = true, bool fracMode = false);
 
+    // Evaluate a graph expression f(x) — sandboxed, no raw eval in QML
+    Q_INVOKABLE double evaluateAt(const QString &expression, double x);
+
     // Format result number nicely
     Q_INVOKABLE QString formatNumber(double value) const;
 
@@ -26,6 +29,7 @@ public:
 
 private:
     QJSEngine m_engine;
+    bool      m_degrees = true;   // mirrors last degrees flag passed to evaluate()
 
     void loadMathLibrary();
     QString prepareExpression(const QString &raw, bool degrees) const;

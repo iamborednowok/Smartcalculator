@@ -75,10 +75,13 @@ Item {
     }
 
     function displayFontSize(v) {
-        if (v.length > 18) return 15
-        if (v.length > 13) return 20
-        if (v.length > 9)  return 28
-        return 38
+        // FIX: scale with Theme.scale so display font is correct on all screen sizes
+        var base
+        if (v.length > 18) base = 15
+        else if (v.length > 13) base = 20
+        else if (v.length > 9)  base = 28
+        else base = 38
+        return Math.round(base * Theme.scale)
     }
 
     function btnType(lbl) {
@@ -178,8 +181,8 @@ Item {
 
                 Row {
                     spacing: 0
-                    Text { text: "Smart"; font.pixelSize: 20; font.family: Theme.fontSans; font.weight: Font.Light; color: Theme.text2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
-                    Text { text: "Calc"; font.pixelSize: 20; font.family: Theme.fontSans; font.weight: Font.Bold; color: Theme.accent2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                    Text { text: "Smart"; font.pixelSize: Math.round(20 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Light; color: Theme.text2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                    Text { text: "Calc"; font.pixelSize: Math.round(20 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Bold; color: Theme.accent2; Behavior on color { ColorAnimation { duration: Theme.normal } } }
                     Rectangle { width: 6; height: 6; radius: 3; color: Theme.cyan; anchors.verticalCenter: parent.verticalCenter; anchors.leftMargin: 2
                         Rectangle { anchors.centerIn: parent; width: 12; height: 12; radius: 6; color: "transparent"; border.color: Theme.cyan; border.width: 1; opacity: 0.45 }
                         Behavior on color { ColorAnimation { duration: Theme.normal } }
@@ -188,12 +191,12 @@ Item {
 
                 Item { Layout.fillWidth: true }
 
-                // Angle mode (sci only)
+                // Angle mode (sci only) — FIX: was `sciMode` (never set), corrected to `sciOpen`
                 Rectangle {
-                    visible: sciMode; height: 24; width: 50; radius: 12
+                    visible: sciOpen; height: 24; width: 50; radius: 12
                     color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? (Theme.dark ? 0.15 : 0.12) : (Theme.dark ? 0.06 : 0.04))
                     border.color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.42 : 0.14); border.width: 1
-                    Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: 9; font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
+                    Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
                     MouseArea { anchors.fill: parent; onClicked: angleMode = angleMode === "deg" ? "rad" : "deg" }
                     Behavior on color { ColorAnimation { duration: 120 } }
                 }
@@ -203,7 +206,7 @@ Item {
                     height: 24; width: 52; radius: 12
                     color: fracMode ? Qt.rgba(0.95,0.62,0.07, Theme.dark ? 0.14 : 0.10) : Theme.actionBg
                     border.color: fracMode ? Qt.rgba(0.95,0.62,0.07,0.42) : Theme.actionBdr; border.width: 1
-                    Text { anchors.centerIn: parent; text: "½ frac"; font.pixelSize: 9; font.family: Theme.fontSans; color: fracMode ? "#F59E0B" : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
+                    Text { anchors.centerIn: parent; text: "½ frac"; font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans; color: fracMode ? "#F59E0B" : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
                     MouseArea { anchors.fill: parent; onClicked: fracMode = !fracMode }
                     Behavior on color { ColorAnimation { duration: 120 } }
                 }
@@ -214,18 +217,11 @@ Item {
                     color: showVars ? Theme.accentDim : Theme.actionBg
                     border.color: showVars ? Theme.accent : Theme.actionBdr; border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    Text { id: varBtnLbl; anchors.centerIn: parent; text: "VAR" + (Object.keys(variables).length > 0 ? " (" + Object.keys(variables).length + ")" : ""); font.pixelSize: 9; font.family: Theme.fontSans; font.weight: Font.Bold; color: showVars ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
+                    Text { id: varBtnLbl; anchors.centerIn: parent; text: "VAR" + (Object.keys(variables).length > 0 ? " (" + Object.keys(variables).length + ")" : ""); font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Bold; color: showVars ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
                     MouseArea { anchors.fill: parent; onClicked: showVars = !showVars }
                 }
 
-                // Theme toggle
-                Rectangle {
-                    height: 26; width: 26; radius: 13
-                    color: Theme.actionBg; border.color: Theme.actionBdr; border.width: 1
-                    Behavior on color { ColorAnimation { duration: Theme.normal } }
-                    Text { anchors.centerIn: parent; text: window && window.darkMode ? "☀" : "🌙"; font.pixelSize: 13 }
-                    MouseArea { anchors.fill: parent; onClicked: if (window) window.darkMode = !window.darkMode }
-                }
+                // NOTE: Dark mode toggle is in the main app header — not duplicated here
             }
 
             // ── Variable manager drawer ────────────────────────────────
@@ -245,10 +241,10 @@ Item {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Text { text: "VARIABLES"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 1.2; font.family: Theme.fontSans; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                        Text { text: "VARIABLES"; font.pixelSize: Math.round(8 * Theme.scale); color: Theme.text3; font.letterSpacing: 1.2; font.family: Theme.fontSans; Behavior on color { ColorAnimation { duration: Theme.normal } } }
                         Item { Layout.fillWidth: true }
                         Text {
-                            text: "clear all"; font.pixelSize: 8; color: Theme.text3; font.family: Theme.fontSans
+                            text: "clear all"; font.pixelSize: Math.round(8 * Theme.scale); color: Theme.text3; font.family: Theme.fontSans
                             MouseArea { anchors.fill: parent; onClicked: { variables = {} } }
                         }
                     }
@@ -264,7 +260,7 @@ Item {
                                     GradientStop { position: 0.0; color: Qt.rgba(0.49,0.23,0.93,0.20) }
                                     GradientStop { position: 1.0; color: Qt.rgba(0.02,0.71,0.83,0.16) } }
                                 border.color: Qt.rgba(0.67,0.55,1.0,0.35); border.width: 1
-                                Text { id: chipLbl; anchors.centerIn: parent; text: modelData + " = " + variables[modelData]; font.pixelSize: 11; font.family: Theme.fontMono; color: Theme.accent2 }
+                                Text { id: chipLbl; anchors.centerIn: parent; text: modelData + " = " + variables[modelData]; font.pixelSize: Math.round(11 * Theme.scale); font.family: Theme.fontMono; color: Theme.accent2 }
                                 MouseArea {
                                     anchors.fill: parent
                                     onClicked: { expr = (justEval ? "" : expr) + modelData; justEval = false }
@@ -282,7 +278,7 @@ Item {
                     Text {
                         visible: Object.keys(variables).length === 0
                         text: "No variables yet. Press = then tap → var to assign a result."
-                        color: Theme.text3; font.pixelSize: 10; wrapMode: Text.WordWrap
+                        color: Theme.text3; font.pixelSize: Math.round(10 * Theme.scale); wrapMode: Text.WordWrap
                         Layout.fillWidth: true; font.family: Theme.fontSans
                     }
                 }
@@ -332,7 +328,7 @@ Item {
                     height: 20; width: pbTxt.implicitWidth + 16; radius: 10
                     color: Qt.rgba(0.95, 0.62, 0.07, Theme.dark ? 0.10 : 0.08)
                     border.color: Qt.rgba(0.95, 0.62, 0.07, 0.32); border.width: 1
-                    Text { id: pbTxt; anchors.centerIn: parent; text: "( ×" + parenBalance; font.pixelSize: 9; color: "#F59E0B"; font.family: Theme.fontMono }
+                    Text { id: pbTxt; anchors.centerIn: parent; text: "( ×" + parenBalance; font.pixelSize: Math.round(9 * Theme.scale); color: "#F59E0B"; font.family: Theme.fontMono }
                 }
 
                 // Copy button
@@ -344,7 +340,7 @@ Item {
                     border.color: cpDone ? Qt.rgba(0.06,0.73,0.51,0.32) : Theme.actionBdr; border.width: 1
                     property bool cpDone: false
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    Text { id: cpLbl; anchors.centerIn: parent; text: parent.cpDone ? "✓ copied" : "copy"; font.pixelSize: 9; font.family: Theme.fontSans; color: parent.cpDone ? Theme.green : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
+                    Text { id: cpLbl; anchors.centerIn: parent; text: parent.cpDone ? "✓ copied" : "copy"; font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans; color: parent.cpDone ? Theme.green : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
                     MouseArea { anchors.fill: parent; onClicked: { copyToClipboard(justEval ? expr : displayFmt(displayVal)); parent.cpDone = true; cpTimer.restart() } }
                     Timer { id: cpTimer; interval: 1800; onTriggered: parent.cpDone = false }
                 }
@@ -356,7 +352,7 @@ Item {
                     color: showHist ? Theme.accentDim : Theme.actionBg
                     border.color: showHist ? Theme.accent : Theme.actionBdr; border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    Text { id: histLbl; anchors.centerIn: parent; text: "Hist" + (window && window.calcHistory.length > 0 ? " (" + window.calcHistory.length + ")" : ""); font.pixelSize: 9; font.family: Theme.fontSans; color: showHist ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
+                    Text { id: histLbl; anchors.centerIn: parent; text: "Hist" + (window && window.calcHistory.length > 0 ? " (" + window.calcHistory.length + ")" : ""); font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans; color: showHist ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 150 } } }
                     MouseArea { anchors.fill: parent; onClicked: showHist = !showHist }
                 }
 
@@ -364,7 +360,7 @@ Item {
                 Text {
                     anchors.right: parent.right; anchors.bottom: mainNumber.top
                     anchors.rightMargin: 16; anchors.bottomMargin: 2
-                    text: prevExpr; font.pixelSize: 11; font.family: Theme.fontMono
+                    text: prevExpr; font.pixelSize: Math.round(11 * Theme.scale); font.family: Theme.fontMono
                     color: Theme.text3; opacity: prevExpr ? 1 : 0
                     Behavior on color   { ColorAnimation { duration: Theme.normal } }
                     Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -378,7 +374,7 @@ Item {
                     anchors.leftMargin: 16; anchors.rightMargin: 60; anchors.bottomMargin: 0
                     text: highlightExpr(expr)
                     textFormat: Text.RichText
-                    font.pixelSize: 10; font.family: Theme.fontMono
+                    font.pixelSize: Math.round(10 * Theme.scale); font.family: Theme.fontMono
                     color: Theme.text2; elide: Text.ElideLeft
                     opacity: justEval ? 0 : 0.85
                     Behavior on opacity { NumberAnimation { duration: 180 } }
@@ -453,7 +449,7 @@ Item {
 
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10; spacing: 6
-                    Text { text: "→ var:"; font.pixelSize: 10; font.family: Theme.fontSans; color: Theme.accent2; font.weight: Font.Medium }
+                    Text { text: "→ var:"; font.pixelSize: Math.round(10 * Theme.scale); font.family: Theme.fontSans; color: Theme.accent2; font.weight: Font.Medium }
                     // Letter quick-picks
                     Repeater {
                         model: ["a","b","c","d","e","m","n","x","y","z"]
@@ -462,13 +458,13 @@ Item {
                             color: Theme.accentDim; border.color: Qt.rgba(0.67,0.55,1.0,0.35); border.width: 1
                             scale: letMa.pressed ? 0.85 : 1.0
                             Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.OutBack } }
-                            Text { anchors.centerIn: parent; text: modelData; font.pixelSize: 12; font.family: Theme.fontMono; color: Theme.accent2 }
+                            Text { anchors.centerIn: parent; text: modelData; font.pixelSize: Math.round(12 * Theme.scale); font.family: Theme.fontMono; color: Theme.accent2 }
                             MouseArea { id: letMa; anchors.fill: parent; onClicked: assignToVar(modelData) }
                         }
                     }
                     Item { Layout.fillWidth: true }
                     // Close
-                    Text { text: "✕"; font.pixelSize: 12; color: Theme.text3; MouseArea { anchors.fill: parent; onClicked: showAssign = false } }
+                    Text { text: "✕"; font.pixelSize: Math.round(12 * Theme.scale); color: Theme.text3; MouseArea { anchors.fill: parent; onClicked: showAssign = false } }
                 }
             }
 
@@ -505,10 +501,10 @@ Item {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Text { text: "TAPE"; font.pixelSize: 8; color: Theme.text3; font.letterSpacing: 2.0; font.family: Theme.fontMono; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                        Text { text: "TAPE"; font.pixelSize: Math.round(8 * Theme.scale); color: Theme.text3; font.letterSpacing: 2.0; font.family: Theme.fontMono; Behavior on color { ColorAnimation { duration: Theme.normal } } }
                         Item { Layout.fillWidth: true }
                         Text {
-                            text: "clear"; font.pixelSize: 8; color: Theme.text3; font.family: Theme.fontSans
+                            text: "clear"; font.pixelSize: Math.round(8 * Theme.scale); color: Theme.text3; font.family: Theme.fontSans
                             MouseArea { anchors.fill: parent; onClicked: { window.calcHistory = []; showHist = false } }
                         }
                     }
@@ -531,16 +527,16 @@ Item {
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 6; anchors.rightMargin: 6
                                 // Time stamp on far left (like a receipt)
-                                Text { text: modelData.time; font.pixelSize: 8; font.family: Theme.fontMono; color: Theme.text3; Layout.preferredWidth: 32 }
+                                Text { text: modelData.time; font.pixelSize: Math.round(8 * Theme.scale); font.family: Theme.fontMono; color: Theme.text3; Layout.preferredWidth: 32 }
                                 // Expression
-                                Text { text: modelData.expr; color: Theme.text2; font.pixelSize: 11; font.family: Theme.fontMono; Layout.fillWidth: true; elide: Text.ElideRight; Behavior on color { ColorAnimation { duration: Theme.normal } } }
+                                Text { text: modelData.expr; color: Theme.text2; font.pixelSize: Math.round(11 * Theme.scale); font.family: Theme.fontMono; Layout.fillWidth: true; elide: Text.ElideRight; Behavior on color { ColorAnimation { duration: Theme.normal } } }
                                 // Equals sign
-                                Text { text: "="; font.pixelSize: 11; font.family: Theme.fontMono; color: Theme.text3 }
+                                Text { text: "="; font.pixelSize: Math.round(11 * Theme.scale); font.family: Theme.fontMono; color: Theme.text3 }
                                 // Result — bold, accented
                                 Text {
                                     text: modelData.result
                                     color: modelData.result === "Error" ? Theme.red : Theme.accent2
-                                    font.pixelSize: 14; font.family: Theme.fontMono; font.weight: Font.Medium
+                                    font.pixelSize: Math.round(14 * Theme.scale); font.family: Theme.fontMono; font.weight: Font.Medium
                                     Behavior on color { ColorAnimation { duration: Theme.normal } }
                                 }
                                 // Reuse button
@@ -550,7 +546,7 @@ Item {
                                     border.color: reuseHover ? Qt.rgba(0.67,0.55,1.0,0.40) : "transparent"; border.width: 1
                                     property bool reuseHover: false
                                     Behavior on color { ColorAnimation { duration: 80 } }
-                                    Text { anchors.centerIn: parent; text: "↩"; font.pixelSize: 11; color: Theme.accent2 }
+                                    Text { anchors.centerIn: parent; text: "↩"; font.pixelSize: Math.round(11 * Theme.scale); color: Theme.accent2 }
                                     MouseArea {
                                         anchors.fill: parent; hoverEnabled: true
                                         onEntered: parent.reuseHover = true
@@ -579,7 +575,7 @@ Item {
                 color: sciOpen ? Theme.accentDim : Theme.actionBg
                 border.color: sciOpen ? Theme.accent : Theme.actionBdr; border.width: 1
                 Behavior on color { ColorAnimation { duration: 160 } }
-                Text { id: sciToggleLbl; anchors.centerIn: parent; text: sciOpen ? "SCI ▲" : "SCI ▼"; font.pixelSize: 9; font.weight: Font.Bold; font.family: Theme.fontSans; font.letterSpacing: 1.2; color: sciOpen ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 160 } } }
+                Text { id: sciToggleLbl; anchors.centerIn: parent; text: sciOpen ? "SCI ▲" : "SCI ▼"; font.pixelSize: Math.round(9 * Theme.scale); font.weight: Font.Bold; font.family: Theme.fontSans; font.letterSpacing: 1.2; color: sciOpen ? Theme.accent2 : Theme.text3; Behavior on color { ColorAnimation { duration: 160 } } }
                 TapHandler { onTapped: sciOpen = !sciOpen }
             }
 
@@ -587,7 +583,7 @@ Item {
                 height: 24; width: 50; radius: 12
                 color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? (Theme.dark ? 0.12 : 0.09) : 0.04)
                 border.color: Qt.rgba(0.02, 0.71, 0.83, angleMode === "deg" ? 0.38 : 0.12); border.width: 1
-                Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: 9; font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
+                Text { anchors.centerIn: parent; text: angleMode.toUpperCase(); font.pixelSize: Math.round(9 * Theme.scale); font.family: Theme.fontSans; font.weight: Font.Bold; color: angleMode === "deg" ? Theme.cyan : Theme.text3; Behavior on color { ColorAnimation { duration: 120 } } }
                 TapHandler { onTapped: angleMode = angleMode === "deg" ? "rad" : "deg" }
                 Behavior on color { ColorAnimation { duration: 120 } }
             }

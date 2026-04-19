@@ -23,10 +23,10 @@ Rectangle {
         anchors { fill: parent; margins: -2; topMargin: 2 }
         z: -1; radius: parent.radius + 2
         color: {
-            if (btnType === "eq")  return Qt.rgba(0.55,0.36,0.96, Theme.dark ? 0.30 : 0.18)
-            if (btnType === "op")  return Qt.rgba(0.96,0.62,0.04, Theme.dark ? 0.22 : 0.12)
-            if (btnType === "red") return Qt.rgba(0.96,0.25,0.37, Theme.dark ? 0.16 : 0.08)
-            return Qt.rgba(0, 0, 0, Theme.dark ? 0.30 : 0.07)
+            if (btnType === "eq")  return Qt.rgba(0.07,0.33,0.75, Theme.dark ? 0.30 : 0.20)
+            if (btnType === "op")  return Qt.rgba(0.20,0.40,0.85, Theme.dark ? 0.22 : 0.14)
+            if (btnType === "red") return Qt.rgba(0.83,0.19,0.19, Theme.dark ? 0.16 : 0.10)
+            return Qt.rgba(0, 0, 0, Theme.dark ? 0.30 : 0.08)
         }
         opacity: tap.pressed ? 0 : 1
         Behavior on opacity { NumberAnimation { duration: 60 } }
