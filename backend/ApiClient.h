@@ -16,7 +16,9 @@ public:
 
     Q_INVOKABLE void sendToAI(const QString &systemPrompt,
                               const QVariantList &messages,
-                              const QString &apiKey,
+                              const QString &openRouterKey,
+                              const QString &anthropicKey,
+                              const QString &geminiKey,
                               const QString &model);
     Q_INVOKABLE void cancel();
 

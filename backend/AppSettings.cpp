@@ -40,6 +40,19 @@ void AppSettings::setAnthKey(const QString &v)
     emit anthKeyChanged();
 }
 
+// ── geminiKey ─────────────────────────────────────────────────────────────────
+
+QString AppSettings::geminiKey() const
+{
+    return cfg().value(QStringLiteral("api/geminiKey"), QString{}).toString();
+}
+void AppSettings::setGeminiKey(const QString &v)
+{
+    if (v == geminiKey()) return;
+    cfg().setValue(QStringLiteral("api/geminiKey"), v);
+    emit geminiKeyChanged();
+}
+
 // ── darkMode ─────────────────────────────────────────────────────────────────
 
 bool AppSettings::darkMode() const

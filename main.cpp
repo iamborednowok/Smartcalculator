@@ -165,7 +165,7 @@ ApplicationWindow {
                     wrapMode:          TextEdit.WrapAnywhere
                     readOnly:          true
                     selectByMouse:     true
-                    selectionColor:    Qt.rgba(0.49, 0.23, 0.93, 0.45)
+                    selectionColor:    Qt.rgba(0.18, 0.48, 1.00, 0.45)
                     selectedTextColor: "#ffffff"
                 }
             }
@@ -183,7 +183,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             height:  50
             radius:  12
-            color:   copyArea.pressed ? "#5b21b6" : "#7C3AED"
+            color:   copyArea.pressed ? "#1E5FCC" : "#2F7BFF"
             Behavior on color { ColorAnimation { duration: 80 } }
 
             Text {
@@ -214,7 +214,7 @@ ApplicationWindow {
             id:               copyDone
             visible:          false
             text:             "✓ Copied to clipboard"
-            color:            "#7C3AED"
+            color:            "#2F7BFF"
             font.pixelSize:   12
             Layout.alignment: Qt.AlignHCenter
             Timer { id: hideTimer; interval: 2500; onTriggered: copyDone.visible = false }

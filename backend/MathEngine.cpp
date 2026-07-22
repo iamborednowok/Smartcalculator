@@ -353,6 +353,31 @@ double MathEngine::evaluateAt(const QString &expression, double x)
     return gp.parse();   // NaN propagates naturally on parse error (gp.ok=false)
 }
 
+// PERF FIX: GraphTab's plot loop used to call evaluateAt() once per
+// horizontal pixel per function — 400-1000+ Q_INVOKABLE round trips per
+// repaint per function on a typical phone width, each one re-running
+// expression.simplified() on a string that hadn't actually changed (only
+// x moves between samples; the expression is constant for the whole
+// curve). Same GParser, same per-point math, same NaN-on-error
+// propagation as evaluateAt() above — this just does the simplify once
+// and the sampling loop natively in C++ instead of once per QML call.
+QVariantList MathEngine::evaluateRange(const QString &expression, double xStart, double xEnd, int steps)
+{
+    QVariantList out;
+    if (steps < 1) return out;
+    out.reserve(steps + 1);
+
+    const QString simplified = expression.simplified();
+    const double  span       = xEnd - xStart;
+
+    for (int i = 0; i <= steps; ++i) {
+        const double x = xStart + span * (static_cast<double>(i) / steps);
+        GParser gp(simplified, x, m_degrees);
+        out.append(gp.parse());
+    }
+    return out;
+}
+
 QString MathEngine::formatNumber(double value) const
 {
     if (std::isnan(value))  return "NaN";
@@ -376,16 +401,23 @@ double MathEngine::convertUnit(double value,
         return celsius + 273.15;
     }
 
+    // BUG FIX: ConvertTab.qml's unitCategories offers "knot" (Speed), "fl oz"
+    // and "pt" (Volume), and "PB" (Data) as selectable units, but none of the
+    // four had an entry here — the `!toBase.contains(...)` guard below made
+    // convertUnit() silently return the input unchanged for any of them (not
+    // an error, just a wrong "conversion" that looks plausible). Found while
+    // wiring AITab's new convert_units skill to this same function; fixed for
+    // ConvertTab too since it's the same underlying table.
     static const QMap<QString, double> toBase {
         {"mm",1e-3},{"cm",1e-2},{"m",1.0},{"km",1e3},
         {"in",0.0254},{"ft",0.3048},{"yd",0.9144},{"mi",1609.344},
         {"g",1e-3},{"kg",1.0},{"lb",0.453592},{"oz",0.0283495},{"t",1e3},
-        {"m/s",1.0},{"km/h",1.0/3.6},{"mph",0.44704},
-        {"ml",1e-3},{"l",1.0},{"gal",3.78541},{"cup",0.236588},
+        {"m/s",1.0},{"km/h",1.0/3.6},{"mph",0.44704},{"knot",0.514444},
+        {"ml",1e-3},{"l",1.0},{"gal",3.78541},{"cup",0.236588},{"fl oz",0.0295735},{"pt",0.473176},
         {"s",1.0},{"min",60.0},{"hr",3600.0},
         {"day",86400.0},{"wk",604800.0},{"mo",2629800.0},{"yr",31557600.0},
         {"B",1.0},{"KB",1024.0},{"MB",1048576.0},
-        {"GB",1073741824.0},{"TB",1099511627776.0},
+        {"GB",1073741824.0},{"TB",1099511627776.0},{"PB",1125899906842624.0},
     };
 
     if (!toBase.contains(fromUnit) || !toBase.contains(toUnit))

@@ -14,8 +14,19 @@ class AppSettings : public QObject
     // ── API keys ──────────────────────────────────────────────────────
     // OpenRouter key (free tier unlocks Llama 3.3, Gemma 3, vision…)
     Q_PROPERTY(QString orKey   READ orKey   WRITE setOrKey   NOTIFY orKeyChanged)
-    // Anthropic direct key (optional — used as vision fallback in AITab)
+    // Anthropic direct key (optional — powers text chat when no OpenRouter
+    // key is set, and vision analysis in AITab either way). Previously
+    // documented as "vision fallback" only, but ApiClient::sendToAI's
+    // Anthropic branch already builds a complete request around it — it
+    // just wasn't wired through. See ApiClient.cpp.
     Q_PROPERTY(QString anthKey READ anthKey WRITE setAnthKey NOTIFY anthKeyChanged)
+    // Google AI Studio key (aistudio.google.com) for Gemini. Sits between
+    // orKey and anthKey in ApiClient::sendToAI's priority — OpenRouter
+    // first if set, then this, then the Anthropic fallback — since Gemini,
+    // like OpenRouter's free lineup, has a genuine free tier rather than
+    // being a last-resort paid fallback the way the Anthropic branch is
+    // documented as being.
+    Q_PROPERTY(QString geminiKey READ geminiKey WRITE setGeminiKey NOTIFY geminiKeyChanged)
 
     // ── Display / UX prefs ────────────────────────────────────────────
     Q_PROPERTY(bool darkMode  READ darkMode  WRITE setDarkMode  NOTIFY darkModeChanged)
@@ -31,6 +42,9 @@ public:
     QString anthKey() const;
     void setAnthKey(const QString &v);
 
+    QString geminiKey() const;
+    void setGeminiKey(const QString &v);
+
     bool darkMode()  const;
     void setDarkMode(bool v);
 
@@ -43,6 +57,7 @@ public:
 signals:
     void orKeyChanged();
     void anthKeyChanged();
+    void geminiKeyChanged();
     void darkModeChanged();
     void fracModeChanged();
     void sciModeChanged();

@@ -1,14 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(SmartCalc VERSION 1.0 LANGUAGES CXX)
 
-# ── Version history ───────────────────────────────────────────────────────────
-# v76 → v77:
-#  • HapticHelper: 18ms click on every CalcButton press, 38ms thud on = and C
-#  • CalcButton uses TapHandler instead of MouseArea for proper multi-touch:
-#    pressing several buttons at once now all register independently
-#  • Responsive button grid: Layout.fillHeight fills available screen height
-#  • Shadow ring on every button + adaptive radius for any button size
-# ─────────────────────────────────────────────────────────────────────────────
+# Design/architecture is documented in REBUILD_NOTES.md at the project root.
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,27 +42,37 @@ qt_add_qml_module(SmartCalc
         qml/ConvertTab.qml
         qml/RandomTab.qml
         qml/GraphTab.qml
-        qml/ProgrammerTab.qml   # v75: programmer / bit-toggler tab
+        qml/ProgrammerTab.qml
         qml/AITab.qml
-        qml/components/AppTabBar.qml
         qml/components/CalcButton.qml
+        qml/components/GroupTabs.qml        # reusable ribbon-style group selector
+        qml/components/TabPillBar.qml        # one nav for every orientation (replaced TopRibbon/AppTabBar/MoreSheet)
+        qml/components/AmbientGlow.qml       # decorative dark-mode background streaks
         qml/components/StyledInput.qml
-        qml/components/UnitPill.qml
         qml/components/ToastMessage.qml
-        qml/components/TabIcon.qml          # v76: custom icon loader w/ fallback
-        qml/components/MoreSheet.qml        # v79: slide-up overflow sheet
+        qml/components/PlaceholderTab.qml   # drop-in stub for scaffolding a new tab
+        qml/components/MiniGraphPlot.qml    # inline chat-bubble plot for AITab's plot_graph skill
+        qml/components/SkillResultCard.qml  # inline chat-bubble result card for AITab's other skills
+        qml/components/SnakeGame.qml        # secret game — see AITab.qml's checkSecretTrigger()
+        qml/components/BossFight.qml        # secret boss fight — see AITab.qml's checkSecretTrigger()
         qml/Theme.qml
-    # ── Custom tab icons (optional) ──────────────────────────────────────────
-    # Drop an image into qml/icons/ named after the tab label (lowercase):
-    #   calc, formula, convert, random, graph, prog, ai
-    # Supported extensions (tried in order): .png  .svg  .jpg
-    # Then add the file path here and rebuild. Max size: 48×48 px recommended.
-    # Example:
-    #   RESOURCES
-    #       qml/icons/calc.png
-    #       qml/icons/formula.svg
-    RESOURCES
-        qml/icons/README.md
+)
+
+
+# Bundles the AI skills registry into the binary itself — desktop *and*
+# Android, where there's no source tree on-device to read a plain file
+# path from. This is what lets AITab load skillviewer.md's real content
+# at runtime (qrc:/ai-skills/skillviewer.md) instead of the hand-kept
+# mirror it used to carry in systemPrompt — see FileHelper::readTextFile
+# and AITab.qml's loadSkillsPromptText() for the other half of this.
+# PREFIX "/" + the FILES path itself (no BASE override) is what puts this
+# at exactly qrc:/ai-skills/skillviewer.md rather than some CMake-derived
+# path — see qt_add_resources' own docs on PREFIX/BASE/alias if this ever
+# needs to move.
+qt_add_resources(SmartCalc "ai_skills"
+    PREFIX "/"
+    FILES
+        ai-skills/skillviewer.md
 )
 
 set_target_properties(SmartCalc PROPERTIES

@@ -1,134 +1,189 @@
 pragma Singleton
 import QtQuick
 
+// ───────────────────────────────────────────────────────────────────────
+// SmartCalc design system — v4 ("RGB Neon")
+//
+// Color direction: red (#FF3B5C) + blue (#2F7BFF) as the two solid
+// accents, with green (#1B9E5E) and cyan (#22D3EE) joining them as extra
+// gradient stops so primary CTAs sweep red → green → blue — a real RGB
+// gradient, not just a two-tone accent. Dark mode gets neon/glass touches
+// via the glow system.
+//
+// ── How to re-color the whole app ────────────────────────────────────
+// Edit the hex literals in the "Bold accents" and "Gradient" sections
+// below. Every tab, button, and nav bar reads through these tokens —
+// nothing is hardcoded elsewhere (except graphColors in GraphTab, the
+// modal scrim black, and the graph color palette — see REBUILD_NOTES.md).
+// ───────────────────────────────────────────────────────────────────────
 QtObject {
-    // Set from Main.qml
+    id: theme
+
     property bool dark:  false
-    // Auto-set by Main.qml based on actual window/screen dimensions.
     property real scale: 1.0
 
-    // ── Backgrounds ───────────────────────────────────────────────────
-    readonly property color bg:  dark ? "#060D14" : "#EBF4FC"
-    readonly property color bg2: dark ? "#091826" : "#D2E8F6"
+    // ── Neutrals ──────────────────────────────────────────────────────
+    readonly property color bg:        dark ? "#0B0B0E" : "#FAFAF7"
+    readonly property color surface:   dark ? "#18181C" : "#F0EEE9"
+    readonly property color surface2:  dark ? "#22222A" : "#E8E4DC"
 
-    // ── Surfaces ──────────────────────────────────────────────────────
-    readonly property color glass1:   dark ? Qt.rgba(1,1,1,0.040) : Qt.rgba(1,1,1,0.90)
-    readonly property color glassBtn: dark ? Qt.rgba(1,1,1,0.060) : Qt.rgba(1,1,1,0.96)
+    // ── Text ──────────────────────────────────────────────────────────
+    readonly property color text:      dark ? "#F5F5F2" : "#15151A"
+    readonly property color textDim:   dark ? "#8A8890" : "#8C8A82"
+    readonly property color textFaint: dark ? "#46454E" : "#CFCCC2"
 
-    // ── Borders ───────────────────────────────────────────────────────
-    readonly property color border1:   dark ? Qt.rgba(1,1,1,0.07)       : Qt.rgba(0.55,0.72,0.90,0.50)
-    readonly property color border2:   dark ? Qt.rgba(1,1,1,0.11)       : Qt.rgba(0.55,0.72,0.90,0.68)
-    readonly property color borderTop: dark ? Qt.rgba(0,0.78,0.66,0.18) : Qt.rgba(0.30,0.56,0.85,0.38)
+    // ── Bold accents ── EDIT THESE TWO LINES TO RE-COLOR THE APP ──────
+    readonly property color accent:   "#FF3B5C"   // red  — "=", primary CTAs, errors
+    readonly property color accent2:  "#2F7BFF"   // blue — operators, ribbons
+    readonly property color onAccent: "#FFFFFF"
 
-    // ── Text hierarchy ────────────────────────────────────────────────
-    readonly property color text:  dark ? "#DFF5F0" : "#0B1E35"
-    readonly property color text2: dark ? "#7DCFBF" : "#1050A0"
-    readonly property color text3: dark ? "#2A5E56" : "#4A6E96"
+    // ── Gradient trio (for buttons, headers, highlights) ──────────────
+    // gradA/accent is red, gradB is green, gradC is cyan-blue — together
+    // they sweep red → green → blue on every primary CTA (see CalcButton,
+    // TopRibbon, and the "=" / Calculate / Add / Send buttons in each
+    // tab). Two-stop pairings also read fine on their own: gradA→gradC
+    // (Convert's swap button) or accent2→gradC (Random's roll/flip/pick).
+    readonly property color gradA: "#FF3B5C"   // red start    (= accent)
+    readonly property color gradB: "#1B9E5E"   // green        (gradient middle)
+    readonly property color gradC: "#22D3EE"   // cyan-blue    (gradient end)
 
-    // ── Accent ────────────────────────────────────────────────────────
-    readonly property color accent:    dark ? "#00C8A8" : "#1050C0"
-    readonly property color accent2:   dark ? "#34D9BE" : "#3878D6"
-    readonly property color accentDim: dark ? Qt.rgba(0,0.78,0.66,0.14) : Qt.rgba(0.06,0.31,0.75,0.13)
+    // ── Glow system ───────────────────────────────────────────────────
+    // glowOp is the master knob — set to 0 to kill every glow at once.
+    // Dark mode: 0.30.  Light mode: 0 (no glow on warm whites).
+    // Pre-baked RGBA colors so no component needs Qt.rgba() calls.
+    // This drives *blurred bloom* effects specifically (an oversized,
+    // soft-edged rect simulating light bleeding outward) — genuinely
+    // dark-only, since the same trick against a light/white background
+    // doesn't read as "glowing," it just reads as a smudge. See edgeOp
+    // below for the crisp-border counterpart that isn't dark-only.
+    readonly property real  glowOp:  dark ? 0.30 : 0.0
+    readonly property color glowA:   Qt.rgba(1.00, 0.23, 0.36, glowOp)          // red bloom
+    readonly property color glowA2:  Qt.rgba(1.00, 0.23, 0.36, glowOp * 0.45)  // softer red
+    readonly property color glowB:   Qt.rgba(0.18, 0.48, 1.00, glowOp)          // blue bloom
+    readonly property color glowB2:  Qt.rgba(0.18, 0.48, 1.00, glowOp * 0.45)  // softer blue
 
-    // ── Cyan / sky ────────────────────────────────────────────────────
-    readonly property color cyan:    dark ? "#00E5CC" : "#3878D6"
-    readonly property color cyanDim: dark ? Qt.rgba(0,0.90,0.80,0.12)  : Qt.rgba(0.22,0.47,0.84,0.20)
+    // ── Edge system (crisp colored borders — the light-mode-compatible
+    // counterpart to the glow blooms above) ─────────────────────────────
+    // A thin *saturated line* reads as vivid/energetic on white the same
+    // way it does on black, unlike a blur. Every card/button ring in the
+    // app used to be wired to glowA/glowB directly, which made light mode
+    // lose every one of them (glowOp is 0 there) — light mode ended up
+    // with the same layout as dark mode but none of its personality. Same
+    // opacity in both modes on purpose: the goal is for light and dark to
+    // read as one consistent design system, not two.
+    readonly property real  edgeOp:  0.42
+    readonly property color edgeA:   Qt.rgba(1.00, 0.23, 0.36, edgeOp)
+    readonly property color edgeA2:  Qt.rgba(1.00, 0.23, 0.36, edgeOp * 0.55)
+    readonly property color edgeB:   Qt.rgba(0.18, 0.48, 1.00, edgeOp)
+    readonly property color edgeB2:  Qt.rgba(0.18, 0.48, 1.00, edgeOp * 0.55)
 
-    // ── Button backgrounds ────────────────────────────────────────────
-    readonly property color btnNormal: dark ? Qt.rgba(1,1,1,0.065)        : Qt.rgba(1,1,1,0.92)
-    readonly property color btnOp:     dark ? Qt.rgba(0,0.78,0.66,0.18)   : Qt.rgba(0.18,0.38,0.86,0.14)
-    readonly property color btnRed:    dark ? Qt.rgba(0.98,0.27,0.35,0.10): Qt.rgba(0.83,0.18,0.18,0.08)
-    readonly property color btnSci:    dark ? Qt.rgba(0,0.78,0.66,0.08)   : Qt.rgba(0.18,0.38,0.86,0.09)
-    readonly property color btnDim:    dark ? Qt.rgba(1,1,1,0.040)        : Qt.rgba(0.86,0.93,0.98,0.88)
+    // ── Surface tints (accent-kissed card backgrounds) ─────────────────
+    // Dark: perceptible but quiet.  Light: was barely-there before (near-
+    // invisible warm/cool wash) — deepened so light mode cards actually
+    // read as tinted instead of looking like plain Theme.surface.
+    readonly property color surfaceEq: dark ? "#201014" : "#FFE0E6"   // red-tinted
+    readonly property color surfaceOp: dark ? "#0F131F" : "#DCE9FF"   // blue-tinted
 
-    // ── Button borders ────────────────────────────────────────────────
-    readonly property color bdrNormal: dark ? Qt.rgba(1,1,1,0.08)          : Qt.rgba(0.55,0.72,0.90,0.55)
-    readonly property color bdrOp:     dark ? Qt.rgba(0,0.78,0.66,0.38)    : Qt.rgba(0.18,0.38,0.86,0.52)
-    readonly property color bdrEq:     dark ? Qt.rgba(0,0.78,0.66,0.40)    : Qt.rgba(0.06,0.31,0.75,0.42)
-    readonly property color bdrRed:    dark ? Qt.rgba(0.98,0.27,0.35,0.35) : Qt.rgba(0.83,0.18,0.18,0.28)
-    readonly property color bdrSci:    dark ? Qt.rgba(0,0.78,0.66,0.28)    : Qt.rgba(0.18,0.38,0.86,0.48)
-    readonly property color bdrDim:    dark ? Qt.rgba(1,1,1,0.06)          : Qt.rgba(0.55,0.72,0.90,0.42)
+    // ── Per-tab identity colors ("RGB Neon" nav pills + bg glow) ───────
+    // One vivid hue per tab, in allTabs order (Calc, Formula, Convert,
+    // Random, Graph, Programmer, AI). Reuses accent/gradB/accent2/gradC
+    // plus 3 more from the same family GraphTab's legend uses, so the
+    // whole app pulls from one consistent set of hues rather than a
+    // second, disconnected palette.
+    readonly property var tabColors: [
+        accent,    // Calc        — red
+        gradB,     // Formula     — green
+        accent2,   // Convert     — blue
+        "#F4B740", // Random      — amber
+        gradC,     // Graph       — cyan
+        "#D63BA8", // Programmer  — magenta
+        "#8B5CF6"  // AI          — violet
+    ]
+    // Paired end-stop per tab, same order — each nav pill is a real
+    // 2-stop gradient (base hue → an adjacent/lighter shade), not a flat
+    // fill, matching the glassy gradient-pill look in the reference
+    // mood board. Reuses gradC/accent2 for Convert/Graph rather than
+    // inventing yet another pair of hex values.
+    readonly property var tabColorsEnd: [
+        "#FF6F8F", // Calc        — lighter rose
+        "#3ECE8A", // Formula     — lighter mint
+        gradC,     // Convert     — cyan
+        "#FFD873", // Random      — lighter gold
+        accent2,   // Graph       — blue
+        "#F06BC7", // Programmer  — lighter pink
+        "#AB8CFF"  // AI          — lighter lavender
+    ]
+    // Same base hues, dimmed — used for the ambient background wash
+    // (see Main.qml) so the streaks read as atmosphere, not UI.
+    readonly property var bgStreakColors: [accent, gradB, accent2, gradC]
 
-    // ── Equals button gradient ────────────────────────────────────────
-    readonly property color eqA: dark ? "#00524A" : "#1050C0"
-    readonly property color eqB: dark ? "#007E6C" : "#1870E0"
-    readonly property color eqC: dark ? "#00C8A8" : "#48A6F8"
+    // Turns any base color into a glow-ready rgba at a given opacity —
+    // one function instead of a hand-derived glowX/glowX2 pair per hue,
+    // so every tab color (and any future one) gets a matching glow for
+    // free. Usage: Theme.glowColor(Theme.tabColors[i], Theme.glowOp)
+    function glowColor(base, opacity) {
+        return Qt.rgba(base.r, base.g, base.b, opacity)
+    }
 
-    // ── Button label colours ──────────────────────────────────────────
-    readonly property color lblNormal: dark ? "#DFF5F0" : "#0B1E35"
-    readonly property color lblOp:     dark ? "#34D9BE" : "#1050A0"
-    readonly property color lblEq:     "#ffffff"
-    readonly property color lblRed:    dark ? "#FF7088" : "#C01E1E"
-    readonly property color lblSci:    dark ? "#00E5CC" : "#1050C0"
-    readonly property color lblDim:    dark ? "#7DCFBF" : "#3A6690"
-
-    // ── Status ────────────────────────────────────────────────────────
-    readonly property color green:  dark ? "#10E896" : "#10B981"
-    readonly property color red:    dark ? "#FF4865" : "#F43F5E"
-    readonly property color yellow: dark ? "#FFB020" : "#F59E0B"
-    readonly property color blue:   dark ? "#38C8F0" : "#3B82F6"
-
-    // ── Tab bar ───────────────────────────────────────────────────────
-    readonly property color tabBg:          dark ? "#050C13" : "#FFFFFF"
-    readonly property color tabActive:      dark ? "#00C8A8" : "#1050C0"
-    readonly property color tabInactive:    dark ? "#1A3530" : "#88AAC6"
-    readonly property color tabLblActive:   dark ? "#34D9BE" : "#1050C0"
-    readonly property color tabLblInactive: dark ? "#3A7068" : "#5E7D92"
-    readonly property color tabPillBg:      dark ? Qt.rgba(0,0.78,0.66,0.16): Qt.rgba(0.06,0.31,0.75,0.09)
-    readonly property color tabPillBdr:     dark ? Qt.rgba(0,0.78,0.66,0.35): Qt.rgba(0.06,0.31,0.75,0.38)
-    readonly property color tabSep0:        dark ? Qt.rgba(0,0.78,0.66,0.25): Qt.rgba(0.55,0.72,0.90,0.48)
-    readonly property color tabSep1:        dark ? Qt.rgba(0,0.90,0.80,0.18): Qt.rgba(0.30,0.56,0.85,0.32)
-
-    // ── Display card ──────────────────────────────────────────────────
-    readonly property color displayBg:  dark ? Qt.rgba(1,1,1,0.042) : Qt.rgba(1,1,1,0.94)
-    readonly property color displayBdr: dark ? Qt.rgba(1,1,1,0.08)  : Qt.rgba(0.55,0.72,0.90,0.60)
-
-    // ── Toast ─────────────────────────────────────────────────────────
-    readonly property color toastBg0: dark ? "#050C13"                     : "#FFFFFF"
-    readonly property color toastBg1: dark ? Qt.rgba(0.04,0.09,0.15,0.97) : "#EEF6FC"
-
-    // ── Section cards ─────────────────────────────────────────────────
-    readonly property color sectionBg:  dark ? Qt.rgba(0,0,0,0.20)  : Qt.rgba(1,1,1,0.82)
-    readonly property color sectionBdr: dark ? Qt.rgba(1,1,1,0.07)  : Qt.rgba(0.55,0.72,0.90,0.52)
-
-    // ── UnitPill ──────────────────────────────────────────────────────
-    readonly property color pillActiveBg:    dark ? Qt.rgba(0,0.78,0.66,0.18) : Qt.rgba(0.06,0.31,0.75,0.13)
-    readonly property color pillActiveBdr:   dark ? Qt.rgba(0,0.78,0.66,0.42) : Qt.rgba(0.06,0.31,0.75,0.48)
-    readonly property color pillInactiveBg:  dark ? Qt.rgba(1,1,1,0.04)       : Qt.rgba(1,1,1,0.90)
-    readonly property color pillInactiveBdr: dark ? Qt.rgba(1,1,1,0.08)       : Qt.rgba(0.55,0.72,0.90,0.52)
-    readonly property color pillActiveLbl:   dark ? "#34D9BE" : "#1050C0"
-    readonly property color pillInactiveLbl: dark ? "#2A5E56" : "#5E7D92"
-
-    // ── StyledInput ───────────────────────────────────────────────────
-    readonly property color inputBg:          dark ? Qt.rgba(1,1,1,0.05)       : Qt.rgba(1,1,1,0.95)
-    readonly property color inputBdr:         dark ? Qt.rgba(1,1,1,0.09)       : Qt.rgba(0.55,0.72,0.90,0.52)
-    readonly property color inputFocusBdr:    dark ? Qt.rgba(0,0.78,0.66,0.60) : Qt.rgba(0.06,0.31,0.75,0.62)
-    readonly property color inputText:        dark ? "#DFF5F0" : "#0B1E35"
-    readonly property color inputPlaceholder: dark ? "#2A5E56" : "#88AAC6"
-
-    // ── Utility header / action pill ──────────────────────────────────
-    readonly property color actionBg:    dark ? Qt.rgba(1,1,1,0.05) : Qt.rgba(1,1,1,0.82)
-    readonly property color actionBdr:   dark ? Qt.rgba(1,1,1,0.09) : Qt.rgba(0.55,0.72,0.90,0.52)
-    readonly property color actionLabel: dark ? "#2A5E56" : "#5E7D92"
+    // Picks readable text (near-black or white) for a given fill color.
+    // Needed now that pills/badges can be filled with any of the 7 tab
+    // colors, some of which (amber, cyan) are too light for white text.
+    // Perceived-brightness heuristic (ITU-R BT.601 luma), not full WCAG
+    // contrast math — good enough for a binary black-or-white choice.
+    function textOn(fill) {
+        var luma = 0.299 * fill.r + 0.587 * fill.g + 0.114 * fill.b
+        return luma > 0.6 ? "#15151A" : "#FFFFFF"
+    }
+    // Same idea, but safe for a *gradient* fill spanning two colors —
+    // checks whichever of the two stops is lighter (the harder case for
+    // white text) so the chosen color stays readable across the whole
+    // gradient, not just at one end of it.
+    function textOnGradient(colorA, colorB) {
+        var lumaA = 0.299 * colorA.r + 0.587 * colorA.g + 0.114 * colorA.b
+        var lumaB = 0.299 * colorB.r + 0.587 * colorB.g + 0.114 * colorB.b
+        return textOn(lumaA > lumaB ? colorA : colorB)
+    }
 
     // ── Typography ────────────────────────────────────────────────────
     readonly property string fontSans: "DM Sans"
     readonly property string fontMono: "DM Mono"
 
+    // ── Spacing scale ─────────────────────────────────────────────────
+    readonly property int sp1: Math.round(4  * scale)
+    readonly property int sp2: Math.round(8  * scale)
+    readonly property int sp3: Math.round(14 * scale)
+    readonly property int sp4: Math.round(22 * scale)
+    readonly property int sp5: Math.round(34 * scale)
+    readonly property int sp6: Math.round(52 * scale)
+
     // ── Radii ─────────────────────────────────────────────────────────
-    readonly property int r8:  8;  readonly property int r12: 12
-    readonly property int r16: 16; readonly property int r18: 18
-    readonly property int r20: 20; readonly property int r24: 24
+    readonly property int rSm:   Math.round(10 * scale)
+    readonly property int rMd:   Math.round(18 * scale)
+    readonly property int rLg:   Math.round(26 * scale)
+    readonly property int rFull: 999
 
-    // ── Timings ───────────────────────────────────────────────────────
-    readonly property int fast:    65
-    readonly property int normal:  150
-    readonly property int slow:    260
-    readonly property int press:    65
-    readonly property int release: 260
+    // ── Motion ────────────────────────────────────────────────────────
+    readonly property int press:  70
+    readonly property int normal: 160
 
-    // ── Graph colors ──────────────────────────────────────────────────
-    readonly property var graphColors: dark
-        ? ["#00C8A8","#38C8F0","#FFB020","#FF4865","#A07DFF","#34D9BE","#FF88AA","#A8E860"]
-        : ["#1050C0","#3878D6","#10B981","#F59E0B","#F43F5E","#3B82F6","#EC4899","#84CC16"]
+    // "Funky" bounce — a snappy press-down paired with a springy release
+    // that overshoots slightly past its resting value before settling.
+    // Used for anything satisfying to tap (CalcButton, hero gradient
+    // buttons, nav pills, bit cells) instead of a flat linear settle.
+    // Press itself stays quick/plain (Easing.OutQuad, `press` duration) —
+    // the bounce is specifically on the way *back*, which is what reads
+    // as playful without making the button feel laggy to actually use.
+    readonly property int    bounceDuration:  380
+    readonly property int    bounceEasing:    Easing.OutBack
+    readonly property real   bounceOvershoot: 2.5
+    // Same idea, slower/gentler — for content that enters the screen
+    // (tab switches, a fresh result appearing) rather than a quick tap.
+    readonly property int    popDuration:  320
+    readonly property int    popEasing:    Easing.OutBack
+    readonly property real   popOvershoot: 1.1
+
+    // ── Navigation ────────────────────────────────────────────────────
+    readonly property color navBg:       bg
+    readonly property color navActive:   accent
+    readonly property color navInactive: textFaint
 }

@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QJSEngine>
 #include <QString>
+#include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 
 class MathEngine : public QObject
@@ -17,6 +18,16 @@ public:
 
     // Evaluate a graph expression f(x) — sandboxed, no raw eval in QML
     Q_INVOKABLE double evaluateAt(const QString &expression, double x);
+
+    // PERF: batched sibling to evaluateAt() — see MathEngine.cpp for why.
+    // Evaluates one expression at `steps+1` evenly-spaced x values between
+    // xStart and xEnd (inclusive) in a single native call. Same GParser,
+    // same per-point math and NaN-on-error behavior as evaluateAt(); this
+    // just amortizes expression.simplified() once instead of per-sample
+    // and collapses `steps+1` separate QML→C++ calls into one. Used by
+    // GraphTab's Canvas.onPaint plot loop instead of calling evaluateAt()
+    // once per horizontal pixel.
+    Q_INVOKABLE QVariantList evaluateRange(const QString &expression, double xStart, double xEnd, int steps);
 
     // Format result number nicely
     Q_INVOKABLE QString formatNumber(double value) const;

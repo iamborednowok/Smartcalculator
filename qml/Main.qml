@@ -11,369 +11,199 @@ ApplicationWindow {
     height: 820
     title:  "SmartCalc"
 
+    // ── Shared backend instances ─────────────────────────────────────
+    // Single instance each, reached by every tab via QML's id scope-chain
+    // (every tab below is instantiated as a direct child of this window).
+    // Do NOT duplicate these inside individual tabs.
     AppSettings { id: settings }
     MathEngine  { id: mathEngine }
     ApiClient   { id: apiClient
         onResponseReceived: function(content, isError) {
-            if (root.currentTab === 6)
-                aiLoader.item?.handleResponse(content, isError)
+            // BUG FIX: this used to gate on `root.currentTab === 6`, so
+            // asking the AI something and switching tabs before the reply
+            // arrived silently dropped it — AITab's `loading` flag never
+            // cleared, wedging its Send button (disabled while loading)
+            // for the rest of the session. AITab is lazy-loaded (see
+            // aiLoader below) so a response can only ever exist after the
+            // user has visited it at least once, meaning aiLoader.item is
+            // always valid here — deliver it regardless of which tab is
+            // on screen; AITab shows a toast itself if the user has since
+            // navigated away (see AITab.qml's handleResponse).
+            if (aiLoader.item) aiLoader.item.handleResponse(content, isError)
         }
     }
 
-    // FIX: start in light mode by default (matches user preference)
-    property bool darkMode: false
-    property var  appSettings: settings
+    property bool darkMode:    false
     property int  currentTab:  0
-    property int  prevTab:     0
     property var  calcHistory: []
 
-    // ── Responsive geometry ──────────────────────────────────────────
-    readonly property bool isWide:      root.width >= 600
-    readonly property bool isLandscape: root.height < root.width
-    readonly property int  contentMaxW: Math.min(root.width, isWide ? 540 : root.width)
+    // Orientation, not size — the "wide vs phone" breakpoint used to be
+    // width >= 600, but that's a *size* threshold (right for responsive
+    // web, wrong for a device that rotates): a tablet held in portrait is
+    // still narrower than it is tall and should get the portrait layout,
+    // and a phone rotated to landscape should get the landscape one the
+    // instant it's rotated, at any absolute size. Comparing width to
+    // height captures "which way is the device held" directly.
+    readonly property bool isWide: width > height
 
-    readonly property bool isMoreActive: currentTab === 1 || currentTab === 3 || currentTab === 5
-    readonly property int  headerH: Math.round(56 * Theme.scale)
+    // ── Single source of truth for all navigation.
+    // To add, rename, or reorder a tab:
+    //   - edit this array only
+    //   - add the corresponding tab content in the StackLayout below
+    //   - TabPillBar reads from here automatically; each tab's pill color
+    //     comes from Theme.tabColors[index], not from this array.
+    //
+    // Fields:
+    //   icon    — emoji/symbol shown in nav
+    //   label   — display name
+    //   index   — must match StackLayout child order (0-based)
+    readonly property var allTabs: [
+        { icon: "▦",   label: "Calc",        index: 0 },
+        { icon: "∑",   label: "Formula",     index: 1 },
+        { icon: "⇄",   label: "Convert",     index: 2 },
+        { icon: "⚂",   label: "Random",      index: 3 },
+        { icon: "∿",   label: "Graph",       index: 4 },
+        { icon: "{}",  label: "Programmer",  index: 5 },
+        { icon: "✦",   label: "AI",          index: 6 },
+    ]
 
-    onDarkModeChanged: {
-        Theme.dark        = darkMode
-        settings.darkMode = darkMode
-    }
+    onDarkModeChanged: { Theme.dark = darkMode; settings.darkMode = darkMode }
 
     Component.onCompleted: {
-        root.darkMode = settings.darkMode
-        Theme.dark    = root.darkMode
+        darkMode   = settings.darkMode
+        Theme.dark = darkMode
         recalcScale()
     }
     onWidthChanged:  Qt.callLater(recalcScale)
     onHeightChanged: Qt.callLater(recalcScale)
 
     function recalcScale() {
-        var scaleW = root.width  / 400
-        var scaleH = root.height / 820
-        var raw    = Math.min(scaleW, scaleH)
-        var maxS   = root.isWide ? 1.55 : 1.35
-        Theme.scale = Math.max(0.72, Math.min(maxS, raw))
+        var s = Math.min(width / 400, height / 820)
+        Theme.scale = Math.max(0.78, Math.min(isWide ? 1.5 : 1.25, s))
     }
 
     function addHistory(expr, result) {
         var now = Qt.formatTime(new Date(), "hh:mm")
-        var arr = [{ expr: expr, result: result, time: now }]
-        for (var i = 0; i < Math.min(calcHistory.length, 49); i++)
-            arr.push(calcHistory[i])
-        calcHistory = arr
+        // Cap at 50 entries total (1 new + up to 49 kept).
+        calcHistory = [{ expr: expr, result: result, time: now }].concat(calcHistory.slice(0, 49))
     }
-    function showToast(msg, suc) { toast.show(msg, suc) }
+    function showToast(msg, ok) { toast.show(msg, ok) }
 
-    // ── Background ───────────────────────────────────────────────────
-    background: Item {
-
-        // DARK: deep ocean navy with teal/cyan glows
-        Item {
-            anchors.fill: parent; visible: root.darkMode
-
-            Rectangle { anchors.fill: parent; color: "#060D14" }
-
-            Canvas {
-                id: darkCanvas
-                anchors.fill: parent
-                Component.onCompleted: requestPaint()
-                Connections {
-                    target: root
-                    function onDarkModeChanged() { if (root.darkMode) darkCanvas.requestPaint() }
-                }
-                onPaint: {
-                    var ctx = getContext("2d")
-                    var W = width, H = height
-
-                    var g1 = ctx.createRadialGradient(60, 50, 0, 60, 50, 280)
-                    g1.addColorStop(0.00, "rgba(0,200,168,0.18)")
-                    g1.addColorStop(0.50, "rgba(0,200,168,0.06)")
-                    g1.addColorStop(1.00, "rgba(0,0,0,0)")
-                    ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H)
-
-                    var g2 = ctx.createRadialGradient(W + 20, H - 40, 0, W + 20, H - 40, 260)
-                    g2.addColorStop(0.00, "rgba(0,140,200,0.16)")
-                    g2.addColorStop(0.50, "rgba(0,100,160,0.06)")
-                    g2.addColorStop(1.00, "rgba(0,0,0,0)")
-                    ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H)
-
-                    var g3 = ctx.createRadialGradient(W * 0.55, H * 0.42, 0, W * 0.55, H * 0.42, 160)
-                    g3.addColorStop(0.00, "rgba(0,229,204,0.04)")
-                    g3.addColorStop(1.00, "rgba(0,0,0,0)")
-                    ctx.fillStyle = g3; ctx.fillRect(0, 0, W, H)
-                }
-            }
-        }
-
-        // LIGHT: clean sky-blue gradient — animated clouds
-        Item {
-            anchors.fill: parent; visible: !root.darkMode; clip: true
-
-            Rectangle {
-                anchors.fill: parent
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#E9F5FC" }
-                    GradientStop { position: 0.5; color: "#D8EDFA" }
-                    GradientStop { position: 1.0; color: "#C8E3F8" }
-                }
-            }
-
-            // Animated cloud blobs
-            Rectangle {
-                id: cl1; width: 240; height: 92; radius: 999
-                color: Qt.rgba(1, 1, 1, 0.60); y: 18
-                NumberAnimation on x {
-                    from: -30; to: 50; duration: 9400
-                    loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
-                }
-            }
-            Rectangle {
-                width: 290; height: 126; radius: 999
-                color: Qt.rgba(1, 1, 1, 0.22)
-                y: cl1.y - 18; x: cl1.x - 28
-            }
-            Rectangle {
-                id: cl2; width: 178; height: 66; radius: 999
-                color: Qt.rgba(1, 1, 1, 0.50); y: 100
-                NumberAnimation on x {
-                    from: 160; to: 228; duration: 7800
-                    loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
-                }
-            }
-            Rectangle {
-                id: cl3; width: 128; height: 48; radius: 999
-                color: Qt.rgba(1, 1, 1, 0.40); y: 178
-                NumberAnimation on x {
-                    from: 24; to: 100; duration: 11600
-                    loops: Animation.Infinite; running: !root.darkMode; easing.type: Easing.InOutSine
-                }
-            }
-
-            Rectangle {
-                anchors.bottom: parent.bottom
-                width: parent.width; height: 220
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "transparent" }
-                    GradientStop { position: 1.0; color: Qt.rgba(0.05,0.16,0.32,0.07) }
-                }
-            }
-        }
+    background: Rectangle {
+        color: Theme.bg
+        Behavior on color { ColorAnimation { duration: Theme.normal } }
+        AmbientGlow { }
     }
 
-    // ── Root shell ───────────────────────────────────────────────────
+    // ── Root shell ──────────────────────────────────────────────────────
     Item {
         anchors.fill: parent
 
-        // Frosted side rails (tablets only)
-        Rectangle {
-            visible: root.isWide
-            anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
-            width: (parent.width - root.contentMaxW) / 2
-            color: root.darkMode ? Qt.rgba(0,0,0,0.20) : Qt.rgba(1,1,1,0.20)
-            Behavior on color { ColorAnimation { duration: Theme.normal } }
-        }
-        Rectangle {
-            visible: root.isWide
-            anchors { top: parent.top; bottom: parent.bottom; right: parent.right }
-            width: (parent.width - root.contentMaxW) / 2
-            color: root.darkMode ? Qt.rgba(0,0,0,0.20) : Qt.rgba(1,1,1,0.20)
-            Behavior on color { ColorAnimation { duration: Theme.normal } }
-        }
-
-        // ── Content column ────────────────────────────────────────────
+        // Centered content column (caps at contentMaxW on wide screens)
         Item {
-            id: contentCol
-            anchors { top: parent.top; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
-            width: root.contentMaxW
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top:    parent.top
+            anchors.bottom: parent.bottom
+            width: root.isWide ? Math.min(root.width, 760) : root.width
 
             ColumnLayout {
-                anchors.fill: parent; spacing: 0
+                anchors.fill: parent
+                spacing: 0
 
-                // ── Top Header ────────────────────────────────────────
-                Rectangle {
-                    id: appHeader
+                // ── One nav, every orientation ──────────────────────
+                // Used to be TopRibbon (wide) vs AppTabBar+MoreSheet
+                // (narrow) chosen by a width breakpoint. Now a single
+                // always-top, always-scrollable pill row — rotating the
+                // device changes the *content* layout below (see e.g.
+                // ProgrammerTab's landscape 3-column view), not which
+                // nav component exists.
+                TabPillBar {
                     Layout.fillWidth: true
-                    height: root.headerH
-
-                    // FIX: solid header background, no transparency bleed
-                    color: Theme.tabBg
-                    Behavior on color { ColorAnimation { duration: Theme.normal } }
-
-                    // Drop shadow for header bottom edge
-                    Rectangle {
-                        anchors.bottom: parent.bottom
-                        width: parent.width; height: 1
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.00; color: "transparent" }
-                            GradientStop { position: 0.15; color: Theme.tabSep0 }
-                            GradientStop { position: 0.50; color: Theme.tabSep0 }
-                            GradientStop { position: 0.85; color: Theme.tabSep1 }
-                            GradientStop { position: 1.00; color: "transparent" }
-                        }
-                    }
-
-                    // Left: Logo + App name
-                    Row {
-                        anchors.left: parent.left
-                        anchors.leftMargin: Math.round(16 * Theme.scale)
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Math.round(9 * Theme.scale)
-
-                        Rectangle {
-                            width:  Math.round(30 * Theme.scale)
-                            height: Math.round(30 * Theme.scale)
-                            radius: Math.round(9  * Theme.scale)
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: Theme.accent }
-                                GradientStop { position: 1.0; color: Theme.cyan  }
-                            }
-                            Text {
-                                anchors.centerIn: parent; text: "⊞"
-                                font.pixelSize: Math.round(15 * Theme.scale)
-                                color: "#FFFFFF"; font.family: Theme.fontSans
-                            }
-                        }
-
-                        Column {
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: 0
-                            Text {
-                                text: "Smart"
-                                font.pixelSize: Math.round(15 * Theme.scale)
-                                font.weight: Font.Bold; font.family: Theme.fontSans
-                                color: Theme.text
-                                Behavior on color { ColorAnimation { duration: Theme.normal } }
-                            }
-                            // Thin accent line under brand name
-                            Rectangle {
-                                width: parent.children[0].implicitWidth
-                                height: Math.round(2 * Theme.scale); radius: 1
-                                gradient: Gradient {
-                                    orientation: Gradient.Horizontal
-                                    GradientStop { position: 0.0; color: Theme.accent }
-                                    GradientStop { position: 1.0; color: Theme.cyan   }
-                                }
-                            }
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "Calc"
-                            font.pixelSize: Math.round(15 * Theme.scale)
-                            font.weight: Font.Bold; font.family: Theme.fontSans
-                            color: Theme.accent
-                            Behavior on color { ColorAnimation { duration: Theme.normal } }
-                        }
-                    }
-
-                    // Right: dark-mode toggle only (More moved to tab bar)
-                    Row {
-                        anchors.right: parent.right
-                        anchors.rightMargin: Math.round(12 * Theme.scale)
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Math.round(4 * Theme.scale)
-
-                        // Dark / Light mode toggle
-                        Rectangle {
-                            width:  Math.round(38 * Theme.scale)
-                            height: Math.round(38 * Theme.scale)
-                            radius: Math.round(11 * Theme.scale)
-                            color:  dmMa.pressed
-                                ? Theme.accentDim
-                                : (Theme.dark ? Qt.rgba(1,1,1,0.06) : Qt.rgba(0.07,0.33,0.75,0.08))
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            border.color: Theme.dark ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0.07,0.33,0.75,0.25)
-                            border.width: 1
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: root.darkMode ? "☀" : "☽"
-                                font.pixelSize: Math.round(17 * Theme.scale)
-                                color: Theme.text2
-                                Behavior on color { ColorAnimation { duration: Theme.normal } }
-                            }
-                            MouseArea { id: dmMa; anchors.fill: parent; onClicked: root.darkMode = !root.darkMode }
-                        }
-                    }
-                }
-
-                // ── Tab content ───────────────────────────────────────
-                Item {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-
-                    Loader { id: calcLoader;    anchors.fill: parent; source: "CalcTab.qml"
-                        active: true
-                        opacity: root.currentTab === 0 ? 1 : 0; visible: opacity > 0
-                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-                    Loader { id: formulaLoader; anchors.fill: parent; source: "FormulaTab.qml"
-                        active: root.currentTab === 1 || formulaLoader.status === Loader.Ready
-                        opacity: root.currentTab === 1 ? 1 : 0; visible: opacity > 0
-                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-                    Loader { id: convertLoader; anchors.fill: parent; source: "ConvertTab.qml"
-                        active: root.currentTab === 2 || convertLoader.status === Loader.Ready
-                        opacity: root.currentTab === 2 ? 1 : 0; visible: opacity > 0
-                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-                    Loader { id: randomLoader;  anchors.fill: parent; source: "RandomTab.qml"
-                        active: root.currentTab === 3 || randomLoader.status === Loader.Ready
-                        opacity: root.currentTab === 3 ? 1 : 0; visible: opacity > 0
-                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-                    Loader { id: graphLoader;   anchors.fill: parent; source: "GraphTab.qml"
-                        active: root.currentTab === 4 || graphLoader.status === Loader.Ready
-                        opacity: root.currentTab === 4 ? 1 : 0; visible: opacity > 0
-                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-                    Loader { id: progLoader;    anchors.fill: parent; source: "ProgrammerTab.qml"
-                        active: root.currentTab === 5 || progLoader.status === Loader.Ready
-                        opacity: root.currentTab === 5 ? 1 : 0; visible: opacity > 0
-                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-
-                    Loader { id: aiLoader;      anchors.fill: parent; source: "AITab.qml"
-                        active: root.currentTab === 6 || aiLoader.status === Loader.Ready
-                        opacity: root.currentTab === 6 ? 1 : 0; visible: opacity > 0
-                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
-                }
-
-                // ── Bottom tab bar ─────────────────────────────────────
-                AppTabBar {
-                    id: tabBar
-                    Layout.fillWidth: true
+                    model:    root.allTabs
                     currentIndex: root.currentTab
-                    // FIX: tab bar z is above MoreSheet dim overlay
-                    z: 60
-                    onTabClicked: function(i) {
-                        if (i === -1) {
-                            // "More" button — toggle the sheet
-                            moreSheet.toggle()
-                        } else {
-                            moreSheet.close()
-                            root.currentTab = i
-                        }
+                    darkMode: root.darkMode
+                    onTabClicked:   function(i) { root.currentTab = i }
+                    onThemeToggled: root.darkMode = !root.darkMode
+                }
+
+                // ── Tab content (reflows per-tab based on root.isWide) ──
+                // PERF FIX: all 7 tabs used to be direct StackLayout
+                // children, which meant all 7 full object graphs — every
+                // Repeater, every delegate, every Component.onCompleted
+                // (GraphTab painted a full canvas nobody was looking at;
+                // AITab stood up a FileDialog and a Settings store) — were
+                // built synchronously at app launch, even though only one
+                // tab is ever visible at a time. Every tab but the startup
+                // one (Calc) now lives behind a Loader that only activates
+                // the first time its tab is actually opened.
+                //
+                // `active: root.currentTab === N || item !== null` is a
+                // "load once, keep forever" latch: false until tab N is
+                // first opened, then permanently true afterwards (reading
+                // `item` inside its own active binding is intentional and
+                // safe — see REBUILD_NOTES.md). That "keep forever" part
+                // matters as much as the lazy part: these tabs hold live,
+                // uniquely-generated state (quiz score, graph functions,
+                // AI chat history, the programmer tab's current value)
+                // that would be silently lost if the Loader tore its item
+                // down every time you switched away.
+                //
+                // Each tab's isCurrentTab is now a plain property driven
+                // from root.currentTab instead of StackLayout.isCurrentItem
+                // — a Loader's loaded item is a grandchild of StackLayout,
+                // not a direct child, and StackLayout only ever sets that
+                // attached property on its own direct children, so the
+                // attached-property form would silently never fire once a
+                // tab was behind a Loader.
+                StackLayout {
+                    id: stack
+                    Layout.fillWidth:  true
+                    Layout.fillHeight: true
+                    currentIndex: root.currentTab
+
+                    // Index order must match allTabs[n].index values above.
+                    CalcTab { isCurrentTab: root.currentTab === 0 }   // 0 — startup tab, loaded eagerly
+
+                    Loader {
+                        id: formulaLoader
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        active: root.currentTab === 1 || item !== null
+                        sourceComponent: FormulaTab { isCurrentTab: root.currentTab === 1 }
+                    }
+                    Loader {
+                        id: convertLoader
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        active: root.currentTab === 2 || item !== null
+                        sourceComponent: ConvertTab { isCurrentTab: root.currentTab === 2 }
+                    }
+                    Loader {
+                        id: randomLoader
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        active: root.currentTab === 3 || item !== null
+                        sourceComponent: RandomTab { isCurrentTab: root.currentTab === 3 }
+                    }
+                    Loader {
+                        id: graphLoader
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        active: root.currentTab === 4 || item !== null
+                        sourceComponent: GraphTab { isCurrentTab: root.currentTab === 4 }
+                    }
+                    Loader {
+                        id: programmerLoader
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        active: root.currentTab === 5 || item !== null
+                        sourceComponent: ProgrammerTab { isCurrentTab: root.currentTab === 5 }
+                    }
+                    Loader {
+                        id: aiLoader   // 6 — apiClient (above) routes responses here
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        active: root.currentTab === 6 || item !== null
+                        sourceComponent: AITab { isCurrentTab: root.currentTab === 6 }
                     }
                 }
-            }
-
-            // ── MoreSheet overlay (above content, below tab bar) ───────
-            MoreSheet {
-                id: moreSheet
-                // Fill only up to (but not including) the tab bar
-                anchors {
-                    top:    parent.top
-                    left:   parent.left
-                    right:  parent.right
-                    bottom: tabBar.top
-                }
-                topOffset:    root.headerH
-                currentIndex: root.currentTab
-                onTabClicked: function(i) { root.currentTab = i }
             }
         }
-    }
 
-    ToastMessage { id: toast; anchors.fill: parent; z: 200 }
+        ToastMessage { id: toast; anchors.fill: parent; z: 200 }
+    }
 }

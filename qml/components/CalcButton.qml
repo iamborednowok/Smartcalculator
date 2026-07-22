@@ -1,172 +1,135 @@
 import QtQuick
 import SmartCalc.Backend 1.0
 
-// CalcButton — updated for violet/amber palette
-Rectangle {
+// CalcButton v4 — "=" sweeps red→green→blue (Theme.gradA/B/C), neon glow
+// rings in dark mode. Every other btnType keeps its original flat/2-tone
+// look (see gradMid's midpoint-blend fallback below).
+// btnType: digit | op | eq | func | clear
+Item {
     id: root
     property string label:   ""
-    property string btnType: "normal"   // normal | op | eq | red | sci | dim
+    property string btnType: "digit"
     signal clicked()
 
-    readonly property real sciH:    Math.round(38 * Theme.scale)
-    readonly property real normalH: Math.round(56 * Theme.scale)
+    implicitWidth:  Math.round(60 * Theme.scale)
+    implicitHeight: Math.round(60 * Theme.scale)
 
-    implicitHeight: btnType === "sci" ? sciH : normalH
-    radius: btnType === "sci"
-            ? Math.round(10 * Theme.scale)
-            : Math.min(Math.round(20 * Theme.scale), height * 0.34)
-
-    property int hitPad: btnType === "sci" ? Math.round(6 * Theme.scale) : 0
-
-    // ── Drop shadow ───────────────────────────────────────────────────
-    Rectangle {
-        anchors { fill: parent; margins: -2; topMargin: 2 }
-        z: -1; radius: parent.radius + 2
-        color: {
-            if (btnType === "eq")  return Qt.rgba(0.07,0.33,0.75, Theme.dark ? 0.30 : 0.20)
-            if (btnType === "op")  return Qt.rgba(0.20,0.40,0.85, Theme.dark ? 0.22 : 0.14)
-            if (btnType === "red") return Qt.rgba(0.83,0.19,0.19, Theme.dark ? 0.16 : 0.10)
-            return Qt.rgba(0, 0, 0, Theme.dark ? 0.30 : 0.08)
-        }
-        opacity: tap.pressed ? 0 : 1
-        Behavior on opacity { NumberAnimation { duration: 60 } }
-    }
-
-    // ── Background ────────────────────────────────────────────────────
-    color: {
+    // ── Gradient colors per button type ──────────────────────────────
+    readonly property color gradStart: {
         switch (btnType) {
-            case "eq":   return "transparent"
-            case "op":   return Theme.btnOp
-            case "red":  return Theme.btnRed
-            case "sci":  return Theme.btnSci
-            case "dim":  return Theme.btnDim
-            default:     return Theme.btnNormal
+            case "eq":    return Theme.gradA
+            case "op":    return Theme.dark ? Theme.surfaceOp : Theme.surface2
+            default:      return Theme.surface
         }
     }
-    Behavior on color { ColorAnimation { duration: Theme.normal } }
-
-    // ── Equals gradient (violet sweep) ────────────────────────────────
-    gradient: Gradient {
-        orientation: Gradient.Horizontal
-        GradientStop { position: 0.0;  color: btnType === "eq" ? Theme.eqA : "transparent" }
-        GradientStop { position: 0.45; color: btnType === "eq" ? Theme.eqB : "transparent" }
-        GradientStop { position: 1.0;  color: btnType === "eq" ? Theme.eqC : "transparent" }
-    }
-
-    // ── Border ────────────────────────────────────────────────────────
-    border.color: {
+    readonly property color gradEnd: {
         switch (btnType) {
-            case "eq":  return Theme.bdrEq
-            case "op":  return Theme.bdrOp
-            case "red": return Theme.bdrRed
-            case "sci": return Theme.bdrSci
-            case "dim": return Theme.bdrDim
-            default:    return Theme.bdrNormal
+            case "eq":    return Theme.gradC
+            case "op":    return Theme.surface2
+            default:      return gradStart   // flat = same both ends
         }
     }
-    border.width: 1
-    Behavior on border.color { ColorAnimation { duration: Theme.normal } }
-
-    // ── Top glass sheen ───────────────────────────────────────────────
-    Rectangle {
-        anchors {
-            top: parent.top; left: parent.left; right: parent.right
-            topMargin: 1
-            leftMargin:  btnType === "sci" ? Math.round(4 * Theme.scale) : Math.round(6 * Theme.scale)
-            rightMargin: btnType === "sci" ? Math.round(4 * Theme.scale) : Math.round(6 * Theme.scale)
+    // Middle stop: only "eq" gets the true RGB sweep (red → green → blue).
+    // Every other button type gets the exact midpoint blend of its own
+    // start/end colors, which sits exactly on the gradStart→gradEnd line —
+    // i.e. visually identical to a plain 2-stop gradient, just expressed
+    // as three stops so one Gradient definition below covers every type.
+    readonly property color gradMid: btnType === "eq"
+        ? Theme.gradB
+        : Qt.rgba((gradStart.r + gradEnd.r) / 2, (gradStart.g + gradEnd.g) / 2,
+                  (gradStart.b + gradEnd.b) / 2, (gradStart.a + gradEnd.a) / 2)
+    readonly property color labelColor: {
+        switch (btnType) {
+            case "eq":    return Theme.onAccent
+            case "op":    return Theme.accent2
+            case "clear": return Theme.accent
+            case "func":  return Theme.textDim
+            default:      return Theme.text
         }
-        height: 1; radius: parent.radius
-        color: {
-            if (btnType === "eq") return Qt.rgba(1, 1, 1, 0.32)
-            return Theme.dark ? Qt.rgba(1, 1, 1, 0.11) : Qt.rgba(1, 1, 1, 0.95)
-        }
-        z: 2
-        Behavior on color { ColorAnimation { duration: Theme.normal } }
     }
 
-    // ── Ripple ────────────────────────────────────────────────────────
+    // ── Glow rings (drawn before the button = rendered behind it) ─────
+    // Two stacked rings: outer softer, inner stronger.
+    // Visible only in dark mode on eq and op buttons.
     Rectangle {
-        id: ripple
-        x: rippleX - width / 2;  y: rippleY - height / 2
-        width: 0; height: width;  radius: width / 2
-        color: btnType === "eq"  ? Qt.rgba(1,1,1,0.24)
-             : btnType === "op"  ? (Theme.dark ? Qt.rgba(0.96,0.62,0.04,0.30) : Qt.rgba(0.85,0.47,0.02,0.26))
-             : btnType === "red" ? Qt.rgba(0.96,0.25,0.37,0.28)
-             : Qt.rgba(1,1,1,0.18)
-        opacity: 0; z: 1; clip: false
-        property real rippleX: root.width  / 2
-        property real rippleY: root.height / 2
+        anchors.centerIn: parent
+        width:  parent.width  + Math.round(20 * Theme.scale)
+        height: parent.height + Math.round(20 * Theme.scale)
+        radius: Theme.rLg + Math.round(10 * Theme.scale)
+        color:  btnType === "eq" ? Theme.glowA2 : (btnType === "op" ? Theme.glowB2 : "transparent")
+        visible: Theme.dark
     }
-    ParallelAnimation {
-        id: rippleAnim
-        NumberAnimation { target: ripple; property: "width"; to: root.width * 2.5
-                          duration: 360; easing.type: Easing.OutQuart }
-        SequentialAnimation {
-            NumberAnimation { target: ripple; property: "opacity"; to: 1.0; duration: 20 }
-            NumberAnimation { target: ripple; property: "opacity"; to: 0.0
-                              duration: 340; easing.type: Easing.OutQuart }
+    Rectangle {
+        anchors.centerIn: parent
+        width:  parent.width  + Math.round(10 * Theme.scale)
+        height: parent.height + Math.round(10 * Theme.scale)
+        radius: Theme.rLg + Math.round(5 * Theme.scale)
+        color:  btnType === "eq" ? Theme.glowA : (btnType === "op" ? Theme.glowB : "transparent")
+        visible: Theme.dark
+    }
+
+    // ── Main button face ──────────────────────────────────────────────
+    Rectangle {
+        id: face
+        anchors.fill: parent
+        radius: Theme.rLg
+
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: root.gradStart }
+            GradientStop { position: 0.5; color: root.gradMid   }
+            GradientStop { position: 1.0; color: root.gradEnd   }
         }
     }
 
     // ── Label ─────────────────────────────────────────────────────────
     Text {
-        anchors.centerIn: parent; z: 3
+        anchors.centerIn: parent
         text: root.label
-        color: {
-            switch (root.btnType) {
-                case "eq":  return Theme.lblEq
-                case "op":  return Theme.lblOp
-                case "red": return Theme.lblRed
-                case "sci": return Theme.lblSci
-                case "dim": return Theme.lblDim
-                default:    return Theme.lblNormal
-            }
-        }
-        font.pixelSize: root.btnType === "sci"
-            ? Math.round(11 * Theme.scale)
-            : root.btnType === "eq"
-            ? Math.round(28 * Theme.scale)
-            : Math.round(20 * Theme.scale)
         font.family: Theme.fontMono
-        font.weight: root.btnType === "eq" ? Font.Light : Font.Normal
-        renderType: Text.NativeRendering
+        font.weight: root.btnType === "eq" ? Font.DemiBold : Font.Normal
+        font.pixelSize: root.btnType === "eq"
+            ? Math.round(24 * Theme.scale)
+            : Math.round(22 * Theme.scale)
+        color: root.labelColor
         Behavior on color { ColorAnimation { duration: Theme.normal } }
     }
 
-    // ── Press: scale spring + opacity dip ────────────────────────────
-    scale:   tap.pressed ? 0.87 : 1.0
-    opacity: tap.pressed ? 0.76 : 1.0
-    Behavior on scale {
-        NumberAnimation {
-            duration: tap.pressed ? 65 : 260
-            easing.type: Easing.OutBack
-            easing.overshoot: tap.pressed ? 0 : 2.2
-        }
-    }
-    Behavior on opacity { NumberAnimation { duration: 50 } }
+    // ── Press animation ───────────────────────────────────────────────
+    // Asymmetric on purpose: pressing down is quick/plain (feels
+    // responsive, not laggy), releasing bounces back with a slight
+    // overshoot past 1.0 before settling — that overshoot is what reads
+    // as "funky" rather than just a flat fade back to resting size.
+    scale: 1.0
+    opacity: tap.pressed ? 0.82 : 1.0
+    Behavior on opacity { NumberAnimation { duration: Theme.press } }
 
-    // ── TapHandler — multi-touch aware ────────────────────────────────
+    NumberAnimation {
+        id: pressDownAnim
+        target: root; property: "scale"; to: 0.94
+        duration: Theme.press
+        easing.type: Easing.OutQuad
+    }
+    NumberAnimation {
+        id: releaseBounceAnim
+        target: root; property: "scale"; to: 1.0
+        duration: Theme.bounceDuration
+        easing.type: Theme.bounceEasing
+        easing.overshoot: Theme.bounceOvershoot
+    }
+
     TapHandler {
         id: tap
         gesturePolicy: TapHandler.ReleaseWithinBounds
-        margin: -root.hitPad
-
         onPressedChanged: {
             if (pressed) {
-                var pt = tap.point.position
-                ripple.width   = 0
-                ripple.opacity = 0
-                ripple.rippleX = pt.x
-                ripple.rippleY = pt.y
-                rippleAnim.restart()
-
-                if (root.btnType === "eq" || root.btnType === "red")
-                    HapticHelper.heavy()
-                else
-                    HapticHelper.click()
+                if (root.btnType === "eq" || root.btnType === "clear") HapticHelper.heavy()
+                else HapticHelper.click()
+                releaseBounceAnim.stop(); pressDownAnim.restart()
+            } else {
+                pressDownAnim.stop(); releaseBounceAnim.restart()
             }
         }
-
         onTapped: root.clicked()
     }
 }
