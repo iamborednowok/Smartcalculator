@@ -9,7 +9,7 @@ Item {
     function show(msg, ok) {
         label.text = msg
         bar.color  = ok ? Theme.text : Theme.accent
-        label.color = ok ? Theme.bg : Theme.onAccent
+        label.color = ok ? Theme.bg : Theme.textOnAccent
         anim.restart()
     }
 

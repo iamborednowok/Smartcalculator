@@ -40,7 +40,7 @@ Item {
                   (gradStart.b + gradEnd.b) / 2, (gradStart.a + gradEnd.a) / 2)
     readonly property color labelColor: {
         switch (btnType) {
-            case "eq":    return Theme.onAccent
+            case "eq":    return Theme.textOnAccent
             case "op":    return Theme.accent2
             case "clear": return Theme.accent
             case "func":  return Theme.textDim

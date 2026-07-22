@@ -245,7 +245,7 @@ Item {
                         color: "transparent"
                         border.width: 2; border.color: Theme.edgeA
                     }
-                    Text { anchors.centerIn: parent; text: "Calculate"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
+                    Text { anchors.centerIn: parent; text: "Calculate"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
 
                     // Funky press bounce (quick down, springy back up — see
                     // Theme.bounceDuration/bounceEasing) instead of a flat

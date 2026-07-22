@@ -379,12 +379,12 @@ Item {
                                                     font.family: Theme.fontMono
                                                     font.weight: Font.Bold
                                                     font.pixelSize: Math.round(9 * Theme.scale)
-                                                    color: bitVal === 1 ? Theme.onAccent : Theme.textFaint
+                                                    color: bitVal === 1 ? Theme.textOnAccent : Theme.textFaint
                                                 }
 
                                                 Rectangle {
                                                     id: bitPress; anchors.fill: parent; radius: parent.radius
-                                                    color: Theme.onAccent; opacity: 0
+                                                    color: Theme.textOnAccent; opacity: 0
                                                     SequentialAnimation on opacity {
                                                         id: bitFlash
                                                         running: false
@@ -516,7 +516,7 @@ Item {
                                 anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2
                                 color: "transparent"; border.width: 2; border.color: Theme.edgeA
                             }
-                            Text { anchors.centerIn: parent; text: "= Execute"; color: Theme.onAccent; font.family: Theme.fontMono; font.weight: Font.Bold; font.pixelSize: Math.round(13 * Theme.scale) }
+                            Text { anchors.centerIn: parent; text: "= Execute"; color: Theme.textOnAccent; font.family: Theme.fontMono; font.weight: Font.Bold; font.pixelSize: Math.round(13 * Theme.scale) }
 
                             scale: 1.0
                             NumberAnimation { id: execPressDown;  target: execBtn; property: "scale"; to: 0.95; duration: Theme.press; easing.type: Easing.OutQuad }

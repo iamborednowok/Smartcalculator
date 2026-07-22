@@ -643,7 +643,7 @@ Item {
                         width: Math.round(40 * Theme.scale); height: Math.round(40 * Theme.scale); radius: Theme.rMd
                         color: root.pendingNum1 === n ? Theme.accent2 : Theme.surface2
                         border.width: 1; border.color: Theme.edgeB2
-                        Text { anchors.centerIn: parent; text: parent.n; color: root.pendingNum1 === parent.n ? Theme.onAccent : Theme.text; font.family: Theme.fontMono; font.pixelSize: Math.round(15 * Theme.scale) }
+                        Text { anchors.centerIn: parent; text: parent.n; color: root.pendingNum1 === parent.n ? Theme.textOnAccent : Theme.text; font.family: Theme.fontMono; font.pixelSize: Math.round(15 * Theme.scale) }
                         TapHandler { onTapped: root.numberTapped(parent.n) }
                     }
                 }

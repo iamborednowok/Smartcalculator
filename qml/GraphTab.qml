@@ -392,7 +392,7 @@ Item {
                     anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2
                     color: "transparent"; border.width: 2; border.color: Theme.edgeA
                 }
-                Text { anchors.centerIn: parent; text: "Add"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(13 * Theme.scale) }
+                Text { anchors.centerIn: parent; text: "Add"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(13 * Theme.scale) }
 
                 scale: 1.0
                 NumberAnimation { id: addPressDown;  target: addBtn; property: "scale"; to: 0.92; duration: Theme.press; easing.type: Easing.OutQuad }

@@ -35,7 +35,7 @@ QtObject {
     // ── Bold accents ── EDIT THESE TWO LINES TO RE-COLOR THE APP ──────
     readonly property color accent:   "#FF3B5C"   // red  — "=", primary CTAs, errors
     readonly property color accent2:  "#2F7BFF"   // blue — operators, ribbons
-    readonly property color onAccent: "#FFFFFF"
+    readonly property color textOnAccent: "#FFFFFF"
 
     // ── Gradient trio (for buttons, headers, highlights) ──────────────
     // gradA/accent is red, gradB is green, gradC is cyan-blue — together
