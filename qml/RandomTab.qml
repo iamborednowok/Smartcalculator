@@ -489,7 +489,7 @@ Item {
                         anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2
                         color: "transparent"; border.width: 2; border.color: Theme.edgeB
                     }
-                    Text { anchors.centerIn: parent; text: "Roll"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
+                    Text { anchors.centerIn: parent; text: "Roll"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
                     scale: rollDiceTap.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: Theme.press } }
                     TapHandler { id: rollDiceTap; onTapped: root.rollDice() }
@@ -594,7 +594,7 @@ Item {
                         anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2
                         color: "transparent"; border.width: 2; border.color: Theme.edgeB
                     }
-                    Text { anchors.centerIn: parent; text: root.coinFlipping ? "…" : "Flip Coin"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
+                    Text { anchors.centerIn: parent; text: root.coinFlipping ? "…" : "Flip Coin"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
                     TapHandler { onTapped: root.flipCoin() }
                 }
             }
@@ -632,7 +632,7 @@ Item {
                         anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2
                         color: "transparent"; border.width: 2; border.color: Theme.edgeB
                     }
-                    Text { anchors.centerIn: parent; text: "Pick"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
+                    Text { anchors.centerIn: parent; text: "Pick"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
                     TapHandler { onTapped: root.pickRandom() }
                 }
 
@@ -711,7 +711,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: "Start — " + root.difficulty + (root.quizLength !== "∞" ? " · " + root.quizLength + "Q" : "")
-                        color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale)
+                        color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale)
                     }
 
                     scale: 1.0
@@ -916,7 +916,7 @@ Item {
                             anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2
                             color: "transparent"; border.width: 2; border.color: Theme.edgeA
                         }
-                        Text { anchors.centerIn: parent; text: "Play Again"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
+                        Text { anchors.centerIn: parent; text: "Play Again"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * Theme.scale) }
 
                         scale: 1.0
                         NumberAnimation { id: playAgainPressDown;  target: playAgainBtn; property: "scale"; to: 0.95; duration: Theme.press; easing.type: Easing.OutQuad }

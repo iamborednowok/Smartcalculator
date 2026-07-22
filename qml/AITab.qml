@@ -1073,7 +1073,7 @@ Item {
                 Rectangle {
                     width: Math.round(60 * Theme.scale); height: Math.round(40 * Theme.scale); radius: Theme.rMd
                     color: Theme.accent2
-                    Text { anchors.centerIn: parent; text: "Save"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.Medium; font.pixelSize: Math.round(12 * Theme.scale) }
+                    Text { anchors.centerIn: parent; text: "Save"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.Medium; font.pixelSize: Math.round(12 * Theme.scale) }
                     TapHandler { onTapped: { settings.orKey = keyInput.text; root.window?.showToast("API key saved", true) } }
                 }
             }
@@ -1093,7 +1093,7 @@ Item {
                 Rectangle {
                     width: Math.round(60 * Theme.scale); height: Math.round(40 * Theme.scale); radius: Theme.rMd
                     color: Theme.accent2
-                    Text { anchors.centerIn: parent; text: "Save"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.Medium; font.pixelSize: Math.round(12 * Theme.scale) }
+                    Text { anchors.centerIn: parent; text: "Save"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.Medium; font.pixelSize: Math.round(12 * Theme.scale) }
                     TapHandler { onTapped: { settings.geminiKey = geminiKeyInput.text; root.window?.showToast("Gemini key saved", true) } }
                 }
             }
@@ -1110,7 +1110,7 @@ Item {
                 Rectangle {
                     width: Math.round(60 * Theme.scale); height: Math.round(40 * Theme.scale); radius: Theme.rMd
                     color: Theme.accent2
-                    Text { anchors.centerIn: parent; text: "Save"; color: Theme.onAccent; font.family: Theme.fontSans; font.weight: Font.Medium; font.pixelSize: Math.round(12 * Theme.scale) }
+                    Text { anchors.centerIn: parent; text: "Save"; color: Theme.textOnAccent; font.family: Theme.fontSans; font.weight: Font.Medium; font.pixelSize: Math.round(12 * Theme.scale) }
                     TapHandler { onTapped: { settings.anthKey = anthKeyInput.text; root.window?.showToast("Anthropic key saved", true) } }
                 }
             }
@@ -1298,14 +1298,14 @@ Item {
                             Text {
                                 visible: modelData.hasAttachment === true
                                 text: "📎 " + (modelData.attachName || "")
-                                color: isUser ? Theme.onAccent : Theme.textDim
+                                color: isUser ? Theme.textOnAccent : Theme.textDim
                                 font.family: Theme.fontSans
                                 font.pixelSize: Math.round(11 * Theme.scale)
                             }
                             Text {
                                 Layout.fillWidth: true
                                 text: modelData.content
-                                color: isUser ? Theme.onAccent : (modelData.isError ? Theme.accent : Theme.text)
+                                color: isUser ? Theme.textOnAccent : (modelData.isError ? Theme.accent : Theme.text)
                                 font.family: Theme.fontSans
                                 font.pixelSize: Math.round(14 * Theme.scale)
                                 wrapMode: Text.WordWrap
@@ -1501,7 +1501,7 @@ Item {
                     anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2
                     color: "transparent"; border.width: 2; border.color: Theme.edgeA
                 }
-                Text { anchors.centerIn: parent; text: "↑"; color: Theme.onAccent; font.weight: Font.Bold; font.pixelSize: Math.round(18 * Theme.scale) }
+                Text { anchors.centerIn: parent; text: "↑"; color: Theme.textOnAccent; font.weight: Font.Bold; font.pixelSize: Math.round(18 * Theme.scale) }
 
                 scale: 1.0
                 NumberAnimation { id: sendPressDown;  target: sendBtn; property: "scale"; to: 0.90; duration: Theme.press; easing.type: Easing.OutQuad }

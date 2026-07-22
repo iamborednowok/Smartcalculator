@@ -126,7 +126,7 @@ Item {
                     font.weight: Font.Bold
                     font.pixelSize: Math.round(9 * Theme.scale)
                     color: Theme.textFaint
-                    letterSpacing: 0.08
+                    font.letterSpacing: 0.08
                 }
                 Item { Layout.fillWidth: true }
                 Text {
@@ -196,7 +196,7 @@ Item {
                                 text: modelData
                                 font.family: Theme.fontMono
                                 font.pixelSize: Math.round(12 * Theme.scale)
-                                color: sel ? Theme.onAccent : Theme.textDim
+                                color: sel ? Theme.textOnAccent : Theme.textDim
                             }
                             TapHandler { onTapped: root.selectFromUnit(modelData) }
                         }
@@ -226,7 +226,7 @@ Item {
                     height: width; radius: width / 2
                     color: Theme.glowA
                 }
-                Text { anchors.centerIn: parent; text: "⇄"; color: Theme.onAccent; font.pixelSize: Math.round(16 * Theme.scale) }
+                Text { anchors.centerIn: parent; text: "⇄"; color: Theme.textOnAccent; font.pixelSize: Math.round(16 * Theme.scale) }
                 scale: swapTap.pressed ? 0.90 : 1.0
                 Behavior on scale { NumberAnimation { duration: Theme.press } }
                 TapHandler { id: swapTap; onTapped: root.swapUnits() }
@@ -249,7 +249,7 @@ Item {
                     font.weight: Font.Bold
                     font.pixelSize: Math.round(9 * Theme.scale)
                     color: Theme.textFaint
-                    letterSpacing: 0.08
+                    font.letterSpacing: 0.08
                 }
                 Item { Layout.fillWidth: true }
                 Text {
@@ -319,7 +319,7 @@ Item {
                                 text: modelData
                                 font.family: Theme.fontMono
                                 font.pixelSize: Math.round(12 * Theme.scale)
-                                color: sel ? Theme.onAccent : Theme.textDim
+                                color: sel ? Theme.textOnAccent : Theme.textDim
                             }
                             TapHandler { onTapped: root.selectToUnit(modelData) }
                         }
